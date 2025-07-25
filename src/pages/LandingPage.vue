@@ -1,3 +1,11 @@
 <template>
-    <div style="padding: 2rem; font-size: 1.5rem;">Welcome to Peshkash – A QR-powered digital menu experience.</div>
+  <Navbar></Navbar>
+          Coming Soon
+
 </template>
+
+<script setup lang="ts">
+import Navbar from '../components/Navbar.vue';
+
+</script>
+

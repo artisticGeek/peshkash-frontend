@@ -1,4 +1,5 @@
 <template>
+  <div class="col-span-12 text-xl text-center">
   <div class="p-4 text-lg">
     <div v-if="isLoading">Loading item...</div>
     <div v-else-if="error">{{ error }}</div>
@@ -10,6 +11,8 @@
       <p><strong>Items: </strong>{{ itemData.menu.lineItems }}</p>
     </div>
   </div>
+  </div>
+
 </template>
 
 <script lang="ts" setup>
