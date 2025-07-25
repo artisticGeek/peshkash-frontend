@@ -1,0 +1,36 @@
+// Override Bootstrap's default variables
+$white: #ffffff;
+
+$theme-colors: (
+    "light":      #f4f1ed,
+    "dark":       #15191e,
+    "primary":    #bd945a,
+    "secondary":  #853f19,
+    "info":       #5a4949,
+    "accent1":    #f4f1ed,
+    "accent2":    #15191e,
+    "accent3":    #bd945a,
+    "success":    #39681c,
+    "warning":    #fec04e,
+    "danger":     #9b2a46,
+);
+
+// Import Bootstrap's source files
+@import "../node_modules/bootstrap/scss/bootstrap.scss";
+
+// Your custom styles here
+body {
+  font-family: 'Urbanist', sans-serif;
+}
+
+h1 {
+  font-family: 'Roboto Slab', serif;
+}
+
+p {
+  font-family: 'Roboto', sans-serif;
+}
+
+.special-text {
+  font-family: 'Rufina', serif;
+}
