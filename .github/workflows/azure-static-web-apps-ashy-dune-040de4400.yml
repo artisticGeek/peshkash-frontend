@@ -25,15 +25,20 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: '20'         # ✅ Use Node 20 for Vite + Vue
-          cache: 'npm'               # ✅ Cache node_modules for faster builds
+          node-version: '20'   # ✅ Use Node 20 (required by Vite 7 + plugin-vue 6)
+          cache: 'npm'         # ✅ Cache node_modules
+
+      - name: Show Node & npm versions
+        run: |
+          node -v
+          npm -v
 
       - name: Install dependencies
         run: npm install
 
       - name: Build project
         run: npm run build
-        # ⚠️ "npm run dev" is not needed in CI/CD
+        # ⚠️ Do not run "npm run dev" here (only for local dev)
 
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
@@ -58,6 +63,7 @@ jobs:
           api_location: ""        # Api source code path - optional
           output_location: "dist" # Built app content directory
           github_id_token: ${{ steps.idtoken.outputs.result }}
+          skip_app_build: true    # ✅ Prevent Oryx from rebuilding with Node 18
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
