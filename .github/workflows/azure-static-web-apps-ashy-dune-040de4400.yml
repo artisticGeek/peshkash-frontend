@@ -3,68 +3,42 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - production
+      - main
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
-      - production
+      - main
 
 jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
-    permissions:
-       id-token: write
-       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          submodules: true
-          lfs: false
+          node-version: '18'
 
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '20'   # ✅ Use Node 20 (required by Vite 7 + plugin-vue 6)
-          cache: 'npm'         # ✅ Cache node_modules
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: Show Node & npm versions
-        run: |
-          node -v
-          npm -v
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build project
+      - name: Build Project
         run: npm run build
-        # ⚠️ Do not run "npm run dev" here (only for local dev)
 
-      - name: Install OIDC Client from Core Package
-        run: npm install @actions/core@1.6.0 @actions/http-client
-
-      - name: Get Id Token
-        uses: actions/github-script@v6
-        id: idtoken
-        with:
-          script: |
-              const coredemo = require('@actions/core')
-              return await coredemo.getIDToken()
-          result-encoding: string
-
-      - name: Build And Deploy
+      - name: Upload to Azure Static Web Apps
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ASHY_DUNE_040DE4400 }}
           action: "upload"
-          ###### Repository/Build Configurations ######
-          app_location: "/"       # App source code path
-          api_location: ""        # Api source code path - optional
-          output_location: "dist" # Built app content directory
+          app_location: "dist"    # ✅ Upload the built dist folder
+          api_location: ""        # No API
+          output_location: ""     # ✅ Empty since dist is final output
+          skip_app_build: true    # ✅ Do not rebuild on Azure
           github_id_token: ${{ steps.idtoken.outputs.result }}
-          skip_app_build: true    # ✅ Prevent Oryx from rebuilding with Node 18
-          ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -75,4 +49,5 @@ jobs:
         id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ASHY_DUNE_040DE4400 }}
           action: "close"
