@@ -1,9 +1,10 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, RouteRecordRaw, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
 import ItemDetailPage from './pages/ItemDetailPage.vue'
 import LandingPage from './pages/LandingPage.vue'
 import MenuPage from './pages/MenuPage.vue'
+import QrRedirect from './pages/QrRedirect.vue' // Import the new component
 
-const routes = [
+const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     component: LandingPage
@@ -16,6 +17,10 @@ const routes = [
     path: '/event/:eventName/menu/:menuName/item/:itemName',
     name: 'ItemDetail',
     component: ItemDetailPage
+  },
+  {
+    path: '/:qrHash',
+    component: QrRedirect
   }
 ]
 
