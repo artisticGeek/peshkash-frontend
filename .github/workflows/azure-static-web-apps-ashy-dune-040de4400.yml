@@ -25,14 +25,15 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: '18' # adjust if your project needs another version
+          node-version: '20'         # ✅ Use Node 20 for Vite + Vue
+          cache: 'npm'               # ✅ Cache node_modules for faster builds
 
       - name: Install dependencies
         run: npm install
 
       - name: Build project
         run: npm run build
-        # (no need to run "npm run dev" — that's only for local development)
+        # ⚠️ "npm run dev" is not needed in CI/CD
 
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
