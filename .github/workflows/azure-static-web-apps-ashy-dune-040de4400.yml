@@ -28,17 +28,16 @@ jobs:
       - name: Build Project
         run: npm run build
 
-      - name: Upload to Azure Static Web Apps
+      - name: Deploy to Azure Static Web Apps
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ASHY_DUNE_040DE4400 }}
           action: "upload"
-          app_location: "dist"    # ✅ Upload the built dist folder
-          api_location: ""        # No API
-          output_location: ""     # ✅ Empty since dist is final output
-          skip_app_build: true    # ✅ Do not rebuild on Azure
-          github_id_token: ${{ steps.idtoken.outputs.result }}
+          app_location: "dist"   # ✅ upload only dist
+          api_location: ""       # no API
+          output_location: ""    # ✅ empty
+          skip_app_build: true   # ✅ don’t rebuild in Azure
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
