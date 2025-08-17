@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "sass": "sass src/styles.scss dist/css/styles.css"
   },
+   "engines": {
+    "node": "20"
+  },
   "dependencies": {
     "@primevue/themes": "^4.3.6",
     "@types/vue-router": "^2.0.0",
