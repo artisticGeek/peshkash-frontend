@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf node_modules && npm ci && vue-tsc -b && vite build && npm run sass",
+    "build": "vue-tsc -b && vite build && npm run sass",
     "preview": "vite preview",
     "sass": "sass src/styles.scss dist/css/styles.css"
   },
