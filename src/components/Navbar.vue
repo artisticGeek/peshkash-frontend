@@ -44,6 +44,6 @@
 
 .pk-brand-text {
   font-family: 'Brush Script MT', cursive;
-  font-size: 1.5rem;
+  font-size: 2.5rem;
 }
 </style>

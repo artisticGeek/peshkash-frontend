@@ -9,12 +9,13 @@
     <div class="container h-100 position-relative">
       <div class="row align-items-center h-100 py-5">
         <div class="col-lg-10 col-xl-7">
-          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
-          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
+          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... </br> Digitally Presented.</h1>
+          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, </br> mobile-first pages — menus, exhibits, and stories... </br> so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
             <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
           </div>
+        </br>
           <ul class="list-inline mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
             <li class="list-inline-item badge bg-light text-dark">No app needed</li>
             <li class="list-inline-item badge bg-light text-dark">Reusable QRs</li>
@@ -29,11 +30,14 @@
     <section id="why" class="py-5 pk-section">
       <div class="container">
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
-        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible. Peshkash blends the physical with the digital so everyone wins.</p>
+      </br>
+        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible.
+        </br>
+          Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
             <div class="card h-100 pk-tilt">
-              <div class="card-body">
+              <div class="card-body text-center">
                 <i class="bi bi-people fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Guests</h5>
                 <ul class="mb-0">
@@ -46,7 +50,7 @@
           </div>
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <div class="card h-100 pk-tilt">
-              <div class="card-body">
+              <div class="card-body text-center">
                 <i class="bi bi-shop fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Vendors &amp; Organizers</h5>
                 <ul class="mb-0">
@@ -59,6 +63,8 @@
           </div>
         </div>
       </div>
+    </br>
+    </br>
     </section>
 
     <!-- SOLUTIONS -->
@@ -137,7 +143,6 @@
     </section>
 
 
-    <!-- PRICING -->
     <section id="pricing" class="py-5 pk-section pk-section-pricing">
       <div class="container">
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
@@ -147,12 +152,13 @@
             <div class="card h-100 text-center pk-tilt">
               <div class="card-body d-flex flex-column">
                 <h5 class="card-title">Starter</h5>
-                <div class="display-6 fw-bold text-primary">₹800</div>
-                <div class="text-muted mb-3">per event (6 hours)</div>
+                <div class="display-6 fw-bold text-primary">₹799</div>
+                <div class="text-muted mb-3">per event (4 hours)</div>
                 <ul class="list-unstyled mb-4">
-                  <li>Up to 10 QRs</li>
-                  <li>Menu pages</li>
-                  <li>Basic analytics</li>
+                  <li>Up to 25 QRs</li>
+                  <li>Menu Onboarding</li>
+                  <li>Vendoor Page</li>
+                  <li>Logo Design</li>
                 </ul>
                 <a href="#contact" class="mt-auto btn btn-outline-primary">Activate an Event</a>
               </div>
@@ -162,14 +168,18 @@
             <div class="card h-100 text-center pk-tilt pk-featured">
               <div class="card-body d-flex flex-column">
                 <h5 class="card-title">Pro</h5>
-                <div class="display-6 fw-bold text-primary">₹1,499</div>
-                <div class="text-muted mb-3">per event (8 hours)</div>
+                <div class="display-6 fw-bold text-primary">₹1,299</div>
+                <div class="text-muted mb-3">per event (6 hours)</div>
                 <ul class="list-unstyled mb-4">
-                  <li>Up to 25 QRs</li>
-                  <li>Dish photos &amp; notes</li>
-                  <li>Priority support</li>
+                  <li>- Upto Menu Items 40</li>
+                  <li>- Logo Design</li>
+                  <li>- Menu Onboarding</li>
+                  <li>- Live Menu Page</li>
+                  <li>- Customised Content Generation</li>
+                  <li>- Live support</li>
+                  <li>- Custom QR Code Design</li>
                 </ul>
-                <a href="#contact" class="mt-auto btn btn-primary">Talk to Sales</a>
+                
               </div>
             </div>
           </div>
@@ -180,18 +190,23 @@
                 <div class="display-6 fw-bold text-primary">Custom</div>
                 <div class="text-muted mb-3">quote</div>
                 <ul class="list-unstyled mb-4">
-                  <li>Bulk events</li>
-                  <li>Branding &amp; custom domains</li>
-                  <li>Advanced analytics</li>
+                  <li>- Bulk events</li>
+                  <li>- Branding &amp; custom domains</li>
+                  <li>- Advanced analytics</li>
+                  <li>- Long term plans</li>
+                  <li>- Custom Pages</li>
+                  <li>- Unlimited List Items</li>
+                  <li>- Permanent Vendor Page</li>
+                  <li>- Event Page</li>
                 </ul>
-                <a href="#contact" class="mt-auto btn btn-outline-primary">Get a Custom Quote</a>
+                
               </div>
             </div>
           </div>
         </div>
         <p class="text-center text-muted mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">One-time QR plates available starting ₹49 each.</p>
       </div>
-      </section>
+    </section>
 
       <!-- CONTACT -->
       <section id="contact" class="py-5 pk-section pk-section-contact">
@@ -205,27 +220,27 @@
                   <div class="d-flex align-items-center mb-3">
                     <i class="bi bi-telephone-fill fs-3 text-primary me-3"></i>
                     <div>
-                      <div class="fw-bold">Phone</div>
-                      <div class="text-muted">+91-XXXXXXXXXX</div>
-                    </div>
+                    <div class="fw-bold">Phone</div>
+                    <div class="text-muted">+91-9041716953</div>
                   </div>
-                  <div class="d-flex align-items-center mb-3">
-                    <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
-                    <div>
-                      <div class="fw-bold">Email</div>
-                      <div class="text-muted">hello@peshkash.app</div>
-                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                  <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
+                  <div>
+                    <div class="fw-bold">Email</div>
+                    <div class="text-muted">contact@peshkash.app</div>
                   </div>
-                  <div class="d-flex align-items-center">
-                    <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
-                    <div>
-                      <div class="fw-bold">WhatsApp</div>
-                      <div class="text-muted"><a href="#" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
-                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
+                  <div>
+                    <div class="fw-bold">WhatsApp</div>
+                    <div class="text-muted"><a href="https://wa.me/+919041716953X" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
             <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
               <div class="card h-100 pk-tilt">
                 <div class="card-body">
@@ -368,7 +383,7 @@ const scrollToTop = () => {
 .pk-section {
   position: relative;
   z-index: 0;
-  background: linear-gradient(180deg, rgba(var(--bs-primary-rgb), .05), #fff);
+  background: linear-gradient(180deg, rgba(var(--bs-primary-rgb), .05), #fff)
 }
 
 .pk-section::before {
@@ -383,7 +398,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-pricing {
-  background: linear-gradient(176deg, rgb(255 243 225 / 70%), rgb(247 216 172));
+  background: linear-gradient(180deg, rgba(255, 250, 242, 0.7), rgb(246, 224, 197))
 }
 
 .pk-section-contact {
