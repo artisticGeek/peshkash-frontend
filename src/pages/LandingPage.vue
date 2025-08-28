@@ -377,12 +377,12 @@ const scrollToTop = () => {
 }
 
 .pk-section-why {
-  background: url('https://images.unsplash.com/photo-1522199710521-72d69614c702?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
 }
 
 .pk-section-why::before,
 .pk-section-contact::before {
-  background: rgba(255, 255, 255, 0.9);
+  background: url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
 }
 
 .pk-section-solutions {
@@ -390,7 +390,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-contact {
-  background: url('https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+  background:  url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
 }
 
 .pk-section-pricing {
