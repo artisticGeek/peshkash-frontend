@@ -332,7 +332,7 @@ const scrollToTop = () => {
     min-height: 100vh;
     padding-top: 6rem;
     padding-bottom: 6rem;
-    background: url('https://images.unsplash.com/photo-1607083208813-478ca7385da2?auto=format&fit=crop&w=2400&q=80') center/cover fixed no-repeat;
+    background: url(../assets/peshkash-demo-hero.png) center/cover fixed no-repeat;
     overflow: hidden;
   }
 
