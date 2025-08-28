@@ -378,7 +378,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-why {
-  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
+  background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), .05), #fff);
 }
 
 .pk-section-solutions {
