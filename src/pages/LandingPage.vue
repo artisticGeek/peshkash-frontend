@@ -10,7 +10,7 @@
       <div class="row align-items-center h-100 py-5">
         <div class="col-lg-6 col-xl-6">
           <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
-          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><em><strong>Peshkash</strong></em> turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
+          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
             <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
@@ -33,7 +33,7 @@
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
             <div class="card h-100 pk-tilt">
-              <div class="card-body text-center">
+              <div class="card-body">
                 <i class="bi bi-people fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Guests</h5>
                 <ul class="mb-0">
@@ -46,7 +46,7 @@
           </div>
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <div class="card h-100 pk-tilt">
-              <div class="card-body text-center">
+              <div class="card-body">
                 <i class="bi bi-shop fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Vendors &amp; Organizers</h5>
                 <ul class="mb-0">
