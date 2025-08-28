@@ -3,10 +3,9 @@
     <Navbar />
 
     <!-- HERO -->
-    <section id="hero" class="pk-hero d-flex align-items-center text-white">
+    <section id="hero" class="pk-hero d-flex align-items-center text-white py-5">
       <div class="pk-hero-overlay"></div>
-      <div class="pk-hero-qr d-none d-lg-block"></div>
-      <div class="container position-relative">
+      <div class="container position-relative px-4 py-5">
         <div class="row">
           <div class="col-lg-8 col-xl-6">
             <h1 class="display-4 fw-bold mb-3 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
@@ -23,6 +22,9 @@
           </div>
         </div>
       </div>
+      <div class="pk-shape pk-shape-1 d-none d-md-block"></div>
+      <div class="pk-shape pk-shape-2 d-none d-md-block"></div>
+      <div class="pk-shape pk-shape-3 d-none d-md-block"></div>
     </section>
 
     <!-- WHY IT MATTERS -->
@@ -334,27 +336,36 @@ const scrollToTop = () => {
   overflow: hidden;
 }
 
+.pk-hero .container {
+  position: relative;
+  z-index: 1;
+}
+
 .pk-hero-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
+  background: rgba(0, 0, 0, 0.6);
 }
 
-.pk-hero-qr {
+.pk-shape {
   position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 50%;
-  background: url('../assets/hero-qr.svg') center/cover no-repeat;
-  opacity: 0.5;
+  width: 80px;
+  height: 80px;
+  background:
+    linear-gradient(45deg, rgba(var(--bs-primary-rgb), 0.3) 25%, transparent 25%) 0 0/10px 10px,
+    linear-gradient(45deg, transparent 75%, rgba(var(--bs-primary-rgb), 0.3) 75%) 0 0/10px 10px;
+  opacity: 0.4;
+  animation: pk-float 8s ease-in-out infinite;
+  z-index: 0;
 }
 
-.pk-hero-qr::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(var(--bs-primary-rgb), 0.6), rgba(var(--bs-primary-rgb), 0));
+.pk-shape-1 { top: 10%; left: 5%; }
+.pk-shape-2 { bottom: 15%; right: 10%; animation-delay: 2s; }
+.pk-shape-3 { top: 40%; right: 30%; animation-delay: 4s; }
+
+@keyframes pk-float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 
 .pk-heading {
