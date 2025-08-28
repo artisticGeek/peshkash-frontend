@@ -5,6 +5,7 @@
     <!-- HERO -->
     <section id="hero" class="pk-hero d-flex align-items-center text-white">
       <div class="pk-hero-overlay"></div>
+      <div class="pk-hero-qr d-none d-lg-block"></div>
       <div class="container position-relative">
         <div class="row">
           <div class="col-lg-8 col-xl-6">
@@ -22,9 +23,6 @@
           </div>
         </div>
       </div>
-      <span class="pk-shape pk-shape-1"></span>
-      <span class="pk-shape pk-shape-2"></span>
-      <span class="pk-shape pk-shape-3"></span>
     </section>
 
     <!-- WHY IT MATTERS -->
@@ -321,21 +319,6 @@ onMounted(() => {
     showTop.value = window.scrollY > 300;
   };
   window.addEventListener('scroll', onScroll);
-
-  const shapes = document.querySelectorAll<HTMLElement>('.pk-shape');
-  shapes.forEach((shape) => {
-    const x1 = (Math.random() - 0.5) * 100;
-    const y1 = (Math.random() - 0.5) * 100;
-    const x2 = (Math.random() - 0.5) * 100;
-    const y2 = (Math.random() - 0.5) * 100;
-    const dur = 3 + Math.random() * 2;
-    shape.style.setProperty('--mx1', `${x1}px`);
-    shape.style.setProperty('--my1', `${y1}px`);
-    shape.style.setProperty('--mx2', `${x2}px`);
-    shape.style.setProperty('--my2', `${y2}px`);
-    shape.style.setProperty('--dur', `${dur}s`);
-    shape.style.animationDelay = `${Math.random() * 2}s`;
-  });
 });
 
 const scrollToTop = () => {
@@ -348,6 +331,7 @@ const scrollToTop = () => {
   position: relative;
   min-height: 100vh;
   background: url('https://images.unsplash.com/photo-1607083208813-478ca7385da2?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+  overflow: hidden;
 }
 
 .pk-hero-overlay {
@@ -356,41 +340,21 @@ const scrollToTop = () => {
   background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
 }
 
-.pk-shape {
-  --s: 1;
+.pk-hero-qr {
   position: absolute;
-  width: 24px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.85);
-  -webkit-mask: url('../assets/qr-sprite.svg') center/contain no-repeat;
-  mask: url('../assets/qr-sprite.svg') center/contain no-repeat;
-  animation: pk-drift var(--dur, 4s) linear infinite;
-}
-.pk-shape-1 {
-  top: 20%;
-  left: 10%;
-}
-.pk-shape-2 {
-  top: 60%;
-  left: 80%;
-  --s: 1.5;
-}
-.pk-shape-3 {
-  top: 80%;
-  left: 30%;
-  --s: 0.8;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 50%;
+  background: url('../assets/hero-qr.svg') center/cover no-repeat;
+  opacity: 0.5;
 }
 
-@keyframes pk-drift {
-  0% {
-    transform: scale(var(--s)) translate(0, 0);
-  }
-  50% {
-    transform: scale(var(--s)) translate(var(--mx1, 40px), var(--my1, -40px));
-  }
-  100% {
-    transform: scale(var(--s)) translate(var(--mx2, -40px), var(--my2, 40px));
-  }
+.pk-hero-qr::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(var(--bs-primary-rgb), 0.6), rgba(var(--bs-primary-rgb), 0));
 }
 
 .pk-heading {
