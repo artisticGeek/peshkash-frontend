@@ -321,6 +321,21 @@ onMounted(() => {
     showTop.value = window.scrollY > 300;
   };
   window.addEventListener('scroll', onScroll);
+
+  const shapes = document.querySelectorAll<HTMLElement>('.pk-shape');
+  shapes.forEach((shape) => {
+    const x1 = (Math.random() - 0.5) * 100;
+    const y1 = (Math.random() - 0.5) * 100;
+    const x2 = (Math.random() - 0.5) * 100;
+    const y2 = (Math.random() - 0.5) * 100;
+    const dur = 3 + Math.random() * 2;
+    shape.style.setProperty('--mx1', `${x1}px`);
+    shape.style.setProperty('--my1', `${y1}px`);
+    shape.style.setProperty('--mx2', `${x2}px`);
+    shape.style.setProperty('--my2', `${y2}px`);
+    shape.style.setProperty('--dur', `${dur}s`);
+    shape.style.animationDelay = `${Math.random() * 2}s`;
+  });
 });
 
 const scrollToTop = () => {
@@ -344,14 +359,21 @@ const scrollToTop = () => {
 .pk-shape {
   --s: 1;
   position: absolute;
-  width: 6px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: 8px 0 rgba(255, 255, 255, 0.7), 16px 0 rgba(255, 255, 255, 0.7),
-    0 8px rgba(255, 255, 255, 0.7), 16px 8px rgba(255, 255, 255, 0.7),
-    0 16px rgba(255, 255, 255, 0.7), 8px 16px rgba(255, 255, 255, 0.7),
-    16px 16px rgba(255, 255, 255, 0.7);
-  animation: pk-float 8s ease-in-out infinite;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    6px 0 rgba(255, 255, 255, 0.8),
+    12px 0 rgba(255, 255, 255, 0.8),
+    0 6px rgba(255, 255, 255, 0.8),
+    18px 6px rgba(255, 255, 255, 0.8),
+    0 12px rgba(255, 255, 255, 0.8),
+    12px 12px rgba(255, 255, 255, 0.8),
+    18px 12px rgba(255, 255, 255, 0.8),
+    6px 18px rgba(255, 255, 255, 0.8),
+    12px 18px rgba(255, 255, 255, 0.8),
+    18px 18px rgba(255, 255, 255, 0.8);
+  animation: pk-drift var(--dur, 4s) linear infinite;
 }
 .pk-shape-1 {
   top: 20%;
@@ -361,24 +383,22 @@ const scrollToTop = () => {
   top: 60%;
   left: 80%;
   --s: 1.5;
-  animation-delay: 2s;
 }
 .pk-shape-3 {
   top: 80%;
   left: 30%;
   --s: 0.8;
-  animation-delay: 4s;
 }
 
-@keyframes pk-float {
+@keyframes pk-drift {
   0% {
-    transform: translateY(0) scale(var(--s));
+    transform: scale(var(--s)) translate(0, 0);
   }
   50% {
-    transform: translateY(-30px) scale(var(--s));
+    transform: scale(var(--s)) translate(var(--mx1, 40px), var(--my1, -40px));
   }
   100% {
-    transform: translateY(0) scale(var(--s));
+    transform: scale(var(--s)) translate(var(--mx2, -40px), var(--my2, 40px));
   }
 }
 
