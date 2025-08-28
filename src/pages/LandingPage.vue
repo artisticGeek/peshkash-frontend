@@ -2,28 +2,28 @@
   <div class="pk-landing">
     <Navbar />
 
-    <!-- HERO -->
-    <section id="hero" class="pk-hero d-flex align-items-center text-white">
-      <div class="pk-hero-overlay"></div>
-      <div class="pk-hero-qr d-none d-lg-block"></div>
-      <div class="container position-relative">
-        <div class="row">
-          <div class="col-lg-8 col-xl-6">
-            <h1 class="display-4 fw-bold mb-3 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
-            <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
-            <div class="d-flex flex-column flex-sm-row gap-2 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
-              <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
-              <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
-            </div>
-            <ul class="list-inline mt-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
-              <li class="list-inline-item badge bg-light text-dark">No app needed</li>
-              <li class="list-inline-item badge bg-light text-dark">Reusable QRs</li>
-              <li class="list-inline-item badge bg-light text-dark">Real-time updates</li>
-            </ul>
+  <!-- HERO -->
+  <section id="hero" class="pk-hero text-white">
+    <div class="pk-hero-overlay"></div>
+    <div class="pk-hero-qr d-none d-lg-block"></div>
+    <div class="container h-100 position-relative">
+      <div class="row align-items-center h-100 py-5">
+        <div class="col-lg-10 col-xl-7">
+          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
+          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
+          <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+            <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
+            <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
           </div>
+          <ul class="list-inline mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
+            <li class="list-inline-item badge bg-light text-dark">No app needed</li>
+            <li class="list-inline-item badge bg-light text-dark">Reusable QRs</li>
+            <li class="list-inline-item badge bg-light text-dark">Real-time updates</li>
+          </ul>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
     <!-- WHY IT MATTERS -->
     <section id="why" class="py-5 pk-section pk-section-why">
@@ -328,11 +328,21 @@ const scrollToTop = () => {
 
 <style scoped>
 .pk-hero {
-  position: relative;
-  min-height: 100vh;
-  background: url('https://images.unsplash.com/photo-1607083208813-478ca7385da2?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
-  overflow: hidden;
-}
+    position: relative;
+    min-height: 100vh;
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+    background: url('https://images.unsplash.com/photo-1607083208813-478ca7385da2?auto=format&fit=crop&w=2400&q=80') center/cover fixed no-repeat;
+    overflow: hidden;
+  }
+
+  @media (max-width: 991.98px) {
+    .pk-hero {
+      padding-top: 4rem;
+      padding-bottom: 4rem;
+      background-attachment: scroll;
+    }
+  }
 
 .pk-hero-overlay {
   position: absolute;
@@ -341,14 +351,14 @@ const scrollToTop = () => {
 }
 
 .pk-hero-qr {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 50%;
-  background: url('../assets/hero-qr.svg') center/cover no-repeat;
-  opacity: 0.5;
-}
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 50%;
+    background: url('../assets/hero-qr.svg') center/contain no-repeat;
+    opacity: 0.4;
+  }
 
 .pk-hero-qr::before {
   content: '';
