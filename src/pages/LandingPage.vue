@@ -1,78 +1,61 @@
 <template>
-  <div class="landing-page">
+  <div class="pk-landing">
     <Navbar />
 
-    <section class="hero d-flex align-items-center text-center text-white">
-      <div class="hero-overlay"></div>
+    <!-- HERO -->
+    <section id="hero" class="pk-hero d-flex align-items-center text-white">
+      <div class="pk-hero-overlay"></div>
       <div class="container position-relative">
-        <h1 class="display-4 fw-bold mb-3">Your Event, Digitally Presented</h1>
-        <p class="lead mb-4">Peshkash lets you offer guests digital menus, exhibits, and stories via QR codes — simple, elegant, and memorable.</p>
-        <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
-      </div>
-      <div class="shapes">
-        <span class="shape shape-1"></span>
-        <span class="shape shape-2"></span>
-        <span class="shape shape-3"></span>
-      </div>
-    </section>
-
-    <section class="how-it-works py-5">
-      <div class="container">
-        <h2 class="text-center mb-4">How It Works</h2>
-        <div class="row g-4 text-center">
-          <div class="col-md-4">
-            <i class="bi bi-qr-code fs-1 text-primary mb-3"></i>
-            <h5>Scan the QR</h5>
-            <p class="text-muted">Guests scan the code placed at your event.</p>
-          </div>
-          <div class="col-md-4">
-            <i class="bi bi-journal-richtext fs-1 text-primary mb-3"></i>
-            <h5>Explore the Menu/Content</h5>
-            <p class="text-muted">They view menus, exhibits, or stories on their device.</p>
-          </div>
-          <div class="col-md-4">
-            <i class="bi bi-emoji-smile fs-1 text-primary mb-3"></i>
-            <h5>Enjoy the Experience</h5>
-            <p class="text-muted">Create a memorable, contactless experience.</p>
+        <div class="row">
+          <div class="col-lg-8 col-xl-6">
+            <h1 class="display-4 fw-bold mb-3 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
+            <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
+            <div class="d-flex flex-column flex-sm-row gap-2 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+              <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
+              <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
+            </div>
+            <ul class="list-inline mt-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
+              <li class="list-inline-item badge bg-light text-dark">No app needed</li>
+              <li class="list-inline-item badge bg-light text-dark">Reusable QRs</li>
+              <li class="list-inline-item badge bg-light text-dark">Real-time updates</li>
+            </ul>
           </div>
         </div>
       </div>
+      <span class="pk-shape pk-shape-1"></span>
+      <span class="pk-shape pk-shape-2"></span>
+      <span class="pk-shape pk-shape-3"></span>
     </section>
 
-    <section class="features py-5 bg-light">
+    <!-- WHY IT MATTERS -->
+    <section id="why" class="py-5">
       <div class="container">
-        <h2 class="text-center mb-4">Features</h2>
+        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
+        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible. Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
-          <div class="col-md-3">
-            <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
+            <div class="card h-100 pk-tilt">
               <div class="card-body">
-                <i class="bi bi-credit-card fs-1 text-primary mb-3"></i>
-                <h5 class="card-title">One-time QR purchase</h5>
+                <i class="bi bi-people fs-1 text-primary mb-3"></i>
+                <h5 class="card-title">Guests</h5>
+                <ul class="mb-0">
+                  <li>Touchless menus, no app install</li>
+                  <li>Fast scans & readable pages</li>
+                  <li>One-tap share</li>
+                </ul>
               </div>
             </div>
           </div>
-          <div class="col-md-3">
-            <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+            <div class="card h-100 pk-tilt">
               <div class="card-body">
-                <i class="bi bi-repeat fs-1 text-primary mb-3"></i>
-                <h5 class="card-title">Reusable QRs for multiple events</h5>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="card h-100 text-center border-0 shadow-sm">
-              <div class="card-body">
-                <i class="bi bi-clock fs-1 text-primary mb-3"></i>
-                <h5 class="card-title">Event activation (6 hours for ₹800)</h5>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="card h-100 text-center border-0 shadow-sm">
-              <div class="card-body">
-                <i class="bi bi-bar-chart fs-1 text-primary mb-3"></i>
-                <h5 class="card-title">Analytics &amp; feedback</h5>
-                <p class="card-text text-muted small">Collect likes &amp; dislikes on dishes.</p>
+                <i class="bi bi-shop fs-1 text-primary mb-3"></i>
+                <h5 class="card-title">Vendors &amp; Organizers</h5>
+                <ul class="mb-0">
+                  <li>Reusable physical QRs</li>
+                  <li>Event-based activation</li>
+                  <li>Simple updates + optional analytics</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -80,18 +63,140 @@
       </div>
     </section>
 
-    <section id="pricing" class="pricing py-5">
+    <!-- SOLUTIONS -->
+    <section id="solutions" class="py-5 bg-light">
       <div class="container">
-        <h2 class="text-center mb-4">Pricing</h2>
-        <div class="row justify-content-center">
-          <div class="col-md-6 col-lg-4">
-            <div class="card text-center border-0 shadow">
+        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
+        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
+        <div class="row g-4">
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
+            <div class="card h-100 text-center pk-tilt">
               <div class="card-body">
-                <h5 class="card-title">Basic Plan</h5>
-                <p class="display-5 fw-bold text-primary">₹800</p>
-                <p class="text-muted">per event (6 hours)</p>
-                <p class="text-muted">Extra Hours: Add-on available</p>
-                <a href="#" class="btn btn-primary">Choose Plan</a>
+                <i class="bi bi-qr-code-scan fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Simple &amp; Physical</h6>
+                <p class="text-muted small mb-0">Elegant QR plates—scan and go.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body">
+                <i class="bi bi-clock-history fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Event-Based Pricing</h6>
+                <p class="text-muted small mb-0">Activate for 6 hours; extend as needed.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body">
+                <i class="bi bi-journal-richtext fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Detailed Pages</h6>
+                <p class="text-muted small mb-0">Menus, photos, notes, allergen info.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body">
+                <i class="bi bi-globe fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Looks Like a Website</h6>
+                <p class="text-muted small mb-0">Shareable links for vendors &amp; events.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="400">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body">
+                <i class="bi bi-phone fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Zero App Install</h6>
+                <p class="text-muted small mb-0">Frictionless for everyone.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="500">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body">
+                <i class="bi bi-graph-up fs-1 text-primary mb-3"></i>
+                <h6 class="fw-semibold">Vendors Stay Ahead</h6>
+                <p class="text-muted small mb-0">Modernize without heavy software.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row text-center py-4">
+          <div class="col-md-4 pk-reveal" data-anim="animate__fadeIn">
+            ⚡ ~2s average load
+          </div>
+          <div class="col-md-4 pk-reveal" data-anim="animate__fadeIn" data-delay="100">
+            ▦ 1 QR, many events
+          </div>
+          <div class="col-md-4 pk-reveal" data-anim="animate__fadeIn" data-delay="200">
+            🛡️ Secure links
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" class="py-5">
+      <div class="container">
+        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
+        <div class="row g-4">
+          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
+            <div class="card h-100 pk-tilt">
+              <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                  <i class="bi bi-telephone-fill fs-3 text-primary me-3"></i>
+                  <div>
+                    <div class="fw-bold">Phone</div>
+                    <div class="text-muted">+91-XXXXXXXXXX</div>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                  <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
+                  <div>
+                    <div class="fw-bold">Email</div>
+                    <div class="text-muted">hello@peshkash.app</div>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
+                  <div>
+                    <div class="fw-bold">WhatsApp</div>
+                    <div class="text-muted"><a href="#" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+            <div class="card h-100 pk-tilt">
+              <div class="card-body">
+                <form action="mailto:hello@peshkash.app" method="post" enctype="text/plain">
+                  <div class="mb-3">
+                    <label for="name" class="form-label">Name</label>
+                    <input id="name" name="name" type="text" class="form-control" required />
+                  </div>
+                  <div class="mb-3">
+                    <label for="phone" class="form-label">Phone</label>
+                    <input id="phone" name="phone" type="tel" class="form-control" />
+                  </div>
+                  <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input id="email" name="email" type="email" class="form-control" required />
+                  </div>
+                  <div class="mb-3">
+                    <label for="city" class="form-label">City</label>
+                    <input id="city" name="city" type="text" class="form-control" />
+                  </div>
+                  <div class="mb-3">
+                    <label for="message" class="form-label">Message</label>
+                    <textarea id="message" name="message" rows="3" class="form-control"></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary">Send</button>
+                </form>
               </div>
             </div>
           </div>
@@ -99,104 +204,210 @@
       </div>
     </section>
 
-    <footer class="py-4 bg-dark text-white text-center">
+    <!-- PRICING -->
+    <section id="pricing" class="py-5 bg-light">
       <div class="container">
-        <ul class="list-inline mb-3">
-          <li class="list-inline-item"><a href="#" class="text-white text-decoration-none">About Us</a></li>
-          <li class="list-inline-item"><a href="#" class="text-white text-decoration-none">Contact</a></li>
-        </ul>
-        <div>
-          <a href="#" class="text-white me-3"><i class="bi bi-facebook"></i></a>
-          <a href="#" class="text-white me-3"><i class="bi bi-twitter"></i></a>
-          <a href="#" class="text-white"><i class="bi bi-instagram"></i></a>
+        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
+        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Start small. Scale as you go.</p>
+        <div class="row g-4 justify-content-center">
+          <div class="col-md-4 col-lg-3 pk-reveal" data-anim="animate__zoomIn">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body d-flex flex-column">
+                <h5 class="card-title">Starter</h5>
+                <div class="display-6 fw-bold text-primary">₹800</div>
+                <div class="text-muted mb-3">per event (6 hours)</div>
+                <ul class="list-unstyled mb-4">
+                  <li>Up to 10 QRs</li>
+                  <li>Menu pages</li>
+                  <li>Basic analytics</li>
+                </ul>
+                <a href="#contact" class="mt-auto btn btn-outline-primary">Activate an Event</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-lg-3 pk-reveal" data-anim="animate__zoomIn" data-delay="100">
+            <div class="card h-100 text-center pk-tilt pk-featured">
+              <div class="card-body d-flex flex-column">
+                <h5 class="card-title">Pro</h5>
+                <div class="display-6 fw-bold text-primary">₹1,499</div>
+                <div class="text-muted mb-3">per event (8 hours)</div>
+                <ul class="list-unstyled mb-4">
+                  <li>Up to 25 QRs</li>
+                  <li>Dish photos &amp; notes</li>
+                  <li>Priority support</li>
+                </ul>
+                <a href="#contact" class="mt-auto btn btn-primary">Talk to Sales</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-lg-3 pk-reveal" data-anim="animate__zoomIn" data-delay="200">
+            <div class="card h-100 text-center pk-tilt">
+              <div class="card-body d-flex flex-column">
+                <h5 class="card-title">Plus</h5>
+                <div class="display-6 fw-bold text-primary">Custom</div>
+                <div class="text-muted mb-3">quote</div>
+                <ul class="list-unstyled mb-4">
+                  <li>Bulk events</li>
+                  <li>Branding &amp; custom domains</li>
+                  <li>Advanced analytics</li>
+                </ul>
+                <a href="#contact" class="mt-auto btn btn-outline-primary">Get a Custom Quote</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="text-center text-muted mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">One-time QR plates available starting ₹49 each.</p>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-5 bg-dark text-white">
+      <div class="container">
+        <div class="row g-4">
+          <div class="col-md-4">
+            <p class="mb-0">Peshkash brings your event to life with elegant, QR-powered pages.</p>
+          </div>
+          <div class="col-md-4">
+            <h6>Quick links</h6>
+            <ul class="list-unstyled">
+              <li><a href="#hero" class="text-white text-decoration-none">About</a></li>
+              <li><a href="#solutions" class="text-white text-decoration-none">How It Works</a></li>
+              <li><a href="#pricing" class="text-white text-decoration-none">Pricing</a></li>
+              <li><a href="#contact" class="text-white text-decoration-none">Contact</a></li>
+            </ul>
+          </div>
+          <div class="col-md-4">
+            <h6>Follow us</h6>
+            <a href="#" class="text-white me-3" aria-label="LinkedIn"><i class="bi bi-linkedin fs-4"></i></a>
+            <a href="#" class="text-white" aria-label="Instagram"><i class="bi bi-instagram fs-4"></i></a>
+          </div>
+        </div>
+        <div class="text-center mt-4">
+          © {{ new Date().getFullYear() }} • COMPANY_NAME
         </div>
       </div>
     </footer>
+
+    <button v-show="showTop" @click="scrollToTop" class="btn btn-primary pk-back-top" aria-label="Back to top">
+      <i class="bi bi-arrow-up"></i>
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
 import Navbar from '../components/Navbar.vue';
+
+const showTop = ref(false);
+
+onMounted(() => {
+  const els = document.querySelectorAll<HTMLElement>('.pk-reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const el = entry.target as HTMLElement;
+        const anim = el.dataset.anim || 'animate__fadeInUp';
+        const delay = Number(el.dataset.delay || 0);
+        setTimeout(() => {
+          el.classList.add('animate__animated', anim, 'pk-visible');
+        }, delay);
+        io.unobserve(el);
+      }
+    });
+  }, { threshold: 0.3 });
+  els.forEach((el) => io.observe(el));
+
+  const onScroll = () => {
+    showTop.value = window.scrollY > 300;
+  };
+  window.addEventListener('scroll', onScroll);
+});
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 </script>
 
 <style scoped>
-.landing-page {
-  overflow-x: hidden;
-}
-
-.hero {
+.pk-hero {
   position: relative;
   min-height: 100vh;
-  background-image: url('https://images.unsplash.com/photo-1529634898368-2714d7b6a2de?auto=format&fit=crop&w=1950&q=80');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  background: url('https://images.unsplash.com/photo-1607083208813-478ca7385da2?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
 }
 
-.hero-overlay {
+.pk-hero-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(65, 105, 225, 0.5);
+  inset: 0;
+  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
 }
 
-.shapes {
+.pk-shape {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  animation: pk-float 20s ease-in-out infinite;
 }
-
-.shape {
-  position: absolute;
-  display: block;
+.pk-shape-1 {
   width: 40px;
   height: 40px;
-  background: rgba(255, 215, 0, 0.3);
-  border-radius: 50%;
-  animation: float 20s infinite linear;
-  backdrop-filter: blur(2px);
+  top: 20%;
+  left: 10%;
 }
-
-.shape-1 {
-  top: 10%;
-  left: 15%;
-}
-
-.shape-2 {
-  top: 70%;
-  left: 25%;
+.pk-shape-2 {
   width: 60px;
   height: 60px;
+  top: 60%;
+  left: 80%;
   animation-delay: 5s;
 }
-
-.shape-3 {
-  top: 40%;
-  left: 80%;
-  width: 80px;
-  height: 80px;
+.pk-shape-3 {
+  width: 50px;
+  height: 50px;
+  top: 80%;
+  left: 30%;
   animation-delay: 10s;
 }
 
-@keyframes float {
+@keyframes pk-float {
   0% {
-    transform: translateY(0) translateX(0);
+    transform: translateY(0);
   }
   50% {
-    transform: translateY(-50px) translateX(20px);
+    transform: translateY(-20px);
   }
   100% {
-    transform: translateY(0) translateX(0);
+    transform: translateY(0);
   }
 }
 
-footer a:hover {
-  color: #ffd700;
+.pk-tilt {
+  transition: transform 0.3s;
+}
+.pk-tilt:hover {
+  transform: translateY(-3px);
+}
+
+.pk-featured {
+  border: 2px solid var(--bs-primary);
+  box-shadow: 0 0 1rem rgba(0, 0, 0, 0.1);
+}
+
+.pk-back-top {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  opacity: 0.8;
+}
+
+.pk-reveal {
+  opacity: 0;
+}
+.pk-visible {
+  opacity: 1;
+}
+
+:global(html, body) {
+  scroll-behavior: smooth;
 }
 </style>
-
