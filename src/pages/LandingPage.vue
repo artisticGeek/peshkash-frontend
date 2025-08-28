@@ -8,7 +8,7 @@
       <div class="container position-relative">
         <div class="row">
           <div class="col-lg-8 col-xl-6">
-            <h1 class="display-4 fw-bold mb-3 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
+            <h1 class="display-4 fw-bold mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
             <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
             <div class="d-flex flex-column flex-sm-row gap-2 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
               <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
@@ -28,9 +28,9 @@
     </section>
 
     <!-- WHY IT MATTERS -->
-    <section id="why" class="py-5">
+    <section id="why" class="py-5 pk-section pk-section-why">
       <div class="container">
-        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
+        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible. Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -64,9 +64,9 @@
     </section>
 
     <!-- SOLUTIONS -->
-    <section id="solutions" class="py-5 bg-light">
+    <section id="solutions" class="py-5 pk-section pk-section-solutions">
       <div class="container">
-        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
+        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
         <div class="row g-4">
           <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
@@ -139,9 +139,9 @@
     </section>
 
     <!-- CONTACT -->
-    <section id="contact" class="py-5">
+    <section id="contact" class="py-5 pk-section pk-section-contact">
       <div class="container">
-        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -205,9 +205,9 @@
     </section>
 
     <!-- PRICING -->
-    <section id="pricing" class="py-5 bg-light">
+    <section id="pricing" class="py-5 pk-section pk-section-pricing">
       <div class="container">
-        <h2 class="text-center mb-3 pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
+        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Start small. Scale as you go.</p>
         <div class="row g-4 justify-content-center">
           <div class="col-md-4 col-lg-3 pk-reveal" data-anim="animate__zoomIn">
@@ -378,6 +378,60 @@ const scrollToTop = () => {
   100% {
     transform: translateY(0);
   }
+}
+
+.pk-heading {
+  background: linear-gradient(45deg, var(--bs-primary), #0d6efd);
+  -webkit-background-clip: text;
+  color: transparent;
+  background-size: 200% 200%;
+  animation: pk-gradient 10s ease-in-out infinite;
+}
+
+@keyframes pk-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.pk-section {
+  position: relative;
+  z-index: 0;
+}
+
+.pk-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.pk-section-why {
+  background: url('https://images.unsplash.com/photo-1522199710521-72d69614c702?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+}
+
+.pk-section-why::before,
+.pk-section-contact::before,
+.pk-section-pricing::before {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.pk-section-solutions {
+  background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05), #fff);
+}
+
+.pk-section-contact {
+  background: url('https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+}
+
+.pk-section-pricing {
+  background: url('https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
 }
 
 .pk-tilt {
