@@ -12,7 +12,7 @@
           <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
           <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
-            <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
+            <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
             <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
           </div>
           <ul class="list-inline mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
@@ -136,71 +136,6 @@
       </div>
     </section>
 
-    <!-- CONTACT -->
-    <section id="contact" class="py-5 pk-section pk-section-contact">
-      <div class="container">
-        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
-        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
-        <div class="row g-4">
-          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
-            <div class="card h-100 pk-tilt">
-              <div class="card-body">
-                <div class="d-flex align-items-center mb-3">
-                  <i class="bi bi-telephone-fill fs-3 text-primary me-3"></i>
-                  <div>
-                    <div class="fw-bold">Phone</div>
-                    <div class="text-muted">+91-XXXXXXXXXX</div>
-                  </div>
-                </div>
-                <div class="d-flex align-items-center mb-3">
-                  <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
-                  <div>
-                    <div class="fw-bold">Email</div>
-                    <div class="text-muted">hello@peshkash.app</div>
-                  </div>
-                </div>
-                <div class="d-flex align-items-center">
-                  <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
-                  <div>
-                    <div class="fw-bold">WhatsApp</div>
-                    <div class="text-muted"><a href="#" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
-            <div class="card h-100 pk-tilt">
-              <div class="card-body">
-                <form action="mailto:hello@peshkash.app" method="post" enctype="text/plain">
-                  <div class="mb-3">
-                    <label for="name" class="form-label">Name</label>
-                    <input id="name" name="name" type="text" class="form-control" required />
-                  </div>
-                  <div class="mb-3">
-                    <label for="phone" class="form-label">Phone</label>
-                    <input id="phone" name="phone" type="tel" class="form-control" />
-                  </div>
-                  <div class="mb-3">
-                    <label for="email" class="form-label">Email</label>
-                    <input id="email" name="email" type="email" class="form-control" required />
-                  </div>
-                  <div class="mb-3">
-                    <label for="city" class="form-label">City</label>
-                    <input id="city" name="city" type="text" class="form-control" />
-                  </div>
-                  <div class="mb-3">
-                    <label for="message" class="form-label">Message</label>
-                    <textarea id="message" name="message" rows="3" class="form-control"></textarea>
-                  </div>
-                  <button type="submit" class="btn btn-primary">Send</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- PRICING -->
     <section id="pricing" class="py-5 pk-section pk-section-pricing">
@@ -256,9 +191,75 @@
         </div>
         <p class="text-center text-muted mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">One-time QR plates available starting ₹49 each.</p>
       </div>
-    </section>
+      </section>
 
-    <!-- FOOTER -->
+      <!-- CONTACT -->
+      <section id="contact" class="py-5 pk-section pk-section-contact">
+        <div class="container">
+          <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+          <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
+          <div class="row g-4">
+            <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
+              <div class="card h-100 pk-tilt">
+                <div class="card-body">
+                  <div class="d-flex align-items-center mb-3">
+                    <i class="bi bi-telephone-fill fs-3 text-primary me-3"></i>
+                    <div>
+                      <div class="fw-bold">Phone</div>
+                      <div class="text-muted">+91-XXXXXXXXXX</div>
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center mb-3">
+                    <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
+                    <div>
+                      <div class="fw-bold">Email</div>
+                      <div class="text-muted">hello@peshkash.app</div>
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center">
+                    <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
+                    <div>
+                      <div class="fw-bold">WhatsApp</div>
+                      <div class="text-muted"><a href="#" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
+              <div class="card h-100 pk-tilt">
+                <div class="card-body">
+                  <form action="mailto:hello@peshkash.app" method="post" enctype="text/plain">
+                    <div class="mb-3">
+                      <label for="name" class="form-label">Name</label>
+                      <input id="name" name="name" type="text" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                      <label for="phone" class="form-label">Phone</label>
+                      <input id="phone" name="phone" type="tel" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                      <label for="email" class="form-label">Email</label>
+                      <input id="email" name="email" type="email" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                      <label for="city" class="form-label">City</label>
+                      <input id="city" name="city" type="text" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                      <label for="message" class="form-label">Message</label>
+                      <textarea id="message" name="message" rows="3" class="form-control"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FOOTER -->
     <footer class="py-5 bg-dark text-white">
       <div class="container">
         <div class="row g-4">
@@ -381,20 +382,20 @@ const scrollToTop = () => {
 }
 
 .pk-section-why::before,
-.pk-section-contact::before {
+.pk-section-pricing::before {
   background: url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
 }
 
 .pk-section-solutions {
-  background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05), #fff);
-}
-
-.pk-section-contact {
-  background:  url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
+  background: url(../assets/peshkash-demo-section-placed.png) center/cover fixed no-repeat;
 }
 
 .pk-section-pricing {
-  background-color: var(--bs-light);
+  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
+}
+
+.pk-section-contact::before {
+  background: url(../assets/peshkash-demo-section-placed.png) center/cover fixed no-repeat;
 }
 
 .pk-tilt {
