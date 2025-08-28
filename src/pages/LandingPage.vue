@@ -359,20 +359,11 @@ const scrollToTop = () => {
 .pk-shape {
   --s: 1;
   position: absolute;
-  width: 4px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow:
-    6px 0 rgba(255, 255, 255, 0.8),
-    12px 0 rgba(255, 255, 255, 0.8),
-    0 6px rgba(255, 255, 255, 0.8),
-    18px 6px rgba(255, 255, 255, 0.8),
-    0 12px rgba(255, 255, 255, 0.8),
-    12px 12px rgba(255, 255, 255, 0.8),
-    18px 12px rgba(255, 255, 255, 0.8),
-    6px 18px rgba(255, 255, 255, 0.8),
-    12px 18px rgba(255, 255, 255, 0.8),
-    18px 18px rgba(255, 255, 255, 0.8);
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  -webkit-mask: url('../assets/qr-sprite.svg') center/contain no-repeat;
+  mask: url('../assets/qr-sprite.svg') center/contain no-repeat;
   animation: pk-drift var(--dur, 4s) linear infinite;
 }
 .pk-shape-1 {
