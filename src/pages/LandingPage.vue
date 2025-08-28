@@ -8,7 +8,7 @@
       <div class="container position-relative">
         <div class="row">
           <div class="col-lg-8 col-xl-6">
-            <h1 class="display-4 fw-bold mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
+            <h1 class="display-4 fw-bold mb-3 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
             <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
             <div class="d-flex flex-column flex-sm-row gap-2 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
               <a href="#contact" class="btn btn-primary btn-lg">Get Started</a>
@@ -30,7 +30,7 @@
     <!-- WHY IT MATTERS -->
     <section id="why" class="py-5 pk-section pk-section-why">
       <div class="container">
-        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
+        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible. Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -66,7 +66,7 @@
     <!-- SOLUTIONS -->
     <section id="solutions" class="py-5 pk-section pk-section-solutions">
       <div class="container">
-        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
+        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
         <div class="row g-4">
           <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
@@ -141,7 +141,7 @@
     <!-- CONTACT -->
     <section id="contact" class="py-5 pk-section pk-section-contact">
       <div class="container">
-        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -207,7 +207,7 @@
     <!-- PRICING -->
     <section id="pricing" class="py-5 pk-section pk-section-pricing">
       <div class="container">
-        <h2 class="text-center mb-3 pk-heading pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
+        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Simple, event-ready pricing</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Start small. Scale as you go.</p>
         <div class="row g-4 justify-content-center">
           <div class="col-md-4 col-lg-3 pk-reveal" data-anim="animate__zoomIn">
@@ -342,62 +342,48 @@ const scrollToTop = () => {
 }
 
 .pk-shape {
+  --s: 1;
   position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  animation: pk-float 20s ease-in-out infinite;
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 8px 0 rgba(255, 255, 255, 0.7), 16px 0 rgba(255, 255, 255, 0.7),
+    0 8px rgba(255, 255, 255, 0.7), 16px 8px rgba(255, 255, 255, 0.7),
+    0 16px rgba(255, 255, 255, 0.7), 8px 16px rgba(255, 255, 255, 0.7),
+    16px 16px rgba(255, 255, 255, 0.7);
+  animation: pk-float 8s ease-in-out infinite;
 }
 .pk-shape-1 {
-  width: 40px;
-  height: 40px;
   top: 20%;
   left: 10%;
 }
 .pk-shape-2 {
-  width: 60px;
-  height: 60px;
   top: 60%;
   left: 80%;
-  animation-delay: 5s;
+  --s: 1.5;
+  animation-delay: 2s;
 }
 .pk-shape-3 {
-  width: 50px;
-  height: 50px;
   top: 80%;
   left: 30%;
-  animation-delay: 10s;
+  --s: 0.8;
+  animation-delay: 4s;
 }
 
 @keyframes pk-float {
   0% {
-    transform: translateY(0);
+    transform: translateY(0) scale(var(--s));
   }
   50% {
-    transform: translateY(-20px);
+    transform: translateY(-30px) scale(var(--s));
   }
   100% {
-    transform: translateY(0);
+    transform: translateY(0) scale(var(--s));
   }
 }
 
 .pk-heading {
-  background: linear-gradient(45deg, var(--bs-primary), #0d6efd);
-  -webkit-background-clip: text;
-  color: transparent;
-  background-size: 200% 200%;
-  animation: pk-gradient 10s ease-in-out infinite;
-}
-
-@keyframes pk-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  color: var(--bs-accent3, var(--bs-primary));
 }
 
 .pk-section {
@@ -417,8 +403,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-why::before,
-.pk-section-contact::before,
-.pk-section-pricing::before {
+.pk-section-contact::before {
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -431,7 +416,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-pricing {
-  background: url('https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=2070&q=80') center/cover fixed no-repeat;
+  background-color: var(--bs-light);
 }
 
 .pk-tilt {
