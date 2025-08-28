@@ -9,8 +9,8 @@
     <div class="container h-100 position-relative">
       <div class="row align-items-center h-100 py-5">
         <div class="col-lg-10 col-xl-7">
-          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... </br> Digitally Presented.</h1>
-          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, </br> mobile-first pages — menus, exhibits, and stories... </br> so guests get everything they need in seconds.</p>
+          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... <br/> Digitally Presented.</h1>
+          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, <br/> mobile-first pages — menus, exhibits, and stories... </br> so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
             <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
@@ -32,7 +32,7 @@
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
       </br>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible.
-        </br>
+        <br/>
           Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -171,13 +171,13 @@
                 <div class="display-6 fw-bold text-primary">₹1,299</div>
                 <div class="text-muted mb-3">per event (6 hours)</div>
                 <ul class="list-unstyled mb-4">
-                  <li>- Upto Menu Items 40</li>
-                  <li>- Logo Design</li>
-                  <li>- Menu Onboarding</li>
-                  <li>- Live Menu Page</li>
-                  <li>- Customised Content Generation</li>
-                  <li>- Live support</li>
-                  <li>- Custom QR Code Design</li>
+                  <li> Upto Menu Items 40</li>
+                  <li> Logo Design</li>
+                  <li> Menu Onboarding</li>
+                  <li> Live Menu Page</li>
+                  <li> Customised Content Generation</li>
+                  <li> Live support</li>
+                  <li> Custom QR Code Design</li>
                 </ul>
                 
               </div>
@@ -190,14 +190,14 @@
                 <div class="display-6 fw-bold text-primary">Custom</div>
                 <div class="text-muted mb-3">quote</div>
                 <ul class="list-unstyled mb-4">
-                  <li>- Bulk events</li>
-                  <li>- Branding &amp; custom domains</li>
-                  <li>- Advanced analytics</li>
-                  <li>- Long term plans</li>
-                  <li>- Custom Pages</li>
-                  <li>- Unlimited List Items</li>
-                  <li>- Permanent Vendor Page</li>
-                  <li>- Event Page</li>
+                  <li> Bulk events</li>
+                  <li> Branding &amp; custom domains</li>
+                  <li> Advanced analytics</li>
+                  <li> Long term plans</li>
+                  <li> Custom Pages</li>
+                  <li> Unlimited List Items</li>
+                  <li> Permanent Vendor Page</li>
+                  <li> Event Page</li>
                 </ul>
                 
               </div>
@@ -235,7 +235,7 @@
                   <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
                   <div>
                     <div class="fw-bold">WhatsApp</div>
-                    <div class="text-muted"><a href="https://wa.me/+919041716953X" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
+                    <div class="text-muted"><a href="https://wa.me/+919041716953" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
                   </div>
                 </div>
               </div>
