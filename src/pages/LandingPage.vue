@@ -381,11 +381,6 @@ const scrollToTop = () => {
   background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
 }
 
-.pk-section-why::before,
-.pk-section-pricing::before {
-  background: url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
-}
-
 .pk-section-solutions {
   background: url(../assets/peshkash-demo-section-placed.png) center/cover fixed no-repeat;
 }
