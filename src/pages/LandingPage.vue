@@ -360,13 +360,6 @@ const scrollToTop = () => {
     opacity: 0.4;
   }
 
-.pk-hero-qr::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(var(--bs-primary-rgb), 0.6), rgba(var(--bs-primary-rgb), 0));
-}
-
 .pk-heading {
   color: var(--bs-accent3, var(--bs-primary));
 }
