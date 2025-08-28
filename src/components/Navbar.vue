@@ -41,3 +41,13 @@
   </div>
 </nav>
 </template>
+
+<style scoped>
+.navbar-nav .nav-link {
+  transition: color 0.3s;
+}
+
+.navbar-nav .nav-link:hover {
+  color: #ffd700;
+}
+</style>
