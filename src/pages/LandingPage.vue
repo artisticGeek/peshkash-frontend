@@ -351,12 +351,12 @@ const scrollToTop = () => {
 }
 
 .pk-hero-qr {
-    position: absolute;
-    top: 0;
-    right: 0;
-    height: 100%;
-    width: 50%;
-    background: url('../assets/hero-qr.svg') center/contain no-repeat;
+  position: absolute;
+    top: 5%;
+    right: 5%;
+    height: 80%;
+    width: 40%;
+    background: url(/assets/hero-qr-ClSCutIb.svg) center / contain no-repeat;
     opacity: 0.4;
   }
 
