@@ -8,7 +8,7 @@
     <div class="pk-hero-qr d-none d-lg-block"></div>
     <div class="container h-100 position-relative">
       <div class="row align-items-center h-100 py-5">
-        <div class="col-lg-6 col-xl-6">
+        <div class="col-lg-10 col-xl-7">
           <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event, Digitally Presented.</h1>
           <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Peshkash turns simple QR codes into rich, mobile-first pages — menus, exhibits, and stories — so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
@@ -81,7 +81,7 @@
               <div class="card-body">
                 <i class="bi bi-clock-history fs-1 text-primary mb-3"></i>
                 <h6 class="fw-semibold">Event-Based Pricing</h6>
-                <p class="text-muted small mb-0">Activate for 4-6 hours; extend as needed.</p>
+                <p class="text-muted small mb-0">Activate for 6 hours; extend as needed.</p>
               </div>
             </div>
           </div>
@@ -149,21 +149,21 @@
                   <i class="bi bi-telephone-fill fs-3 text-primary me-3"></i>
                   <div>
                     <div class="fw-bold">Phone</div>
-                    <div class="text-muted">+91-9041716953</div>
+                    <div class="text-muted">+91-XXXXXXXXXX</div>
                   </div>
                 </div>
                 <div class="d-flex align-items-center mb-3">
                   <i class="bi bi-envelope-fill fs-3 text-primary me-3"></i>
                   <div>
                     <div class="fw-bold">Email</div>
-                    <div class="text-muted">contact@peshkash.app</div>
+                    <div class="text-muted">hello@peshkash.app</div>
                   </div>
                 </div>
                 <div class="d-flex align-items-center">
                   <i class="bi bi-whatsapp fs-3 text-primary me-3"></i>
                   <div>
                     <div class="fw-bold">WhatsApp</div>
-                    <div class="text-muted"><a href="https://wa.me/+919041716953X" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
+                    <div class="text-muted"><a href="#" class="text-reset text-decoration-none">Chat on WhatsApp</a></div>
                   </div>
                 </div>
               </div>
@@ -212,13 +212,12 @@
             <div class="card h-100 text-center pk-tilt">
               <div class="card-body d-flex flex-column">
                 <h5 class="card-title">Starter</h5>
-                <div class="display-6 fw-bold text-primary">₹799</div>
-                <div class="text-muted mb-3">per event (4 hours)</div>
+                <div class="display-6 fw-bold text-primary">₹800</div>
+                <div class="text-muted mb-3">per event (6 hours)</div>
                 <ul class="list-unstyled mb-4">
-                  <li>Up to 25 QRs</li>
-                  <li>Menu Onboarding</li>
-                  <li>Vendoor Page</li>
-                  <li>Logo Design</li>
+                  <li>Up to 10 QRs</li>
+                  <li>Menu pages</li>
+                  <li>Basic analytics</li>
                 </ul>
                 <a href="#contact" class="mt-auto btn btn-outline-primary">Activate an Event</a>
               </div>
@@ -228,18 +227,14 @@
             <div class="card h-100 text-center pk-tilt pk-featured">
               <div class="card-body d-flex flex-column">
                 <h5 class="card-title">Pro</h5>
-                <div class="display-6 fw-bold text-primary">₹1,299</div>
-                <div class="text-muted mb-3">per event (6 hours)</div>
+                <div class="display-6 fw-bold text-primary">₹1,499</div>
+                <div class="text-muted mb-3">per event (8 hours)</div>
                 <ul class="list-unstyled mb-4">
-                  <li>- Upto Menu Items 40</li>
-                  <li>- Logo Design</li>
-                  <li>- Menu Onboarding</li>
-                  <li>- Live Menu Page</li>
-                  <li>- Customised Content Generation</li>
-                  <li>- Live support</li>
-                  <li>- Custom QR Code Design</li>
+                  <li>Up to 25 QRs</li>
+                  <li>Dish photos &amp; notes</li>
+                  <li>Priority support</li>
                 </ul>
-                
+                <a href="#contact" class="mt-auto btn btn-primary">Talk to Sales</a>
               </div>
             </div>
           </div>
@@ -250,16 +245,11 @@
                 <div class="display-6 fw-bold text-primary">Custom</div>
                 <div class="text-muted mb-3">quote</div>
                 <ul class="list-unstyled mb-4">
-                  <li>- Bulk events</li>
-                  <li>- Branding &amp; custom domains</li>
-                  <li>- Advanced analytics</li>
-                  <li>- Long term plans</li>
-                  <li>- Custom Pages</li>
-                  <li>- Unlimited List Items</li>
-                  <li>- Permanent Vendor Page</li>
-                  <li>- Event Page</li>
+                  <li>Bulk events</li>
+                  <li>Branding &amp; custom domains</li>
+                  <li>Advanced analytics</li>
                 </ul>
-                
+                <a href="#contact" class="mt-auto btn btn-outline-primary">Get a Custom Quote</a>
               </div>
             </div>
           </div>
@@ -269,7 +259,7 @@
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-5 bg-dark text-white text-center">
+    <footer class="py-5 bg-dark text-white">
       <div class="container">
         <div class="row g-4">
           <div class="col-md-4">
@@ -291,7 +281,7 @@
           </div>
         </div>
         <div class="text-center mt-4">
-          © {{ new Date().getFullYear() }} • ArtisticGeek Labs
+          © {{ new Date().getFullYear() }} • COMPANY_NAME
         </div>
       </div>
     </footer>
@@ -338,7 +328,7 @@ const scrollToTop = () => {
 
 <style scoped>
 .pk-hero {
-    position: absolute;
+    position: relative;
     min-height: 100vh;
     padding-top: 6rem;
     padding-bottom: 6rem;
@@ -361,7 +351,7 @@ const scrollToTop = () => {
 }
 
 .pk-hero-qr {
-  position: fixed;
+  position: absolute;
     top: 5%;
     right: 5%;
     height: 80%;
@@ -392,15 +382,15 @@ const scrollToTop = () => {
 
 .pk-section-why::before,
 .pk-section-contact::before {
-  background:linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05), #fff);
-}
-
-.pk-section-solutions {
   background: url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
 }
 
+.pk-section-solutions {
+  background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05), #fff);
+}
+
 .pk-section-contact {
-  background:  url(../assets/peshkash-demo-sectio-placed.png) center/cover fixed no-repeat;
+  background:  url(../assets/peshkash-demo-section.png) center/cover fixed no-repeat;
 }
 
 .pk-section-pricing {
