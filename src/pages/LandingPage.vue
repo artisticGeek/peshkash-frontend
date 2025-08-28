@@ -26,7 +26,7 @@
   </section>
 
     <!-- WHY IT MATTERS -->
-    <section id="why" class="py-5 pk-section pk-section-why">
+    <section id="why" class="py-5 pk-section">
       <div class="container">
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible. Peshkash blends the physical with the digital so everyone wins.</p>
@@ -368,6 +368,7 @@ const scrollToTop = () => {
 .pk-section {
   position: relative;
   z-index: 0;
+  background: linear-gradient(180deg, rgba(var(--bs-primary-rgb), .05), #fff);
 }
 
 .pk-section::before {
@@ -377,16 +378,16 @@ const scrollToTop = () => {
   z-index: -1;
 }
 
-.pk-section-why {
-  background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), .05), #fff);
-}
-
 .pk-section-solutions {
   background: url(../assets/peshkash-demo-section-placed.png) center/cover fixed no-repeat;
 }
 
 .pk-section-pricing {
-  background: linear-gradient(rgba(var(--bs-primary-rgb), 0.7), rgba(0, 0, 0, 0.7));
+  background: linear-gradient(176deg, rgb(255 243 225 / 70%), rgb(247 216 172));
+}
+
+.pk-section-contact {
+  background: none;
 }
 
 .pk-section-contact::before {
