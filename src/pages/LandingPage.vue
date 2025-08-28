@@ -356,7 +356,7 @@ const scrollToTop = () => {
     right: 5%;
     height: 80%;
     width: 40%;
-    background: url(../assets/peshkash-qr.png) center / contain no-repeat;
+    background: url(../assets/peshkashqrhero.png) center / contain no-repeat;
     opacity: 0.4;
   }
 
