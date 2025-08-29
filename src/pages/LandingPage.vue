@@ -69,7 +69,7 @@
           </div>
         </div>
         <br>
-        <p class="text-center text-secondary"> So that, no one is left behind in the fast paced world of Technology...</p>
+        <p class="text-center text-primary"> So that, no one is left behind in the fast paced world of Technology...</p>
         <br></br>
       </div>
     </br>
@@ -79,8 +79,8 @@
     <!-- SOLUTIONS -->
     <section id="solutions" class="py-5 pk-section pk-section-solutions">
       <div class="container">
-        <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
-        <p class="text-center text-white mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
+        <h2 class="text-center mb-3 display-5 text-white pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
+        <p class="text-center text-primary mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
         <div class="row g-4">
           <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
             <div class="card h-100 text-center pk-tilt">
@@ -407,6 +407,7 @@ const scrollToTop = () => {
 
 .pk-section-solutions {
   background: url(../assets/peshkash-demo-section-placed.png) center/cover fixed no-repeat;
+  overflow: hidden;
 }
 
 .pk-section-pricing {
