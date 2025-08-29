@@ -9,7 +9,7 @@
     <div class="container h-100 position-relative">
       <div class="row align-items-center h-100 py-5">
         <div class="col-lg-10 col-xl-7">
-          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... <br> Digitally Presented.</h1>
+          <h1 class="display-2 shadow fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... <br> Digitally Presented.</h1>
           <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, <br/> mobile-first pages — menus, exhibits, and stories... <br> so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
@@ -69,8 +69,8 @@
           </div>
         </div>
         <br>
-        <p class="text-center text-primary"> So that, no one is left behind in the fast paced world of Technology...</p>
-        <br></br>
+        <p class="text-center shadow text-primary"> So that, no one is left behind in the fast paced world of Technology...</p>
+        <br>
       </div>
     </br>
     </br>
@@ -79,8 +79,8 @@
     <!-- SOLUTIONS -->
     <section id="solutions" class="py-5 pk-section pk-section-solutions">
       <div class="container">
-        <h2 class="text-center mb-3 display-5 text-white pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
-        <p class="text-center text-primary mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
+        <h2 class="text-center shadow mb-3 display-5 text-white pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
+        <p class="text-center shadow text-primary mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
         <div class="row g-4">
           <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
             <div class="card h-100 text-center pk-tilt">
@@ -223,8 +223,8 @@
       <!-- CONTACT -->
       <section id="contact" class="py-5 pk-section pk-section-contact">
         <div class="container">
-          <h2 class="text-center text-white mb-3 display-4 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
-          <p class="text-center text-primary text-muted mb-5  pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
+          <h2 class="text-center shadow text-white mb-3 display-4 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+          <p class="text-center text-primary mb-5 shadow pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
           <div class="row g-4">
             <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
               <div class="card h-100 pk-tilt">
@@ -294,7 +294,7 @@
             <p class="mb-0">Peshkash brings your event to life with elegant, QR-powered pages.</p>
           </div>
           <div class="col-md-4">
-            <h6>Quick links</h6>
+            <h6 class="text-primary">Quick links</h6>
             <ul class="list-unstyled">
               <li><a href="#hero" class="text-white text-decoration-none">About</a></li>
               <li><a href="#solutions" class="text-white text-decoration-none">How It Works</a></li>
