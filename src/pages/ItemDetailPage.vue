@@ -57,7 +57,7 @@
             <span
               v-for="ing in itemData.ingredients.split(',')"
               :key="ing"
-              class="badge bg-secondary pk-beige-text"
+              class="badge bg-info pk-beige-text"
             >
               {{ ing.trim() }}
             </span>
