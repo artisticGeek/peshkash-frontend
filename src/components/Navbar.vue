@@ -3,7 +3,7 @@
   <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center" href="#hero">
       <i class="bi bi-qr-code me-2"></i>
-      <span class="pk-brand-text">peshkash</span>
+      <span class="pk-brand-text"> &nbsp; peshkash</span>
     </a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasDarkNavbar" aria-controls="offcanvasDarkNavbar" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
@@ -43,7 +43,7 @@
 }
 
 .pk-brand-text {
-  font-family: 'Brush Script MT', cursive;
+  font-family: 'Brush Script MT';
   font-size: 2.0rem;
 }
 </style>

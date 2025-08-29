@@ -46,6 +46,8 @@
                   <li>Fast scans & readable pages</li>
                   <li>One-tap share</li>
                 </ul>
+                <br>
+                <br>
               </div>
             </div>
           </div>
@@ -60,10 +62,14 @@
                   <li>Event-based activation</li>
                   <li>Simple updates + optional analytics</li>
                 </ul>
+                <br>
+                <br>
               </div>
             </div>
           </div>
         </div>
+        <p>So that, no one is left behind in the fast paced world of Technology...</p>
+        <br></br>
       </div>
     </br>
     </br>
@@ -163,7 +169,7 @@
                   <li>Vendoor Page</li>
                   <li>Logo Design</li>
                 </ul>
-                
+                <br>
               </div>
             </div>
           </div>
@@ -173,6 +179,7 @@
                 <h5 class="card-title">Pro</h5>
                 <div class="display-6 fw-bold text-primary">₹1,299</div>
                 <div class="text-muted mb-3">per event (6 hours)</div>
+                <br>
                 <ul class="list-unstyled mb-4">
                   <li> Upto Menu Items 40</li>
                   <li> Logo Design</li>
@@ -182,7 +189,7 @@
                   <li> Live support</li>
                   <li> Custom QR Code Design</li>
                 </ul>
-                
+                <br></br>
               </div>
             </div>
           </div>
@@ -193,16 +200,17 @@
                 <div class="display-6 fw-bold text-primary">Custom</div>
                 <div class="text-muted mb-3">quote</div>
                 <ul class="list-unstyled mb-4">
+                  <br>
                   <li> Bulk events</li>
                   <li> Branding &amp; custom domains</li>
                   <li> Advanced analytics</li>
                   <li> Long term plans</li>
-                  <li> Custom Pages</li>
+                  <li> Custom Pages</li></br>
                   <li> Unlimited List Items</li>
                   <li> Permanent Vendor Page</li>
                   <li> Event Page</li>
                 </ul>
-                
+                <br>
               </div>
             </div>
           </div>
