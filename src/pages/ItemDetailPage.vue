@@ -17,7 +17,9 @@
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
       <div class="text-center mb-4">
         <h1 class="fw-bold mb-1">{{ itemData?.name }}</h1>
-        <small class="d-block text-muted">{{ itemData.event.vendor.displayName }}</small>
+        <small class="d-block text-muted">
+          {{ itemData.event.vendor.displayName }} @ {{ itemData.event.displayName }}
+        </small>
         <small v-if="itemData?.price" class="d-block text-info">{{ itemData.price }}</small>
       </div>
 
@@ -47,25 +49,31 @@
         </ol>
       </nav>
 
-      <div class="card bg-dark border-0 text-light mb-4 shadow-sm">
+      <div class="card bg-light border-0 mb-4 shadow-sm">
         <div class="card-body">
           <h2 class="h5 mb-3 text-primary"><i class="bi bi-fork-knife me-2"></i>About the delight!</h2>
           <p class="mb-3">{{ itemData?.description }}</p>
           <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2">
-            <span v-for="ing in itemData.ingredients.split(',')" :key="ing" class="badge bg-secondary">{{ ing.trim() }}</span>
+            <span
+              v-for="ing in itemData.ingredients.split(',')"
+              :key="ing"
+              class="badge bg-light text-dark border"
+            >
+              {{ ing.trim() }}
+            </span>
           </div>
         </div>
       </div>
 
       <div class="my-4">
         <div class="d-flex justify-content-center gap-3 mb-3">
-          <button type="button" class="btn btn-outline-success btn-lg d-flex align-items-center gap-2">
-            <i class="bi bi-hand-thumbs-up-fill"></i>
+          <button type="button" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3 py-1">
+            <i class="bi bi-hand-thumbs-up"></i>
             <span>{{ itemData?.likes ?? 0 }}</span>
             <span class="visually-hidden">Like</span>
           </button>
-          <button type="button" class="btn btn-outline-danger btn-lg d-flex align-items-center gap-2">
-            <i class="bi bi-hand-thumbs-down-fill"></i>
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 py-1">
+            <i class="bi bi-hand-thumbs-down"></i>
             <span>{{ itemData?.dislikes ?? 0 }}</span>
             <span class="visually-hidden">Dislike</span>
           </button>
@@ -90,17 +98,6 @@
           <i class="bi bi-share-fill me-1"></i>Share
         </button>
       </div>
-    </div>
-  </div>
-
-  <div class="d-md-none fixed-bottom bg-dark py-2 border-top">
-    <div class="container d-flex justify-content-between">
-      <button class="btn btn-link text-decoration-none text-light" @click="win.history.back()">
-        <i class="bi bi-arrow-left-circle me-1"></i>Back to Menu
-      </button>
-      <button class="btn btn-link text-decoration-none text-light" @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })">
-        <i class="bi bi-share-fill me-1"></i>Share
-      </button>
     </div>
   </div>
 </template>
