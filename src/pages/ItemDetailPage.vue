@@ -53,43 +53,37 @@
         <div class="card-body">
           <h2 class="h5 mb-3 text-primary"><i class="bi bi-fork-knife me-2"></i>About the delight!</h2>
           <p class="mb-3">{{ itemData?.description }}</p>
-          <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2">
+          <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2 mb-3">
             <span
               v-for="ing in itemData.ingredients.split(',')"
               :key="ing"
-              class="badge bg-light text-dark border"
+              class="badge bg-secondary pk-beige-text"
             >
               {{ ing.trim() }}
+            </span>
+          </div>
+          <div v-if="itemData?.allergens?.length" class="d-flex flex-wrap gap-2">
+            <span
+              v-for="allergen in itemData.allergens"
+              :key="allergen"
+              class="badge bg-danger"
+            >
+              {{ allergen }}
             </span>
           </div>
         </div>
       </div>
 
-      <div class="my-4">
-        <div class="d-flex justify-content-center gap-3 mb-3">
-          <button type="button" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3 py-1">
-            <i class="bi bi-hand-thumbs-up"></i>
-            <span>{{ itemData?.likes ?? 0 }}</span>
-            <span class="visually-hidden">Like</span>
-          </button>
-          <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 py-1">
-            <i class="bi bi-hand-thumbs-down"></i>
-            <span>{{ itemData?.dislikes ?? 0 }}</span>
-            <span class="visually-hidden">Dislike</span>
-          </button>
-        </div>
-
-        <div class="d-flex flex-column align-items-center">
-          <span class="mb-2">Rate this item</span>
-          <div class="d-flex">
-            <template v-for="n in 5">
-              <input :id="'rate'+n" type="radio" class="btn-check" name="rating">
-              <label :for="'rate'+n" class="btn btn-sm btn-outline-warning me-1">
-                <i class="bi bi-star-fill"></i>
-                <span class="visually-hidden">{{ n }} star</span>
-              </label>
-            </template>
-          </div>
+      <div class="my-4 d-flex flex-column align-items-center">
+        <span class="mb-2">Rate this item</span>
+        <div class="d-flex">
+          <template v-for="n in 5">
+            <input :id="'rate'+n" type="radio" class="btn-check" name="rating">
+            <label :for="'rate'+n" class="btn btn-sm btn-outline-primary me-1">
+              <i class="bi bi-star-fill"></i>
+              <span class="visually-hidden">{{ n }} star</span>
+            </label>
+          </template>
         </div>
       </div>
 
@@ -152,5 +146,6 @@ onMounted(async () => {
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }
+.pk-beige-text { color: beige; }
 </style>
 
