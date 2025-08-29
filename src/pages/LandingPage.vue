@@ -69,7 +69,7 @@
           </div>
         </div>
         <br>
-        <p class="text-center text-primary"> So that, no one is left behind in the fast paced world of Technology...</p>
+        <p class="text-center text-secondary"> So that, no one is left behind in the fast paced world of Technology...</p>
         <br></br>
       </div>
     </br>
@@ -216,7 +216,7 @@
             </div>
           </div>
         </div>
-        <p class="text-center text-primary text-muted mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300"><strong>+ Offer </strong> One-time QR plates available starting just ₹49/-</p>
+        <p class="text-center text-info text-muted mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300"><strong>+ Offer </strong> One-time QR plates available starting just ₹49/-</p>
       </div>
     </section>
 
