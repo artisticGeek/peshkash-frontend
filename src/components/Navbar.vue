@@ -1,5 +1,5 @@
 <template>
-<nav class="navbar navbar-dark bg-dark fixed-top">
+<nav class="navbar navbar-dark bg-dark">
   <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center" href="#hero">
       <i class="bi bi-qr-code me-2"></i>

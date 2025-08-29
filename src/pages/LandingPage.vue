@@ -9,13 +9,13 @@
     <div class="container h-100 position-relative">
       <div class="row align-items-center h-100 py-5">
         <div class="col-lg-10 col-xl-7">
-          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... <br/> Digitally Presented.</h1>
-          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, <br/> mobile-first pages — menus, exhibits, and stories... </br> so guests get everything they need in seconds.</p>
+          <h1 class="display-4 fw-bold mb-4 pk-reveal" data-anim="animate__fadeInUp">Your Event... <br> Digitally Presented.</h1>
+          <p class="lead mb-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="100"><strong><em>Peshkash</em></strong> turns simple QR codes into rich, <br/> mobile-first pages — menus, exhibits, and stories... <br> so guests get everything they need in seconds.</p>
           <div class="d-flex flex-column flex-sm-row gap-3 pk-reveal" data-anim="animate__fadeInUp" data-delay="200">
             <a href="#pricing" class="btn btn-primary btn-lg">Get Started</a>
             <a href="#solutions" class="btn btn-outline-light btn-lg">See How It Works</a>
           </div>
-        </br>
+        <br>
           <ul class="list-inline mt-4 pk-reveal" data-anim="animate__fadeInUp" data-delay="300">
             <li class="list-inline-item badge bg-light text-dark">No app needed</li>
             <li class="list-inline-item badge bg-light text-dark">Reusable QRs</li>
@@ -30,9 +30,9 @@
     <section id="why" class="py-5 pk-section">
       <div class="container">
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Why it matters — for guests & vendors</h2>
-      </br>
+      <br>
         <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Technology should feel invisible.
-        <br/>
+        <br>
           Peshkash blends the physical with the digital so everyone wins.</p>
         <div class="row g-4">
           <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
@@ -40,7 +40,8 @@
               <div class="card-body text-center">
                 <i class="bi bi-people fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Guests</h5>
-                <ul class="mb-0">
+                <br>
+                <ul class="mb-0 text-start">
                   <li>Touchless menus, no app install</li>
                   <li>Fast scans & readable pages</li>
                   <li>One-tap share</li>
@@ -53,7 +54,8 @@
               <div class="card-body text-center">
                 <i class="bi bi-shop fs-1 text-primary mb-3"></i>
                 <h5 class="card-title">Vendors &amp; Organizers</h5>
-                <ul class="mb-0">
+                <br>
+                <ul class="mb-0 text-start">
                   <li>Reusable physical QRs</li>
                   <li>Event-based activation</li>
                   <li>Simple updates + optional analytics</li>
@@ -71,7 +73,7 @@
     <section id="solutions" class="py-5 pk-section pk-section-solutions">
       <div class="container">
         <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">One simple system. Many problems solved.</h2>
-        <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
+        <p class="text-center text-white mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Connect real-world touchpoints to effortless digital experiences.</p>
         <div class="row g-4">
           <div class="col-6 col-lg-4 pk-reveal" data-anim="animate__fadeInUp">
             <div class="card h-100 text-center pk-tilt">
@@ -128,7 +130,7 @@
             </div>
           </div>
         </div>
-        <div class="row text-center py-4">
+        <div class="row text-center text-white py-4">
           <div class="col-md-4 pk-reveal" data-anim="animate__fadeIn">
             ⚡ ~2s average load
           </div>
@@ -154,13 +156,14 @@
                 <h5 class="card-title">Starter</h5>
                 <div class="display-6 fw-bold text-primary">₹799</div>
                 <div class="text-muted mb-3">per event (4 hours)</div>
+                <br>
                 <ul class="list-unstyled mb-4">
                   <li>Up to 25 QRs</li>
                   <li>Menu Onboarding</li>
                   <li>Vendoor Page</li>
                   <li>Logo Design</li>
                 </ul>
-                <a href="#contact" class="mt-auto btn btn-outline-primary">Activate an Event</a>
+                
               </div>
             </div>
           </div>
@@ -211,8 +214,8 @@
       <!-- CONTACT -->
       <section id="contact" class="py-5 pk-section pk-section-contact">
         <div class="container">
-          <h2 class="text-center mb-3 display-5 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
-          <p class="text-center text-muted mb-5 pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
+          <h2 class="text-center text-white mb-3 display-4 pk-heading pk-reveal" data-anim="animate__fadeInUp">Let’s make your next event effortless.</h2>
+          <p class="text-center text-primary text-muted mb-5  pk-reveal" data-anim="animate__fadeInUp" data-delay="100">Tell us about your event or become a vendor partner.</p>
           <div class="row g-4">
             <div class="col-md-6 pk-reveal" data-anim="animate__fadeInUp">
               <div class="card h-100 pk-tilt">
@@ -276,7 +279,7 @@
 
       <!-- FOOTER -->
     <footer class="py-5 bg-dark text-white">
-      <div class="container">
+      <div class="container text-center">
         <div class="row g-4">
           <div class="col-md-4">
             <p class="mb-0">Peshkash brings your event to life with elegant, QR-powered pages.</p>
@@ -398,7 +401,7 @@ const scrollToTop = () => {
 }
 
 .pk-section-pricing {
-  background: linear-gradient(180deg, rgba(255, 250, 242, 0.7), rgb(246, 224, 197))
+  background: linear-gradient(180deg, rgb(239, 239, 239), rgb(255, 247, 237))
 }
 
 .pk-section-contact {
