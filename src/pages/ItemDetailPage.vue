@@ -1,7 +1,7 @@
 <template>
   <Navbar />
 
-  <section class="py-3 py-md-4">
+  <section class="bg-body-tertiary py-3 py-md-4">
     <div class="container">
       <div class="row justify-content-center">
         <div class="col-12 col-md-10 col-lg-7">
@@ -18,9 +18,9 @@
           </div>
           <div v-else-if="error">{{ error }}</div>
           <div v-else>
+            <div class="text-center text-secondary mb-2">{{ itemData.event.displayName }}</div>
             <nav aria-label="breadcrumb" class="mb-2 mb-md-3">
               <ol class="breadcrumb small mb-0">
-                <li class="breadcrumb-item"><a href="#">{{ itemData.event.displayName }}</a></li>
                 <li v-for="parent in itemData.parentItems || []" :key="parent.displayName" class="breadcrumb-item">
                   <a href="#">{{ parent.displayName }}</a>
                 </li>
@@ -29,6 +29,7 @@
             </nav>
 
             <div class="card border-0 shadow rounded-4 overflow-hidden pk-reveal" data-anim="fadeInUp">
+              <div class="border-top border-warning opacity-50"></div>
               <div class="vstack gap-3 gap-md-4">
                 <div class="p-3 p-md-4 pb-0">
                   <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-1">
@@ -96,7 +97,7 @@
                     <span
                       v-for="ing in itemData.ingredients.split(',')"
                       :key="ing"
-                      class="badge rounded-pill border me-2 mb-2"
+                      class="badge rounded-pill bg-secondary pk-beige me-2 mb-2"
                     >
                       {{ ing.trim() }}
                     </span>
@@ -106,20 +107,26 @@
                     <div class="btn-group" role="radiogroup">
                       <template v-for="n in 5">
                         <input class="btn-check" type="radio" name="rating" :id="'star'+n" />
-                        <label class="btn btn-sm btn-outline-secondary" :for="'star'+n">
+                        <label class="btn btn-sm btn-outline-warning" :for="'star'+n">
                           ★<span class="visually-hidden">{{ n }} star</span>
                         </label>
                       </template>
                     </div>
                   </div>
                   <div class="d-flex gap-2 justify-content-center mt-3">
-                    <button class="btn btn-outline-secondary">
+                    <button class="btn btn-sm btn-outline-secondary">
                       Like <span class="ms-1">{{ itemData?.likes || 0 }}</span>
                     </button>
-                    <button class="btn btn-outline-secondary">
+                    <button class="btn btn-sm btn-outline-secondary">
                       Dislike <span class="ms-1">{{ itemData?.dislikes || 0 }}</span>
                     </button>
                   </div>
+                  <button
+                    class="btn btn-outline-secondary w-100 mt-3"
+                    @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })"
+                  >
+                    Share
+                  </button>
                 </div>
               </div>
             </div>
@@ -128,18 +135,6 @@
       </div>
     </div>
   </section>
-
-  <div class="fixed-bottom border-top shadow-sm d-md-none">
-    <div class="container py-2 d-flex gap-2">
-      <button class="btn btn-outline-secondary flex-fill" @click="$router.back()">Back to Menu</button>
-      <button
-        class="btn btn-primary flex-fill"
-        @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })"
-      >
-        Share
-      </button>
-    </div>
-  </div>
 </template>
 
 <script lang="ts" setup>
@@ -191,5 +186,6 @@ onMounted(async () => {
 <style scoped>
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
+.pk-beige { color: beige; }
 </style>
 
