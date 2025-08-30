@@ -1,5 +1,12 @@
 <template>
   <Navbar />
+  <div
+    v-if="showFeedback"
+    class="position-fixed top-0 start-50 translate-middle-x mt-3"
+    style="z-index: 2000;"
+  >
+    <div class="alert alert-success shadow" role="alert">{{ feedback }}</div>
+  </div>
 
   <div class="container py-3">
     <div v-if="isLoading" class="text-center py-5">
@@ -89,7 +96,6 @@
             <span class="visually-hidden">{{ n }} star</span>
           </button>
         </div>
-        <small v-if="feedback" class="mt-2 text-success">{{ feedback }}</small>
       </div>
 
       <div class="text-end mb-4">
@@ -117,10 +123,15 @@ const error = ref<string | null>(null)
 const win = window
 const rating = ref<number>(0)
 const feedback = ref('')
+const showFeedback = ref(false)
 
 const setRating = (n: number) => {
   rating.value = n
   feedback.value = `Thanks for rating ${n} star${n > 1 ? 's' : ''}!`
+  showFeedback.value = true
+  setTimeout(() => {
+    showFeedback.value = false
+  }, 2000)
 }
 
 onMounted(async () => {
