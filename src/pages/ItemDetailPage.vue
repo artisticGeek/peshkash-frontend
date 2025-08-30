@@ -77,14 +77,19 @@
       <div class="my-4 d-flex flex-column align-items-center">
         <span class="mb-2">Rate this item</span>
         <div class="d-flex">
-          <template v-for="n in 5">
-            <input :id="'rate'+n" type="radio" class="btn-check" name="rating">
-            <label :for="'rate'+n" class="btn btn-sm btn-outline-primary me-1">
-              <i class="bi bi-star-fill"></i>
-              <span class="visually-hidden">{{ n }} star</span>
-            </label>
-          </template>
+          <button
+            v-for="n in 5"
+            :key="n"
+            type="button"
+            class="btn btn-sm me-1"
+            :class="n <= rating ? 'btn-primary' : 'btn-outline-primary'"
+            @click="setRating(n)"
+          >
+            <i class="bi bi-star-fill"></i>
+            <span class="visually-hidden">{{ n }} star</span>
+          </button>
         </div>
+        <small v-if="feedback" class="mt-2 text-success">{{ feedback }}</small>
       </div>
 
       <div class="text-end mb-4">
@@ -110,6 +115,13 @@ const itemData = ref<any>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const win = window
+const rating = ref<number>(0)
+const feedback = ref('')
+
+const setRating = (n: number) => {
+  rating.value = n
+  feedback.value = `Thanks for rating ${n} star${n > 1 ? 's' : ''}!`
+}
 
 onMounted(async () => {
   try {
