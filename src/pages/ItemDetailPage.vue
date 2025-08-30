@@ -5,7 +5,7 @@
     class="position-fixed top-0 start-50 translate-middle-x mt-3"
     style="z-index: 2000;"
   >
-    <div class="alert alert-success shadow" role="alert">{{ feedback }}</div>
+    <div class="alert alert-info shadow" role="alert">{{ feedback }}</div>
   </div>
 
   <div class="container py-3">
