@@ -88,9 +88,9 @@
       </div>
 
       <div class="text-end mb-4">
-        <button class="btn btn-outline-primary" @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })">
+        <div class="m-2 text-primary fixed-bottom" @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })">
           <i class="bi bi-share-fill me-1"></i>Share
-        </button>
+        </div>
       </div>
     </div>
   </div>
