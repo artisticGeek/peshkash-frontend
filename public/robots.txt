@@ -1,0 +1,3 @@
+Sitemap: https://peshkash.app/sitemap.xml
+User-agent: *
+Allow: /
