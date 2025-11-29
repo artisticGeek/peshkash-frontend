@@ -97,13 +97,18 @@
           </button>
         </div>
       </div>
-
-      <div class="text-end mb-4">
-        <div class="m-2 text-primary fixed-bottom" @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })">
-          <i class="bi bi-share-fill me-1"></i>Share
-        </div>
-      </div>
     </div>
+
+    <!-- Floating Share Button -->
+    <button 
+      v-if="itemData"
+      class="btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-3 shadow-lg pk-share-fab"
+      @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })"
+      aria-label="Share this item"
+      style="width: 56px; height: 56px; z-index: 1000;"
+    >
+      <i class="bi bi-share-fill fs-5"></i>
+    </button>
   </div>
 </template>
 
@@ -170,5 +175,14 @@ onMounted(async () => {
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }
 .pk-beige-text { color: beige; }
+
+.pk-share-fab {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pk-share-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
 </style>
 

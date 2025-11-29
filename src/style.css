@@ -1,42 +1,72 @@
 :root {
   --rx-main-color: #BD945A;
-  /* Add other color variables here as you identify them */
+  --rx-bg-color: #F4F1ED;
+  --rx-text-color: #15191e;
+  --rx-font-heading: 'Rufina', serif;
+  --rx-font-body: 'Urbanist', sans-serif;
 }
 
 body {
-  font-family: 'Urbanist', sans-serif;
-  background-color: #F4F1ED;
-  /* Or use a variable if you define one for background color */
+  font-family: var(--rx-font-body);
+  background-color: var(--rx-bg-color);
+  color: var(--rx-text-color);
 }
 
-h1 {
-  font-family: 'Urbanist', serif;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.display-1,
+.display-2,
+.display-3,
+.display-4,
+.display-5,
+.display-6 {
+  font-family: var(--rx-font-heading);
 }
 
-p {
-  font-family: 'Roboto', sans-serif;
+p,
+.lead {
+  font-family: var(--rx-font-body);
 }
 
-.special-text {
-  font-family: 'Rufina', serif;
-}
-
-.btn-primary {
+/* Landing page specific button styles */
+.pk-landing .btn-primary {
   background-color: var(--rx-main-color);
-  outline: var(--rx-main-color);
-  /* Assuming outline is the same as background */
+  border-color: var(--rx-main-color);
   color: white;
-  /* Assuming text color on button is white */
+  border-radius: 50px;
+  /* Pill shape */
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
-/* Add hover, active, and focus styles for elements here based on your copiedCss.css */
-.btn-primary:hover {
-  /* Add hover styles for buttons here */
+.pk-landing .btn-primary:hover {
+  background-color: #a37d45;
+  /* Darker shade */
+  border-color: #a37d45;
+  transform: translateY(-2px);
+}
+
+.pk-landing .btn-outline-light {
+  border-radius: 50px;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.pk-landing .btn-outline-light:hover {
   background-color: white;
-  outline: var(--rx-main-color);
+  color: var(--rx-text-color);
+  transform: translateY(-2px);
 }
 
-.btn-primary:active {
-  /* Add active styles for buttons here */
-  background-color: antiquewhite;
+.pk-landing .btn-outline-primary {
+  border-radius: 50px;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
