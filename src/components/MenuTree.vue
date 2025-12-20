@@ -552,18 +552,18 @@ const getEnumClass = (enumType: string): string => {
 }
 
 .enum-indicator-square.enum-veg {
-  border-color: #2e7d32;
-  color: #2e7d32;
+  border-color: #6b9d6f;
+  color: #6b9d6f;
 }
 
 .enum-indicator-square.enum-non-veg {
-  border-color: #c62828;
-  color: #c62828;
+  border-color: #b07c7c;
+  color: #b07c7c;
 }
 
 .enum-indicator-square.enum-egg {
-  border-color: #f57c00;
-  color: #f57c00;
+  border-color: #d4a574;
+  color: #d4a574;
 }
 
 @media (min-width: 768px) {
