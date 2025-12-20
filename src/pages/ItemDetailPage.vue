@@ -24,9 +24,9 @@
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
       <div class="text-center mb-4">
         <h1 class="fw-bold mb-1">{{ itemData?.name }}</h1>
-        <small class="d-block text-muted">
-          {{ itemData.event.vendor.displayName }} @ {{ itemData.event.displayName }}
-        </small>
+         <small class="d-block">
+        <span class="vendor-name">{{ itemData.event.vendor.displayName }}</span> @ <span class="event-name">{{ itemData.event.displayName }}</span>
+      </small>
         <small v-if="itemData?.price" class="d-block text-info">{{ itemData.price }}</small>
       </div>
 
@@ -175,6 +175,12 @@ onMounted(async () => {
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }
 .pk-beige-text { color: beige; }
+
+.vendor-name,
+.event-name {
+  color: #bd945a;
+  font-weight: 500;
+}
 
 .pk-share-fab {
   transition: transform 0.2s ease, box-shadow 0.2s ease;

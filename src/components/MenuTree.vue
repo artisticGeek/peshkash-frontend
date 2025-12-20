@@ -1,79 +1,90 @@
 <template>
   <div class="tree-node" :style="{ marginLeft: indentation }">
     <!-- Category Node (has children) -->
-    <div 
-      v-if="hasChildren" 
-      class="tree-category" 
-      @click="toggleExpanded"
-      role="button"
-      tabindex="0"
-      @keydown.enter="toggleExpanded"
-      @keydown.space.prevent="toggleExpanded"
-    >
-      <!-- Connecting Line (if not root level) -->
-      <div v-if="level > 0" class="tree-line"></div>
-      
-      <!-- Chevron Icon -->
-      <i 
-        :class="isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'" 
-        class="bi tree-chevron"
-      ></i>
-      
-      <!-- Category Name (Gold/Brown color) -->
-      <span class="category-name">
-        {{ item.displayName || item.name }}
-      </span>
-      
-      <!-- Item Count Badge (only count leaf nodes) -->
-      <span class="badge bg-primary ms-auto">
-        {{ leafItemCount }}
-      </span>
-    </div>
-    
-    <!-- Recursive Children (when expanded) -->
-    <div v-if="isExpanded && hasChildren" class="tree-children">
-      <MenuTree 
-        v-for="child in item.subCategoryLineItems" 
-        :key="child.id"
-        :item="child"
-        :level="level + 1"
-        :event-name="eventName"
-        :menu-name="menuName"
-      />
-    </div>
-    
-    <!-- Menu Item (Leaf Node - no children) -->
-    <div 
-      v-if="!hasChildren"
-      class="menu-item"
-      @click="toggleDescription"
-      role="button"
-      tabindex="0"
-    >
-      <!-- Connecting Line -->
-      <div v-if="level > 0" class="tree-line"></div>
-      
-      <!-- Veg/Non-veg Indicator -->
+    <template v-if="hasChildren">
       <div 
-        v-if="item.isVeg !== undefined" 
-        class="veg-indicator" 
-        :class="item.isVeg ? 'veg' : 'non-veg'"
-        :aria-label="item.isVeg ? 'Vegetarian' : 'Non-vegetarian'"
-      ></div>
+        class="tree-category" 
+        @click="toggleExpanded"
+        role="button"
+        tabindex="0"
+        @keydown.enter="toggleExpanded"
+        @keydown.space.prevent="toggleExpanded"
+      >
+        <!-- Connecting Line (if not root level) -->
+        <div v-if="level > 0" class="tree-line"></div>
+        
+        <!-- Chevron Icon -->
+        <i 
+          :class="isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'" 
+          class="bi tree-chevron"
+        ></i>
+        
+        <!-- Category Name (Gold/Brown color) -->
+        <span class="category-name">
+          {{ item.displayName || item.name }}
+        </span>
+        
+        <!-- Item Count Badge (only count leaf nodes) -->
+        <span class="badge bg-primary ms-auto">
+          {{ leafItemCount }}
+        </span>
+      </div>
       
-      <!-- Item Content -->
-      <div class="menu-item-content">
-        <!-- Dish Name (Black color) -->
-        <div class="menu-item-name">{{ item.displayName || item.name }}</div>
+      <!-- Recursive Children (when expanded) -->
+      <div v-if="isExpanded" class="tree-children">
+        <MenuTree 
+          v-for="child in item.subCategoryLineItems" 
+          :key="child.id"
+          :item="child"
+          :level="level + 1"
+          :event-name="eventName"
+          :menu-name="menuName"
+          :search-query="searchQuery"
+          :selected-filter="selectedFilter"
+        />
+      </div>
+    </template>
+    
+    <!-- Leaf Item View (individual menu item) -->
+    <template v-else>
+      <div 
+        v-show="matchesFilters"
+        class="menu-item"
+        :class="{ 'has-description': item.description && isDescriptionTruncated }"
+        @click="item.description && isDescriptionTruncated ? toggleDescription() : null"
+        role="button"
+        :tabindex="item.description && isDescriptionTruncated ? 0 : -1"
+      >
+        <!-- Connecting Line -->
+        <div v-if="level > 0" class="tree-line"></div>
+        
+        <!-- Enum Type Indicator (Veg/Non-Veg/Egg) -->
         <div 
-          v-if="item.description" 
-          class="menu-item-description" 
-          :class="{ expanded: descriptionExpanded }"
+          v-if="item.enumType" 
+          class="enum-indicator" 
+          :class="getEnumClass(item.enumType)"
+          :title="item.enumType"
         >
-          {{ descriptionExpanded ? item.description : truncatedDescription }}
+          <i :class="getEnumIcon(item.enumType)"></i>
+        </div>
+        
+        <!-- Item Content -->
+        <div class="menu-item-content">
+          <!-- Dish Name (Black color) -->
+          <div class="menu-item-name">{{ item.displayName || item.name }}</div>
+          <div 
+            v-if="item.description" 
+            class="menu-item-description" 
+            :class="{ expanded: descriptionExpanded }"
+          >
+            {{ descriptionExpanded ? item.description : truncatedDescription }}
+            <span v-if="isDescriptionTruncated" class="read-more-link">
+              {{ descriptionExpanded ? ' Read less' : ' Read more' }}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -88,6 +99,7 @@ interface LineItem {
   itemType: string;
   isActive: boolean;
   createdAt: string;
+  enumType?: string;
   subCategoryLineItems?: LineItem[];
   isVeg?: boolean;
   tags?: string[];
@@ -99,10 +111,14 @@ interface Props {
   level?: number;
   eventName: string;
   menuName: string;
+  searchQuery?: string;
+  selectedFilter?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  level: 0
+  level: 0,
+  searchQuery: '',
+  selectedFilter: 'All'
 });
 
 const isExpanded = ref(false);
@@ -112,6 +128,28 @@ const descriptionExpanded = ref(false);
 const hasChildren = computed(() => {
   return props.item.subCategoryLineItems && props.item.subCategoryLineItems.length > 0;
 });
+
+// Check if this item matches current filters
+const matchesFilters = computed(() => {
+  // Apply search filter
+  let matchesSearch = true;
+  if (props.searchQuery?.trim()) {
+    const query = props.searchQuery.toLowerCase();
+    matchesSearch = (props.item.name || '').toLowerCase().includes(query) ||
+                   (props.item.displayName || '').toLowerCase().includes(query) ||
+                   (props.item.description || '').toLowerCase().includes(query);
+  }
+  
+  // Leaf items: also check enum filter
+  if (!hasChildren.value) {
+    const matchesEnum = props.selectedFilter === 'All' || props.item.enumType === props.selectedFilter;
+    return matchesSearch && matchesEnum;
+  }
+  
+  // Categories: just need to pass search filter (children will handle their own filtering)
+  return true; // Categories are always shown, children determine visibility
+});
+
 
 // Calculate indentation - even more reduced for mobile (8px), normal for desktop (18px)
 const indentation = computed(() => {
@@ -129,24 +167,43 @@ const truncatedDescription = computed(() => {
     : props.item.description;
 });
 
-// Count only leaf nodes (menu items) recursively
+// Check if description is actually truncated
+const isDescriptionTruncated = computed(() => {
+  if (!props.item.description) return false;
+  return props.item.description.length > 70;
+});
+
+// Count only leaf nodes (menu items) that match current filters
 const leafItemCount = computed(() => {
   const countLeafItems = (items: LineItem[]): number => {
     let count = 0;
     for (const item of items) {
-      if (!item.subCategoryLineItems || item.subCategoryLineItems.length === 0) {
-        count++;
-      } else {
+      if (item.subCategoryLineItems && item.subCategoryLineItems.length > 0) {
+        // Category: recursively count its children
         count += countLeafItems(item.subCategoryLineItems);
+      } else {
+        // Leaf item: check if it matches filters
+        let matchesSearch = true;
+        if (props.searchQuery?.trim()) {
+          const query = props.searchQuery.toLowerCase();
+          matchesSearch = (item.name || '').toLowerCase().includes(query) ||
+                         (item.displayName || '').toLowerCase().includes(query) ||
+                         (item.description || '').toLowerCase().includes(query);
+        }
+        
+        const matchesEnum = props.selectedFilter === 'All' || item.enumType === props.selectedFilter;
+        
+        // Only count if matches both filters
+        if (matchesSearch && matchesEnum) {
+          count++;
+        }
       }
     }
     return count;
   };
   
-  if (hasChildren.value) {
-    return countLeafItems(props.item.subCategoryLineItems!);
-  }
-  return 0;
+  if (!hasChildren.value) return 0;
+  return countLeafItems(props.item.subCategoryLineItems || []);
 });
 
 const toggleExpanded = () => {
@@ -155,6 +212,23 @@ const toggleExpanded = () => {
 
 const toggleDescription = () => {
   descriptionExpanded.value = !descriptionExpanded.value;
+};
+
+// Helper functions for enum type indicators
+const getEnumIcon = (enumType: string): string => {
+  const type = enumType.toLowerCase();
+  if (type === 'veg') return 'bi bi-circle-fill';
+  if (type === 'non-veg') return 'bi bi-circle-fill';
+  if (type === 'egg') return 'bi bi-egg-fill';
+  return 'bi bi-circle-fill'; // default
+};
+
+const getEnumClass = (enumType: string): string => {
+  const type = enumType.toLowerCase();
+  if (type === 'veg') return 'enum-veg';
+  if (type === 'non-veg') return 'enum-non-veg';
+  if (type === 'egg') return 'enum-egg';
+  return 'enum-default';
 };
 </script>
 
@@ -260,33 +334,59 @@ const toggleDescription = () => {
   }
 }
 
-.menu-item:hover {
-  box-shadow: 0 2px 4px rgba(189, 148, 90, 0.15);
-  background-color: rgba(189, 148, 90, 0.02);
+.menu-item.has-description:hover {
+  box-shadow: 0 2px 6px rgba(189, 148, 90, 0.2);
+  background-color: rgba(189, 148, 90, 0.05);
+  transform: translateX(2px);
+  cursor: pointer;
 }
 
-.veg-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 4px;
+.menu-item:not(.has-description) {
+  cursor: default;
+}
+
+/* Enum Type Indicator Styles */
+.enum-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  margin-top: 4px;
+  margin-right: 10px;
+}
+
+.enum-indicator i {
+  font-size: 10px;
 }
 
 @media (min-width: 768px) {
-  .veg-indicator {
-    width: 10px;
-    height: 10px;
-    margin-top: 5px;
+  .enum-indicator {
+    margin-right: 12px;
+  }
+  
+  .enum-indicator i {
+    font-size: 12px;
   }
 }
 
-.veg-indicator.veg {
-  background-color: #39681c;
+/* Veg - Green */
+.enum-indicator.enum-veg i {
+  color: #22c55e;
 }
 
-.veg-indicator.non-veg {
-  background-color: #9b2a46;
+/* Non-Veg - Red */
+.enum-indicator.enum-non-veg i {
+  color: #ef4444;
+}
+
+/* Egg - Yellow/Orange */
+.enum-indicator.enum-egg i {
+  color: #f59e0b;
+}
+
+/* Default */
+.enum-indicator.enum-default i {
+  color: #9ca3af;
 }
 
 .menu-item-content {
@@ -330,6 +430,7 @@ const toggleDescription = () => {
 .menu-item-description:not(.expanded) {
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,6 +438,27 @@ const toggleDescription = () => {
 
 .menu-item-description.expanded {
   white-space: normal;
+}
+
+.read-more-link {
+  color: #bd945a;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+@media (min-width: 768px) {
+  .read-more-link {
+    font-size: 0.9rem;
+  }
+}
+
+.read-more-link:hover {
+  text-decoration: underline;
+  opacity: 0.8;
 }
 
 /* Tree Lines - Very subtle on mobile */

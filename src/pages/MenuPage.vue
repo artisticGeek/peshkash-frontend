@@ -29,10 +29,10 @@
     <!-- Header Section -->
     <div class="text-center mb-4 pk-reveal" data-anim="animate__fadeInUp">
       <h1 class="fw-bold mb-1">{{ menuData?.menu?.displayName }}</h1>
-      <small class="d-block text-muted">
-        {{ menuData?.vendor?.displayName }} @ {{ menuData?.event?.displayName }}
+      <small class="d-block">
+        <span class="vendor-name">{{ menuData?.vendor?.displayName }}</span> @ <span class="event-name">{{ menuData?.event?.displayName }}</span>
       </small>
-      <p v-if="menuData?.menu?.description" class="text-muted mt-2">
+      <p v-if="menuData?.menu?.description" class="menu-item-description">
         {{ menuData.menu.description }}
       </p>
     </div>
@@ -43,16 +43,52 @@
       This event has ended. Menu details are no longer available.
     </div>
 
+    <!-- Filters Section -->
+    <div v-if="menuData?.menu?.lineItems" class="filters-container mb-3">
+      <!-- Search Bar -->
+      <div class="search-bar">
+        <i class="bi bi-search search-icon"></i>
+        <input 
+          v-model="searchQuery"
+          type="text" 
+          class="search-input" 
+          placeholder="Search menu items..."
+        />
+      </div>
+      
+      <!-- Filter Tags (only show if enumTypes exist) -->
+      <div v-if="availableFilters.length > 1" class="filter-tags">
+        <button
+          v-for="filter in availableFilters"
+          :key="filter"
+          class="filter-tag"
+          :class="{ active: selectedFilter === filter }"
+          @click="selectedFilter = filter"
+        >
+          {{ filter }}
+        </button>
+      </div>
+    </div>
+
     <!-- Menu Categories -->
-    <div v-if="menuData?.menu?.lineItems && menuData.menu.lineItems.length > 0" class="menu-list pk-reveal" data-anim="animate__fadeInUp" data-delay="100">
+    <div v-if="filteredMenuItems && filteredMenuItems.length > 0" class="menu-list pk-reveal" data-anim="animate__fadeInUp" data-delay="100">
       <MenuTree 
-        v-for="item in menuData.menu.lineItems" 
-        :key="item.id"
+        v-for="item in filteredMenuItems" 
+        :key="`${item.id}-${forceRenderKey}`"
         :item="item"
         :level="0"
         :event-name="eventName"
         :menu-name="menuName"
+        :search-query="searchQuery"
+        :selected-filter="selectedFilter"
       />
+    </div>
+
+    <!-- No Results State -->
+    <div v-else-if="menuData?.menu?.lineItems && menuData.menu.lineItems.length > 0 && filteredMenuItems.length === 0" class="text-center py-5">
+      <i class="bi bi-search display-1 text-muted"></i>
+      <p class="text-muted mt-3">No items match your search</p>
+      <button class="btn btn-sm btn-outline-secondary" @click="clearFilters">Clear filters</button>
     </div>
 
     <!-- Empty State -->
@@ -64,7 +100,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import MenuTree from '../components/MenuTree.vue'
@@ -78,6 +114,10 @@ const menuData = ref<any>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 
+// Filter state
+const searchQuery = ref('')
+const selectedFilter = ref('All')
+
 // Check if event is currently active
 const isEventActive = computed(() => {
   if (!menuData.value?.event) return false
@@ -89,6 +129,58 @@ const isEventActive = computed(() => {
   if (!startTime || !endTime) return false
   
   return now >= startTime && now <= endTime
+})
+
+// Get available filter types from menu items
+const availableFilters = computed(() => {
+  if (!menuData.value?.menu?.lineItems) return ['All']
+  
+  const enumTypes = new Set<string>()
+  
+  const collectEnumTypes = (items: any[]) => {
+    for (const item of items) {
+      if (item.enumType) {
+        enumTypes.add(item.enumType)
+      }
+      if (item.subCategoryLineItems && item.subCategoryLineItems.length > 0) {
+        collectEnumTypes(item.subCategoryLineItems)
+      }
+    }
+  }
+  
+  collectEnumTypes(menuData.value.menu.lineItems)
+  
+  return enumTypes.size > 0 ? ['All', ...Array.from(enumTypes).sort()] : ['All']
+})
+
+// Create a reactive key that changes when filter state changes
+const filterKey = computed(() => `${searchQuery.value}-${selectedFilter.value}`)
+
+// Return menu items without filtering - MenuTree will handle visibility
+const filteredMenuItems = computed(() => {
+  return menuData.value?.menu?.lineItems || []
+})
+
+const clearFilters = () => {
+  searchQuery.value = ''
+  selectedFilter.value = 'All'
+}
+
+// Watch for search query changes to force reactivity
+const forceRenderKey = ref(0)
+watch([searchQuery, selectedFilter], ([newSearch, newFilter], [oldSearch, oldFilter]) => {
+  // Force immediate re-render when transitioning to "no filter" state
+  // This prevents blank categories after backspacing from empty results
+  const wasFiltered = oldSearch?.trim() || oldFilter !== 'All'
+  const isNowUnfiltered = !newSearch?.trim() && newFilter === 'All'
+  
+  if (wasFiltered && isNowUnfiltered) {
+    forceRenderKey.value++
+  } else {
+    nextTick(() => {
+      forceRenderKey.value++
+    })
+  }
 })
 
 onMounted(async () => {
@@ -141,5 +233,113 @@ onMounted(async () => {
 .menu-list {
   max-width: 800px;
   margin: 0 auto;
+}
+
+.vendor-name, .event-name {
+  color: #bd945a;
+  font-weight: 500;
+}
+
+.menu-item-description {
+  font-size: 0.775rem;
+  color: #6c757d;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+@media (min-width: 768px) {
+  .menu-item-description {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+}
+
+/* Filter UI Styles */
+.filters-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.search-bar {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 8px 8px 24px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  background: transparent;
+}
+
+.search-input:focus {
+  border-bottom-color: #bd945a;
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.filter-tags {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+
+.filter-tag {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: #6c757d;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s ease;
+  font-weight: 400;
+}
+
+.filter-tag:hover {
+  color: #495057;
+}
+
+.filter-tag.active {
+  color: #bd945a;
+  font-weight: 500;
+}
+
+.filter-tag.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #bd945a;
+}
+
+@media (min-width: 768px) {
+  .search-input {
+    font-size: 0.95rem;
+  }
+  
+  .filter-tag {
+    font-size: 0.9rem;
+  }
 }
 </style>
