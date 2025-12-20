@@ -58,14 +58,23 @@
         <!-- Connecting Line -->
         <div v-if="level > 0" class="tree-line"></div>
         
-        <!-- Enum Type Indicator (Veg/Non-Veg/Egg) -->
+        <!-- Enum Type Indicator (Veg/Non-Veg/Egg) - Indian Style with SVG Icons -->
         <div 
           v-if="item.enumType" 
-          class="enum-indicator" 
+          class="enum-indicator-square" 
           :class="getEnumClass(item.enumType)"
           :title="item.enumType"
         >
-          <i :class="getEnumIcon(item.enumType)"></i>
+          <!-- SVG Icons for each type -->
+          <svg v-if="item.enumType.toLowerCase() === 'veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66 .95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/>
+          </svg>
+          <svg v-else-if="item.enumType.toLowerCase() === 'egg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C8.5 2 6 6.5 6 12c0 4.97 2.69 9 6 9s6-4.03 6-9c0-5.5-2.5-10-6-10z"/>
+          </svg>
+          <svg v-else-if="item.enumType.toLowerCase() === 'non-veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="8"/>
+          </svg>
         </div>
         
         <!-- Item Content -->
@@ -215,6 +224,10 @@ const toggleDescription = () => {
 };
 
 // Helper functions for enum type indicators
+const getEnumSymbol = (enumType: string): string => {
+  return '●'; // Simple filled circle for all types - professional look
+};
+
 const getEnumIcon = (enumType: string): string => {
   const type = enumType.toLowerCase();
   if (type === 'veg') return 'bi bi-circle-fill';
@@ -517,6 +530,53 @@ const getEnumClass = (enumType: string): string => {
   .badge {
     font-size: 0.75rem;
     padding: 4px 10px;
+  }
+}
+
+/* Squared Dietary Indicators - Indian Style */
+.enum-indicator-square {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1.5px solid;
+  flex-shrink: 0;
+  background-color: white;
+}
+
+.enum-indicator-square .enum-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.enum-indicator-square.enum-veg {
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.enum-indicator-square.enum-non-veg {
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.enum-indicator-square.enum-egg {
+  border-color: #f57c00;
+  color: #f57c00;
+}
+
+@media (min-width: 768px) {
+  .enum-indicator-square {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border-width: 2px;
+  }
+  
+  .enum-indicator-square .enum-icon {
+    width: 13px;
+    height: 13px;
   }
 }
 </style>

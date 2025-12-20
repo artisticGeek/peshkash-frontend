@@ -43,7 +43,7 @@
 }
 
 .pk-brand-text {
-  font-family: 'Brush Script MT';
+  font-family: 'Dancing Script', 'Brush Script MT', cursive;
   font-size: 2.0rem;
 }
 </style>
