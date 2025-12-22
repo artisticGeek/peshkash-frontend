@@ -51,9 +51,6 @@
         v-show="matchesFilters"
         class="menu-item"
         :class="{ 'has-description': item.description && isDescriptionTruncated }"
-        @click="item.description && isDescriptionTruncated ? toggleDescription() : null"
-        role="button"
-        :tabindex="item.description && isDescriptionTruncated ? 0 : -1"
       >
         <!-- Connecting Line -->
         <div v-if="level > 0" class="tree-line"></div>
@@ -87,10 +84,14 @@
             :class="{ expanded: descriptionExpanded }"
           >
             {{ descriptionExpanded ? item.description : truncatedDescription }}
-            <span v-if="isDescriptionTruncated" class="read-more-link">
-              {{ descriptionExpanded ? ' Read less' : ' Read more' }}
-            </span>
           </div>
+          <span 
+            v-if="item.description && isDescriptionTruncated" 
+            class="read-more-link"
+            @click="toggleDescription"
+          >
+            {{ descriptionExpanded ? 'Read less' : 'Read more' }}
+          </span>
         </div>
       </div>
     </template>
@@ -347,17 +348,6 @@ const getEnumClass = (enumType: string): string => {
   }
 }
 
-.menu-item.has-description:hover {
-  box-shadow: 0 2px 6px rgba(189, 148, 90, 0.2);
-  background-color: rgba(189, 148, 90, 0.05);
-  transform: translateX(2px);
-  cursor: pointer;
-}
-
-.menu-item:not(.has-description) {
-  cursor: default;
-}
-
 /* Enum Type Indicator Styles */
 .enum-indicator {
   display: flex;
@@ -455,18 +445,20 @@ const getEnumClass = (enumType: string): string => {
 
 .read-more-link {
   color: #bd945a;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-style: normal;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: inline;
+  display: block;
+  margin-top: 4px;
   white-space: nowrap;
 }
 
 @media (min-width: 768px) {
   .read-more-link {
     font-size: 0.9rem;
+    margin-top: 6px;
   }
 }
 
