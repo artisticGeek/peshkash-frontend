@@ -455,12 +455,13 @@ const getEnumClass = (enumType: string): string => {
 
 .read-more-link {
   color: #bd945a;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-style: normal;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: inline-block;
+  display: inline;
+  white-space: nowrap;
 }
 
 @media (min-width: 768px) {
