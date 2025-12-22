@@ -222,6 +222,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Force default fonts - prevent navbar font inheritance */
+.container,
+h1,
+.vendor-name,
+.event-name,
+.menu-item-description,
+.search-input,
+.filter-tag {
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
 .pk-reveal { 
   opacity: 0; 
 }

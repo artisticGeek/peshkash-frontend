@@ -247,6 +247,17 @@ const getEnumClass = (enumType: string): string => {
 </script>
 
 <style scoped>
+/* Force default fonts - prevent navbar font inheritance */
+.tree-node,
+.tree-category,
+.category-name,
+.menu-item,
+.menu-item-name,
+.menu-item-description,
+.read-more-link {
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
 /* Mobile-first: 8px indent (reduced from 12px) */
 :root {
   --indent-size: 8px;
