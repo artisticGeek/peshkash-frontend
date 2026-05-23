@@ -56,6 +56,7 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['pk-share-fab']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 /** @type {[typeof Navbar, ]} */ ;
@@ -124,9 +125,15 @@ else {
     });
     (__VLS_ctx.itemData?.name);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
-        ...{ class: "d-block text-muted" },
+        ...{ class: "d-block" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "vendor-name" },
     });
     (__VLS_ctx.itemData.event.vendor.displayName);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "event-name" },
+    });
     (__VLS_ctx.itemData.event.displayName);
     if (__VLS_ctx.itemData?.price) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
@@ -277,21 +284,20 @@ else {
         });
         (n);
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "text-end mb-4" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+}
+if (__VLS_ctx.itemData) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                if (!!(__VLS_ctx.isLoading))
-                    return;
-                if (!!(__VLS_ctx.error))
+                if (!(__VLS_ctx.itemData))
                     return;
                 __VLS_ctx.win.navigator?.share && __VLS_ctx.win.navigator?.share({ title: __VLS_ctx.itemData?.name, url: __VLS_ctx.win.location.href });
             } },
-        ...{ class: "m-2 text-primary fixed-bottom" },
+        ...{ class: "btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-3 shadow-lg pk-share-fab" },
+        'aria-label': "Share this item",
+        ...{ style: {} },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
-        ...{ class: "bi bi-share-fill me-1" },
+        ...{ class: "bi bi-share-fill fs-5" },
     });
 }
 /** @type {__VLS_StyleScopedClasses['position-fixed']} */ ;
@@ -327,7 +333,8 @@ else {
 /** @type {__VLS_StyleScopedClasses['fw-bold']} */ ;
 /** @type {__VLS_StyleScopedClasses['mb-1']} */ ;
 /** @type {__VLS_StyleScopedClasses['d-block']} */ ;
-/** @type {__VLS_StyleScopedClasses['text-muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['event-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['d-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-info']} */ ;
 /** @type {__VLS_StyleScopedClasses['d-flex']} */ ;
@@ -410,14 +417,18 @@ else {
 /** @type {__VLS_StyleScopedClasses['bi']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi-star-fill']} */ ;
 /** @type {__VLS_StyleScopedClasses['visually-hidden']} */ ;
-/** @type {__VLS_StyleScopedClasses['text-end']} */ ;
-/** @type {__VLS_StyleScopedClasses['mb-4']} */ ;
-/** @type {__VLS_StyleScopedClasses['m-2']} */ ;
-/** @type {__VLS_StyleScopedClasses['text-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['fixed-bottom']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-circle']} */ ;
+/** @type {__VLS_StyleScopedClasses['position-fixed']} */ ;
+/** @type {__VLS_StyleScopedClasses['bottom-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['m-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['shadow-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['pk-share-fab']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi-share-fill']} */ ;
-/** @type {__VLS_StyleScopedClasses['me-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['fs-5']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {

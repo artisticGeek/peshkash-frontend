@@ -18,6 +18,21 @@ const routes = [
         component: ItemDetailPage
     },
     {
+        path: '/vendor/:vendorName',
+        name: 'VendorCard',
+        component: () => import('./pages/VendorCardPage.vue')
+    },
+    {
+        path: '/onboard/:vendorName',
+        name: 'Onboarding',
+        component: () => import('./pages/onboarding/OnboardingWizard.vue'),
+    },
+    {
+        path: '/admin',
+        name: 'AdminDashboard',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
         path: '/:qrHash',
         component: QrRedirect
     }
