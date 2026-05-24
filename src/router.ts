@@ -43,8 +43,28 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
+    path: '/dashboard/vendors/:vendorId',
+    name: 'DashboardVendorWorkspace',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
     path: '/dashboard/events',
     name: 'DashboardEvents',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
+    path: '/dashboard/events/:eventId',
+    name: 'DashboardEventWorkspace',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
+    path: '/dashboard/events/:eventId/publish',
+    name: 'DashboardEventPublishContext',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
+    path: '/dashboard/events/:eventId/qr-sheet',
+    name: 'DashboardEventQrSheet',
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
@@ -59,7 +79,21 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/dashboard/menus/designer',
-    name: 'DashboardMenuDesigner',
+    redirect: '/dashboard/menus/studio',
+  },
+  {
+    path: '/dashboard/menus/studio',
+    name: 'DashboardMenuStudio',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
+    path: '/dashboard/menus/:menuId/studio',
+    name: 'DashboardMenuStudioContext',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
+    path: '/dashboard/menus/:menuId/preview',
+    name: 'DashboardMenuPreviewContext',
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
