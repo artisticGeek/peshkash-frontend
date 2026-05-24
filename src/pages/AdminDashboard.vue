@@ -6,16 +6,16 @@
         <h1>Vendor Workspace</h1>
       </div>
       <nav>
-        <button
+        <RouterLink
           v-for="section in sections"
           :key="section.key"
+          :to="dashboardRouteBySection[section.key]"
           class="nav-button"
-          :class="{ active: activeSection === section.key }"
-          @click="activeSection = section.key"
+          :class="{ active: activeSection === section.key || (activeSection === 'analytics' && section.key === 'inventory') }"
         >
           <i :class="section.icon"></i>
           <span>{{ section.label }}</span>
-        </button>
+        </RouterLink>
       </nav>
     </aside>
 
@@ -31,39 +31,78 @@
         </button>
       </header>
 
-      <section v-if="activeSection !== 'vendors'" class="vendor-context">
-        <div>
-          <label>Working Vendor</label>
-          <select v-model.number="selectedVendorId" class="form-select">
+      <section v-if="activeSection !== 'vendors'" class="vendor-context slim-context">
+        <label>Vendor
+          <select v-model.number="selectedVendorId" class="form-select form-select-sm">
             <option :value="0">Select vendor</option>
             <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
-              {{ vendor.displayName }} ({{ vendor.name }})
+              {{ vendor.displayName }}
             </option>
           </select>
-        </div>
-        <div v-if="selectedVendor" class="context-summary">
-          <strong>{{ selectedVendor.displayName }}</strong>
-          <span>{{ selectedVendor.hasContactPage ? 'Contact card active' : 'Contact card inactive' }}</span>
-          <a v-if="selectedVendor.hasContactPage" :href="vendorPublicUrl(selectedVendor)" target="_blank" rel="noreferrer">Open vendor page</a>
-        </div>
-        <div v-else class="context-summary muted">
-          Select or create a vendor first. Events, menus, items, and QR mappings will use this vendor.
-        </div>
+        </label>
+        <span v-if="selectedVendor" class="context-chip">{{ selectedVendor.name }}</span>
+        <a v-if="selectedVendor?.hasContactPage" :href="vendorPublicUrl(selectedVendor)" target="_blank" rel="noreferrer">Vendor page</a>
+        <span v-if="!selectedVendor" class="muted">Pick a vendor to continue.</span>
       </section>
 
       <div v-if="message" class="alert alert-success py-2">{{ message }}</div>
       <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
 
-      <section v-if="activeSection === 'home'" class="dashboard-grid">
-        <article class="metric-card"><span>Vendors</span><strong>{{ vendors.length }}</strong></article>
-        <article class="metric-card"><span>Vendor Events</span><strong>{{ vendorEvents.length }}</strong></article>
-        <article class="metric-card"><span>Vendor Menus</span><strong>{{ vendorMenus.length }}</strong></article>
-        <article class="metric-card"><span>Vendor Items</span><strong>{{ vendorItems.length }}</strong></article>
-        <article class="metric-card"><span>QR Mappings</span><strong>{{ qrMappings.length }}</strong></article>
+      <section v-if="activeSection === 'home'" class="home-layout">
+        <div class="panel">
+          <h3>Setup Flow</h3>
+          <table class="table table-sm align-middle action-table">
+            <thead><tr><th>Step</th><th>Purpose</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="step in dashboardSteps" :key="step.key" @click="activeSection = step.key">
+                <td><strong>{{ step.label }}</strong></td>
+                <td>{{ step.description }}</td>
+                <td>{{ step.status }}</td>
+                <td><button class="btn btn-outline-primary btn-sm">Open</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Snapshot</h3>
+          <table class="table table-sm align-middle">
+            <tbody>
+              <tr @click="activeSection = 'vendors'"><td>Vendors</td><td class="number-cell">{{ vendors.length }}</td></tr>
+              <tr @click="activeSection = 'publish'"><td>Vendor Events</td><td class="number-cell">{{ vendorEvents.length }}</td></tr>
+              <tr @click="activeSection = 'designer'"><td>Vendor Menus</td><td class="number-cell">{{ vendorMenus.length }}</td></tr>
+              <tr @click="activeSection = 'inventory'"><td>Vendor Items</td><td class="number-cell">{{ vendorItems.length }}</td></tr>
+              <tr @click="activeSection = 'qr'"><td>QR Mappings</td><td class="number-cell">{{ qrMappings.length }}</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section v-if="activeSection === 'vendors'" class="two-column">
-        <form class="panel" @submit.prevent="saveVendor">
+      <section v-if="activeSection === 'vendors'" class="stack-layout">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>Vendors</h3>
+              <p class="hint">Create vendors only when needed. Existing vendors stay reusable for events, menus, QR cards, and future vendor logins.</p>
+            </div>
+            <button class="btn btn-primary" @click="openVendorEditor()">New Vendor</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table table-sm align-middle action-table">
+              <thead><tr><th>Vendor</th><th>Slug</th><th>Card</th><th>QR</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)">
+                  <td>{{ vendor.displayName }}</td>
+                  <td><code>{{ vendor.name }}</code></td>
+                  <td>{{ vendor.hasContactPage ? 'Active' : 'Inactive' }}</td>
+                  <td><button class="btn btn-outline-primary btn-sm" @click.stop="prepareVendorQr(vendor)">QR</button></td>
+                  <td><button class="btn btn-outline-secondary btn-sm" @click.stop="openVendorEditor(vendor)">Edit</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <form v-if="showVendorEditor" class="panel compact-editor" @submit.prevent="saveVendor">
           <h3>{{ vendorForm.id ? 'Edit Vendor' : 'Create Vendor' }}</h3>
           <div class="form-grid">
             <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
@@ -76,35 +115,16 @@
           </div>
           <div class="actions">
             <button class="btn btn-primary" type="submit" :disabled="loading">Save Vendor</button>
-            <button class="btn btn-outline-secondary" type="button" @click="resetVendor">Clear</button>
-            <button class="btn btn-outline-primary" type="button" :disabled="!vendorForm.id && !selectedVendor" @click="prepareVendorQr">Prepare Vendor QR</button>
+            <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor">Close</button>
+            <button class="btn btn-outline-primary" type="button" :disabled="!vendorForm.id" @click="prepareVendorQr()">Generate Vendor QR</button>
           </div>
           <div v-if="vendorQrDraft.url" class="preview-box">
             <div><span>Destination</span><code>{{ vendorQrDraft.url }}</code></div>
             <div><span>QR Hash</span><input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" /></div>
+            <img v-if="vendorQrCodeDataUrl" class="qr-image" :src="vendorQrCodeDataUrl" alt="Vendor QR code" />
             <button class="btn btn-primary btn-sm" type="button" @click="saveVendorQr">Save Vendor QR</button>
           </div>
         </form>
-
-        <div class="panel">
-          <h3>Vendors</h3>
-          <div class="table-wrap">
-            <table class="table table-sm align-middle">
-              <thead><tr><th>Vendor</th><th>Slug</th><th>Card</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="vendor in vendors" :key="vendor.id">
-                  <td>{{ vendor.displayName }}</td>
-                  <td><code>{{ vendor.name }}</code></td>
-                  <td>{{ vendor.hasContactPage ? 'Active' : 'Inactive' }}</td>
-                  <td>
-                    <button class="btn btn-outline-secondary btn-sm" @click="selectVendor(vendor)">Use</button>
-                    <button class="btn btn-outline-primary btn-sm" @click="editVendor(vendor)">Edit</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
       </section>
 
       <section v-if="activeSection === 'events'" class="two-column">
@@ -189,6 +209,244 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'inventory'" class="panel">
+        <div class="panel-heading">
+          <div>
+            <h3>Item Library</h3>
+            <p class="hint">All reusable items for the selected vendor. Search, filter, edit inline, and open item analysis from the usage column.</p>
+          </div>
+          <div class="item-toolbar">
+            <button class="btn btn-outline-primary" :disabled="!selectedMenuIdForItems" @click="() => addDraftItemRow()">Add Row</button>
+            <button class="btn btn-primary" :disabled="!dirtyItemRows.length" @click="saveDirtyItemRows">Save Changed Rows</button>
+          </div>
+        </div>
+        <div class="table-filters">
+          <label>Search<input v-model.trim="itemSearch" class="form-control" placeholder="Search name, slug, type, tag" /></label>
+          <label>Menu<select v-model.number="itemMenuFilter" class="form-select"><option :value="0">All menus</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
+          <label>Type<select v-model="itemTypeFilter" class="form-select"><option value="">All types</option><option v-for="type in itemTypeOptions" :key="type" :value="type">{{ type }}</option></select></label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table table-sm align-middle editable-table">
+            <thead><tr><th>Item</th><th>Slug</th><th>Menu</th><th>Parent</th><th>Type</th><th>Tag</th><th>Used In</th><th>Scans</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="row in inventoryRows" :key="row.clientId">
+                <td><input v-model.trim="row.displayName" class="form-control" placeholder="Paneer Tikka" @input="markItemDirty(row)" @blur="fillRowSlug(row)" /></td>
+                <td><input v-model.trim="row.name" class="form-control" placeholder="paneer-tikka" @input="markItemDirty(row)" /></td>
+                <td>{{ menuName(row.menuId) }}</td>
+                <td>
+                  <select v-model.number="row.parentId" class="form-select" @change="markItemDirty(row)">
+                    <option :value="0">No parent</option>
+                    <option v-for="item in parentOptions(row)" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option>
+                  </select>
+                </td>
+                <td><input v-model.trim="row.type" class="form-control" placeholder="item" @input="markItemDirty(row)" /></td>
+                <td><input v-model.trim="row.enumType" class="form-control" placeholder="veg" @input="markItemDirty(row)" /></td>
+                <td>
+                  <button class="link-button" :title="itemUsageTitle(row.id)" @click="openItemAnalytics(row.id)">
+                    {{ itemUsage(row.id).menus }} menus / {{ itemUsage(row.id).events }} events
+                  </button>
+                </td>
+                <td><span class="muted">Later</span></td>
+                <td>
+                  <button v-if="row.isDirty || row.isNew" class="btn btn-primary btn-sm" @click="saveItemRow(row)">Save</button>
+                  <span v-else class="saved-state">Saved</span>
+                </td>
+              </tr>
+              <tr v-if="!inventoryRows.length">
+                <td colspan="9" class="muted">No items match the current filters.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'analytics'" class="stack-layout">
+        <div class="panel">
+          <button class="btn btn-outline-secondary btn-sm mb-3" @click="activeSection = 'inventory'">Back to Item Library</button>
+          <h3>{{ selectedAnalyticsItem ? itemLabel(selectedAnalyticsItem) : 'Item Analytics' }}</h3>
+          <p class="hint">Usage analysis is wired from current menu/event mappings. Scan count, ratings, and first-added history can plug into this page when those tables exist.</p>
+          <table v-if="selectedAnalyticsItem" class="table table-sm align-middle">
+            <tbody>
+              <tr><td>Slug</td><td><code>{{ selectedAnalyticsItem.name }}</code></td></tr>
+              <tr><td>Source menu</td><td>{{ menuName(selectedAnalyticsItem.menuId) }}</td></tr>
+              <tr><td>Parent</td><td>{{ parentName(selectedAnalyticsItem.parentId) }}</td></tr>
+              <tr><td>Type</td><td>{{ selectedAnalyticsItem.type || 'item' }}</td></tr>
+              <tr><td>Rating</td><td>Later</td></tr>
+              <tr><td>Scans</td><td>Later</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Used In</h3>
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Event</th><th>Menu</th><th>Public URL</th></tr></thead>
+            <tbody>
+              <tr v-for="usage in selectedAnalyticsUsage" :key="`${usage.event.id}-${usage.menu.id}`">
+                <td>{{ usage.event.displayName }}</td>
+                <td>{{ usage.menu.displayName }}</td>
+                <td><a :href="itemPathFor(usage.event, selectedAnalyticsItem!)" target="_blank" rel="noreferrer">Open</a></td>
+              </tr>
+              <tr v-if="!selectedAnalyticsUsage.length"><td colspan="3" class="muted">No event usage found yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'designer'" class="designer-grid">
+        <div class="panel designer-controls">
+          <h3>Menu Designer</h3>
+          <p class="hint">Visual nested editor. Drag items from the library into the menu, drop onto categories to re-parent, or use row actions when precision is easier.</p>
+          <div class="form-grid">
+            <label>Event<select v-model.number="selectedEventIdForItems" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
+            <label>Working Menu<select v-model.number="selectedMenuIdForItems" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
+            <label>New Custom Menu<input v-model.trim="designerMenuName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
+            <label class="check"><input v-model="designerFullMenuQr" type="checkbox" /> Enable full-menu QR</label>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">Create Custom Menu</button>
+            <button class="btn btn-outline-primary" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">Use Menu For Event</button>
+          </div>
+          <div class="payment-note">
+            Payment checkpoint later: after menu design is valid and before publishing/QR activation.
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Item Library</h3>
+          <input v-model.trim="designerSearch" class="form-control mb-2" placeholder="Search items to add" />
+          <div class="library-list">
+            <button
+              v-for="item in availableDesignerItems"
+              :key="item.id"
+              class="library-row"
+              draggable="true"
+              @dragstart="dragLibraryItem(item)"
+              @click="copyItemToDesignedMenu(item)"
+            >
+              <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ item.type || 'item' }}</small></span>
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel menu-render" @dragover.prevent @drop="dropOnMenuRoot">
+          <div class="panel-heading">
+            <div>
+              <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
+              <p class="hint">Admin render. Notes stay private and do not appear on public guest pages.</p>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" :disabled="!selectedMenuForItems" @click="activeSection = 'preview'">Preview</button>
+          </div>
+          <div class="admin-tree">
+            <div v-for="item in selectedMenuTree" :key="item.id" class="tree-root">
+              <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
+                <span><i class="bi bi-grip-vertical"></i> <strong>{{ itemLabel(item) }}</strong></span>
+                <small>{{ item.type || 'item' }} · {{ childCount(item) }} children</small>
+                <button class="btn btn-outline-secondary btn-sm" @click="setItemParent(item, null)">Root</button>
+              </div>
+              <textarea v-model="designerNotes[item.id]" class="form-control admin-note" rows="1" placeholder="Private admin/vendor note"></textarea>
+              <div class="tree-children-admin">
+                <div
+                  v-for="child in item.subCategoryLineItems"
+                  :key="child.id"
+                  class="admin-tree-row child"
+                  draggable="true"
+                  @dragstart="dragDesignedItem(child)"
+                  @dragover.prevent
+                  @drop.stop="dropOnDesignedItem(child)"
+                >
+                  <span><i class="bi bi-grip-vertical"></i> {{ itemLabel(child) }}</span>
+                  <small>{{ child.enumType || child.type }}</small>
+                  <button class="btn btn-outline-secondary btn-sm" @click="setItemParent(child, item.id)">Move here</button>
+                </div>
+              </div>
+            </div>
+            <p v-if="!selectedMenuItems.length" class="muted">No items in this menu yet. Add from the library or create rows in Item Library.</p>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'preview'" class="preview-layout">
+        <div class="panel">
+          <h3>Preview Menu</h3>
+          <div class="form-grid">
+            <label>Event<select v-model.number="selectedEventIdForItems" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
+            <label>Menu<select v-model.number="selectedMenuIdForItems" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
+          </div>
+          <div class="actions">
+            <a v-if="selectedEventForItems && selectedMenuForItems" class="btn btn-outline-primary" :href="menuPreviewUrl" target="_blank" rel="noreferrer">Open Public Menu</a>
+            <button class="btn btn-primary" :disabled="!selectedEventForItems || !selectedMenuForItems" @click="activeSection = 'publish'">Continue To Publish</button>
+          </div>
+        </div>
+        <div class="phone-preview">
+          <div class="phone-shell">
+            <p class="eyebrow">{{ selectedEventForItems?.displayName || 'Event' }}</p>
+            <h3>{{ selectedMenuForItems?.displayName || 'Menu Preview' }}</h3>
+            <MenuTree
+              v-for="item in selectedMenuTree"
+              :key="item.id"
+              :item="item"
+              :level="0"
+              :event-name="selectedEventForItems?.name || ''"
+              :menu-name="selectedMenuForItems?.name || ''"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'publish'" class="publish-grid">
+        <form class="panel" @submit.prevent="saveEvent">
+          <h3>Event Design</h3>
+          <p class="hint">Create or edit the event shell, attach menus, validate, then publish.</p>
+          <div class="form-grid">
+            <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
+            <label>Slug<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
+            <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
+            <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
+            <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">Save Event Draft</button>
+          </div>
+        </form>
+
+        <div class="panel">
+          <h3>Publish Checklist</h3>
+          <ul class="checklist">
+            <li v-for="item in publishChecklist" :key="item.label" :class="{ done: item.done }">
+              <i :class="item.done ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i>
+              {{ item.label }}
+            </li>
+          </ul>
+          <div class="payment-gate">
+            <strong>Future payment gate</strong>
+            <p>Payment should happen here, after validation and before making the event active or enabling final QR mappings.</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-outline-secondary" :disabled="!selectedEventForItems" @click="loadEventIntoForm(selectedEventForItems!)">Edit Selected Event</button>
+            <button class="btn btn-primary" :disabled="!canPublish" @click="publishSelectedEvent">Publish Event</button>
+          </div>
+        </div>
+
+        <div class="panel wide-panel">
+          <h3>Post-Publish QR Sheet</h3>
+          <p class="hint">After publish, this becomes the printable/clickable list of menu and item QR targets. Timers use the event active window.</p>
+          <div class="qr-sheet">
+            <article v-for="menu in selectedEventMenus" :key="menu.id" class="qr-tile">
+              <strong>{{ menu.displayName }}</strong>
+              <code>{{ menuPathFor(selectedEventForItems, menu) }}</code>
+              <span>{{ eventTimerLabel(selectedEventForItems) }}</span>
+            </article>
+            <article v-for="item in selectedEventItems" :key="item.id" class="qr-tile">
+              <strong>{{ itemLabel(item) }}</strong>
+              <code>{{ itemPathFor(selectedEventForItems, item) }}</code>
+              <span>{{ eventTimerLabel(selectedEventForItems) }}</span>
+            </article>
           </div>
         </div>
       </section>
@@ -303,6 +561,7 @@
           <div class="preview-box" v-if="qrPreview.shortQrUrl || qrPreview.finalPublicUrl">
             <div><span>Short QR URL</span><a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer">{{ qrPreview.shortQrUrl }}</a></div>
             <div><span>Final URL</span><a :href="qrPreview.finalPublicUrl" target="_blank" rel="noreferrer">{{ qrPreview.finalPublicUrl }}</a></div>
+            <img v-if="qrCodeDataUrl" class="qr-image" :src="qrCodeDataUrl" alt="QR code" />
           </div>
           <div class="actions">
             <button class="btn btn-outline-secondary" type="button" :disabled="loading" @click="buildQrDestination">Generate Destination</button>
@@ -334,10 +593,13 @@
 
 <script setup lang="ts">
 import axios from 'axios';
+import QRCode from 'qrcode';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import MenuTree from '../components/MenuTree.vue';
 import { API_BASE_URL } from '../config';
 
-type SectionKey = 'home' | 'vendors' | 'events' | 'menus' | 'items' | 'qr';
+type SectionKey = 'home' | 'vendors' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'events' | 'menus' | 'items';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; vendor?: Vendor };
@@ -349,13 +611,45 @@ type DraftItem = { clientId: string; id?: number; menuId: number; parentId: numb
 const sections = [
   { key: 'home', label: 'Dashboard Home', icon: 'bi bi-grid-1x2' },
   { key: 'vendors', label: 'Vendors', icon: 'bi bi-shop' },
-  { key: 'events', label: 'Events', icon: 'bi bi-calendar-event' },
-  { key: 'menus', label: 'Menus', icon: 'bi bi-card-list' },
-  { key: 'items', label: 'Items', icon: 'bi bi-tags' },
+  { key: 'inventory', label: 'Item Library', icon: 'bi bi-box-seam' },
+  { key: 'designer', label: 'Menu Designer', icon: 'bi bi-layout-three-columns' },
+  { key: 'preview', label: 'Menu Preview', icon: 'bi bi-phone' },
+  { key: 'publish', label: 'Event Publish', icon: 'bi bi-send-check' },
   { key: 'qr', label: 'QR Mappings', icon: 'bi bi-qr-code' },
 ] as const;
 
-const activeSection = ref<SectionKey>('home');
+const route = useRoute();
+const router = useRouter();
+
+const dashboardRouteBySection: Record<SectionKey, string> = {
+  home: '/dashboard/home',
+  vendors: '/dashboard/vendors',
+  inventory: '/dashboard/items',
+  analytics: '/dashboard/items',
+  designer: '/dashboard/menus/designer',
+  preview: '/dashboard/menus/preview',
+  publish: '/dashboard/events/publish',
+  qr: '/dashboard/qr',
+  events: '/dashboard/events/publish',
+  menus: '/dashboard/menus/designer',
+  items: '/dashboard/items',
+};
+
+function sectionFromPath(path: string): SectionKey {
+  if (path.startsWith('/dashboard/vendors')) return 'vendors';
+  if (path.startsWith('/dashboard/items/')) return 'analytics';
+  if (path.startsWith('/dashboard/items')) return 'inventory';
+  if (path.startsWith('/dashboard/menus/preview')) return 'preview';
+  if (path.startsWith('/dashboard/menus/designer')) return 'designer';
+  if (path.startsWith('/dashboard/events/publish')) return 'publish';
+  if (path.startsWith('/dashboard/qr')) return 'qr';
+  return 'home';
+}
+
+const activeSection = computed<SectionKey>({
+  get: () => sectionFromPath(route.path),
+  set: (section) => router.push(dashboardRouteBySection[section]),
+});
 const loading = ref(false);
 const error = ref('');
 const message = ref('');
@@ -363,6 +657,18 @@ const selectedVendorId = ref(Number(localStorage.getItem('peshkash-admin-vendor-
 const selectedMenuIdForItems = ref(0);
 const selectedEventIdForItems = ref(0);
 const showItemContextPicker = ref(false);
+const showVendorEditor = ref(false);
+const designerMenuName = ref('');
+const designerFullMenuQr = ref(false);
+const designerNotes = reactive<Record<number, string>>({});
+const designerSearch = ref('');
+const itemSearch = ref('');
+const itemMenuFilter = ref(0);
+const itemTypeFilter = ref('');
+const selectedAnalyticsItemId = ref<number | null>(null);
+const draggedLibraryItemId = ref<number | null>(null);
+const draggedDesignedItemId = ref<number | null>(null);
+let alertTimer: number | undefined;
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -375,6 +681,8 @@ const eventMenuMap = ref<Record<number, MenuRow[]>>({});
 const vendorContactText = ref('');
 const qrTargetType = ref<'vendor' | 'menu' | 'item' | 'custom'>('vendor');
 const qrPreview = reactive({ shortQrUrl: '', finalPublicUrl: '' });
+const qrCodeDataUrl = ref('');
+const vendorQrCodeDataUrl = ref('');
 const itemRows = ref<DraftItem[]>([]);
 
 const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false });
@@ -399,12 +707,53 @@ const miscMenu = computed(() => vendorMenus.value.find((menu) => menu.name === m
 const miscMenuSlug = computed(() => selectedVendor.value ? `${selectedVendor.value.name}-misc` : '');
 const miscMenuItems = computed(() => miscMenu.value ? items.value.filter((item) => item.menuId === miscMenu.value!.id) : []);
 const importMenuItems = computed(() => items.value.filter((item) => item.menuId === importForm.menuId));
+const itemTypeOptions = computed(() => Array.from(new Set(vendorItems.value.map((item) => item.type || 'item'))).sort());
+const inventoryRows = computed(() => itemRows.value.filter((row) => {
+  const query = itemSearch.value.toLowerCase();
+  const matchesSearch = !query || [row.displayName, row.name, row.type, row.enumType].some((value) => value?.toLowerCase().includes(query));
+  const matchesMenu = !itemMenuFilter.value || row.menuId === itemMenuFilter.value;
+  const matchesType = !itemTypeFilter.value || row.type === itemTypeFilter.value;
+  return matchesSearch && matchesMenu && matchesType;
+}));
+const availableDesignerItems = computed(() => vendorItems.value.filter((item) => {
+  const query = designerSearch.value.toLowerCase();
+  const notInMenu = item.menuId !== selectedMenuIdForItems.value;
+  const matchesSearch = !query || [item.displayName, item.name, item.type, item.enumType].some((value) => value?.toLowerCase().includes(query));
+  return notInMenu && matchesSearch;
+}));
+const selectedMenuTree = computed(() => buildItemTree(selectedMenuItems.value));
+const selectedAnalyticsItem = computed(() => selectedAnalyticsItemId.value ? items.value.find((item) => item.id === selectedAnalyticsItemId.value) : undefined);
+const selectedAnalyticsUsage = computed(() => {
+  if (!selectedAnalyticsItem.value) return [];
+  return events.value.flatMap((event) => eventMenus(event.id)
+    .filter((menu) => menu.id === selectedAnalyticsItem.value!.menuId)
+    .map((menu) => ({ event, menu })));
+});
+const menuPreviewUrl = computed(() => selectedEventForItems.value && selectedMenuForItems.value
+  ? `${window.location.origin}/event/${selectedEventForItems.value.name}/menu/${selectedMenuForItems.value.name}`
+  : '');
+const selectedEventMenus = computed(() => selectedEventIdForItems.value ? eventMenus(selectedEventIdForItems.value) : []);
+const selectedEventMenuIds = computed(() => selectedEventMenus.value.map((menu) => menu.id));
+const selectedEventItems = computed(() => items.value.filter((item) => selectedEventMenuIds.value.includes(item.menuId)));
+const publishChecklist = computed(() => [
+  { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
+  { label: 'Event selected or saved', done: Boolean(selectedEventForItems.value || eventForm.id) },
+  { label: 'Event has active dates', done: Boolean((selectedEventForItems.value?.startTime || eventForm.startTime) && (selectedEventForItems.value?.endTime || eventForm.endTime)) },
+  { label: 'At least one menu linked', done: selectedEventMenus.value.length > 0 },
+  { label: 'Linked menus contain items', done: selectedEventItems.value.length > 0 },
+]);
+const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
 
 const activeTitle = computed(() => sections.find((section) => section.key === activeSection.value)?.label ?? 'Admin');
 const activeSubtitle = computed(() => {
   const copy: Record<SectionKey, string> = {
     home: 'Work from a selected vendor and move through setup without losing context.',
     vendors: 'Create vendors, activate contact cards, and generate vendor QR mappings.',
+    inventory: 'Manage reusable vendor items before they are assembled into menus.',
+    analytics: 'Inspect where an item is used and leave space for scans, ratings, and first-added history.',
+    designer: 'Assemble event-ready menus from existing items, adhoc items, and custom menu copies.',
+    preview: 'Review the menu as guests will see it before QR mapping or publish.',
+    publish: 'Validate event setup and keep the future payment checkpoint in one place.',
     events: 'Create events under the selected vendor. Events do not need standalone QR codes.',
     menus: 'Create source menus independently, then map them to events when needed.',
     items: 'Add source or adhoc items quickly in a table-first workflow.',
@@ -412,6 +761,15 @@ const activeSubtitle = computed(() => {
   };
   return copy[activeSection.value];
 });
+
+const dashboardSteps = computed(() => [
+  { key: 'vendors' as SectionKey, label: 'Vendor Setup', description: 'Create or reuse a vendor and generate contact QR codes.', status: `${vendors.value.length} vendors` },
+  { key: 'inventory' as SectionKey, label: 'Item Library', description: 'Maintain the exhaustive reusable item list with filters and analytics.', status: `${vendorItems.value.length} items` },
+  { key: 'designer' as SectionKey, label: 'Menu Designer', description: 'Build nested menus visually from reusable items.', status: `${vendorMenus.value.length} menus` },
+  { key: 'preview' as SectionKey, label: 'Preview', description: 'Use the same recursive menu renderer guests see.', status: selectedMenuForItems.value?.displayName || 'Select menu' },
+  { key: 'publish' as SectionKey, label: 'Publish', description: 'Validate event setup. Future payment gate lives here.', status: canPublish.value ? 'Ready' : 'Needs checks' },
+  { key: 'qr' as SectionKey, label: 'QR Mapping', description: 'Create reusable mappings and render actual QR codes.', status: `${qrMappings.value.length} mappings` },
+]);
 
 const selectedEventMenuLinks = computed(() => eventMenuMap.value[linkForm.eventId] ?? []);
 const menusForQrEvent = computed(() => eventMenuMap.value[qrForm.eventId] ?? []);
@@ -435,6 +793,8 @@ function slugify(value: string) {
 function setNotice(text: string) {
   message.value = text;
   error.value = '';
+  window.clearTimeout(alertTimer);
+  alertTimer = window.setTimeout(() => { message.value = ''; }, 4000);
 }
 
 function setError(err: any) {
@@ -443,6 +803,8 @@ function setError(err: any) {
     ? `${raw} Try a more specific slug or add a short suffix.`
     : raw;
   message.value = '';
+  window.clearTimeout(alertTimer);
+  alertTimer = window.setTimeout(() => { error.value = ''; }, 7000);
 }
 
 function requireSlug(value: string, label: string) {
@@ -503,7 +865,7 @@ function toItemRow(item: ItemRow): DraftItem {
 
 function syncItemRows() {
   const newRows = itemRows.value.filter((row) => row.isNew);
-  const existingRows = selectedMenuItems.value.map(toItemRow);
+  const existingRows = vendorItems.value.map(toItemRow);
   itemRows.value = [...newRows, ...existingRows];
 }
 
@@ -586,17 +948,33 @@ function selectVendor(vendor: Vendor) {
   setNotice(`Working vendor set to ${vendor.displayName}`);
 }
 
+function openVendorEditor(vendor?: Vendor) {
+  if (vendor) {
+    editVendor(vendor);
+  } else {
+    resetVendor();
+    showVendorEditor.value = true;
+  }
+}
+
+function closeVendorEditor() {
+  showVendorEditor.value = false;
+  resetVendor();
+}
+
 function resetVendor() {
   Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false });
   vendorContactText.value = '';
   vendorQrDraft.qrHash = '';
   vendorQrDraft.url = '';
+  vendorQrCodeDataUrl.value = '';
 }
 
 function editVendor(vendor: Vendor) {
   Object.assign(vendorForm, vendor);
   vendorContactText.value = vendor.contact?.join(', ') ?? '';
   selectedVendorId.value = vendor.id;
+  showVendorEditor.value = true;
   activeSection.value = 'vendors';
 }
 
@@ -617,11 +995,16 @@ async function saveVendor() {
   }
 }
 
-function prepareVendorQr() {
-  const vendor = selectedVendor.value || vendors.value.find((row) => row.id === vendorForm.id);
+async function prepareVendorQr(vendorArg?: Vendor) {
+  const vendor = vendorArg || vendors.value.find((row) => row.id === vendorForm.id) || selectedVendor.value;
   if (!vendor) return setError(new Error('Select or save a vendor first'));
+  Object.assign(vendorForm, vendor);
+  vendorContactText.value = vendor.contact?.join(', ') ?? '';
+  showVendorEditor.value = true;
+  selectedVendorId.value = vendor.id;
   vendorQrDraft.url = `/vendor/${vendor.name}`;
   vendorQrDraft.qrHash = vendorQrDraft.qrHash || `${vendor.name}-card`;
+  vendorQrCodeDataUrl.value = await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 });
 }
 
 async function saveVendorQr() {
@@ -762,7 +1145,7 @@ function markItemDirty(row: DraftItem) {
 }
 
 function parentOptions(row: DraftItem) {
-  return selectedMenuItems.value.filter((item) => item.id !== row.id);
+  return items.value.filter((item) => item.menuId === row.menuId && item.id !== row.id);
 }
 
 async function saveItemRow(row: DraftItem) {
@@ -875,6 +1258,189 @@ function itemLabel(item: ItemRow) {
   return item.displayName?.trim() || item.name;
 }
 
+function menuName(menuId: number) {
+  return menus.value.find((menu) => menu.id === menuId)?.displayName || 'Unknown menu';
+}
+
+function itemUsage(itemId?: number) {
+  if (!itemId) return { menus: 0, events: 0 };
+  const item = items.value.find((row) => row.id === itemId);
+  if (!item) return { menus: 0, events: 0 };
+  const eventsUsed = Object.values(eventMenuMap.value).filter((linkedMenus) => linkedMenus.some((menu) => menu.id === item.menuId)).length;
+  return { menus: 1, events: eventsUsed };
+}
+
+function itemUsageTitle(itemId?: number) {
+  if (!itemId) return 'Save the item before analytics are available';
+  const item = items.value.find((row) => row.id === itemId);
+  if (!item) return 'Item not found';
+  const eventNames = events.value
+    .filter((event) => eventMenus(event.id).some((menu) => menu.id === item.menuId))
+    .map((event) => event.displayName);
+  return eventNames.length ? `Used in ${menuName(item.menuId)} for ${eventNames.join(', ')}` : `Part of ${menuName(item.menuId)}. Not linked to an event yet.`;
+}
+
+function openItemAnalytics(itemId?: number) {
+  if (!itemId) return;
+  selectedAnalyticsItemId.value = itemId;
+  router.push(`/dashboard/items/${itemId}`);
+}
+
+function buildItemTree(flatItems: ItemRow[]) {
+  const map = new Map<number, any>();
+  flatItems.forEach((item) => map.set(item.id, { ...item, itemType: item.type, subCategoryLineItems: [] }));
+  const roots: any[] = [];
+  flatItems.forEach((item) => {
+    const node = map.get(item.id);
+    if (item.parentId && map.has(item.parentId)) map.get(item.parentId).subCategoryLineItems.push(node);
+    else roots.push(node);
+  });
+  return roots;
+}
+
+function childCount(item: any) {
+  return item.subCategoryLineItems?.length ?? 0;
+}
+
+function dragLibraryItem(item: ItemRow) {
+  draggedLibraryItemId.value = item.id;
+  draggedDesignedItemId.value = null;
+}
+
+function dragDesignedItem(item: ItemRow) {
+  draggedDesignedItemId.value = item.id;
+  draggedLibraryItemId.value = null;
+}
+
+async function dropOnMenuRoot() {
+  if (draggedLibraryItemId.value) {
+    const item = items.value.find((row) => row.id === draggedLibraryItemId.value);
+    if (item) await copyItemToDesignedMenu(item);
+  } else if (draggedDesignedItemId.value) {
+    const item = items.value.find((row) => row.id === draggedDesignedItemId.value);
+    if (item) await setItemParent(item, null);
+  }
+  draggedLibraryItemId.value = null;
+  draggedDesignedItemId.value = null;
+}
+
+async function dropOnDesignedItem(target: ItemRow) {
+  if (draggedLibraryItemId.value) {
+    const item = items.value.find((row) => row.id === draggedLibraryItemId.value);
+    if (item) {
+      await copyItemToDesignedMenu(item, target.id);
+    }
+  } else if (draggedDesignedItemId.value && draggedDesignedItemId.value !== target.id) {
+    const item = items.value.find((row) => row.id === draggedDesignedItemId.value);
+    if (item) await setItemParent(item, target.id);
+  }
+  draggedLibraryItemId.value = null;
+  draggedDesignedItemId.value = null;
+}
+
+async function setItemParent(item: ItemRow, parentId: number | null) {
+  try {
+    if (parentId === item.id) throw new Error('An item cannot be its own parent');
+    await axios.put(adminUrl(`/items/${item.id}`), { ...item, parentId });
+    await loadAll();
+    syncItemRows();
+    setNotice('Menu nesting updated');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function createDesignerMenu() {
+  try {
+    if (!selectedVendor.value) throw new Error('Select a vendor before creating a menu');
+    const name = slugify(designerMenuName.value);
+    requireSlug(name, 'Menu slug');
+    const { data } = await axios.post<MenuRow>(adminUrl('/menus'), {
+      vendorId: selectedVendorId.value,
+      name,
+      displayName: designerMenuName.value.trim(),
+      description: 'Custom menu designed in admin.',
+      isActive: true,
+    });
+    await loadAll();
+    selectedMenuIdForItems.value = Number(data.id);
+    designerMenuName.value = '';
+    setNotice('Custom menu created. Add items from the library next.');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function linkSelectedMenuToEvent() {
+  try {
+    if (!selectedEventIdForItems.value || !selectedMenuIdForItems.value) throw new Error('Select an event and menu first');
+    await axios.post(adminUrl(`/events/${selectedEventIdForItems.value}/menus/${selectedMenuIdForItems.value}`), {
+      displayName: selectedMenuForItems.value?.displayName,
+    });
+    if (designerFullMenuQr.value) {
+      qrForm.qrHash = `${selectedEventForItems.value?.name}-${selectedMenuForItems.value?.name}`.toLowerCase();
+      qrTargetType.value = 'menu';
+      qrForm.eventId = selectedEventIdForItems.value;
+      qrForm.menuId = selectedMenuIdForItems.value;
+      await buildQrDestination();
+    }
+    await loadAll();
+    setNotice('Menu linked to event');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function copyItemToDesignedMenu(item: ItemRow, parentId: number | null = null) {
+  try {
+    if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
+    await axios.post(adminUrl('/items'), { ...cloneItemPayload(item, selectedMenuIdForItems.value), parentId });
+    await loadAll();
+    syncItemRows();
+    setNotice(`${itemLabel(item)} added to ${selectedMenuForItems.value?.displayName || 'menu'}`);
+  } catch (err) {
+    setError(err);
+  }
+}
+
+function loadEventIntoForm(event: EventRow) {
+  selectedEventIdForItems.value = event.id;
+  editEvent(event);
+}
+
+async function publishSelectedEvent() {
+  try {
+    const event = selectedEventForItems.value;
+    if (!event) throw new Error('Select an event to publish');
+    await axios.put(adminUrl(`/events/${event.id}`), { ...event, status: 'active' });
+    await loadAll();
+    setNotice('Event published. Payment gate will be inserted here before activation later.');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+function menuPathFor(event?: EventRow, menu?: MenuRow) {
+  if (!event || !menu) return '';
+  return `/event/${event.name}/menu/${menu.name}`;
+}
+
+function itemPathFor(event: EventRow | undefined, item: ItemRow) {
+  if (!event) return '';
+  const menu = menus.value.find((row) => row.id === item.menuId);
+  return menu ? `/event/${event.name}/menu/${menu.name}/item/${item.name}` : '';
+}
+
+function eventTimerLabel(event?: EventRow) {
+  if (!event?.startTime || !event?.endTime) return 'Timer available after dates are set';
+  const now = Date.now();
+  const start = new Date(event.startTime).getTime();
+  const end = new Date(event.endTime).getTime();
+  if (now < start) return 'Starts later';
+  if (now > end) return 'Ended';
+  return 'Live now';
+}
+
 function menuPreviews(menuId: number) {
   return previews.menus.filter((preview) => preview.menuId === menuId);
 }
@@ -900,6 +1466,7 @@ async function buildQrDestination() {
     }
     qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
     qrPreview.finalPublicUrl = qrForm.url ? buildAbsolute(qrForm.url) : '';
+    qrCodeDataUrl.value = qrPreview.shortQrUrl ? await QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }) : '';
   } catch (err) {
     setError(err);
   }
@@ -909,6 +1476,7 @@ function editQr(mapping: QrMapping) {
   Object.assign(qrForm, { qrHash: mapping.qrHash, url: mapping.url, isActive: mapping.isActive, eventId: 0, menuId: 0, itemId: 0 });
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
+  QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
   qrTargetType.value = 'custom';
 }
 
@@ -919,6 +1487,7 @@ async function saveQr() {
     const { data } = await axios.post<QrMapping>(adminUrl('/qr-mappings'), { qrHash: qrForm.qrHash, url: qrForm.url, isActive: qrForm.isActive });
     qrPreview.shortQrUrl = data.shortQrUrl;
     qrPreview.finalPublicUrl = data.finalPublicUrl;
+    qrCodeDataUrl.value = await QRCode.toDataURL(data.shortQrUrl, { margin: 1, width: 180 });
     await loadAll();
     setNotice('QR mapping saved');
   } catch (err) {
@@ -941,10 +1510,16 @@ watch([selectedMenuIdForItems, items], syncItemRows);
 
 watch(() => qrForm.qrHash, () => {
   qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
+  if (qrPreview.shortQrUrl) QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
+});
+
+watch(() => route.params.itemId, (itemId) => {
+  selectedAnalyticsItemId.value = itemId ? Number(itemId) : null;
 });
 
 onMounted(async () => {
   await loadAll();
+  if (route.params.itemId) selectedAnalyticsItemId.value = Number(route.params.itemId);
   selectedMenuIdForItems.value = vendorMenus.value[0]?.id ?? 0;
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
   syncItemRows();
@@ -1051,6 +1626,26 @@ onMounted(async () => {
   z-index: 3;
 }
 
+.slim-context {
+  padding: 10px 12px;
+  align-items: end;
+  justify-content: flex-start;
+}
+
+.slim-context label {
+  min-width: 240px;
+}
+
+.context-chip {
+  background: #f4f1ed;
+  border: 1px solid #e6dfd4;
+  border-radius: 999px;
+  color: #6d4c24;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
 .vendor-context > div:first-child {
   min-width: 320px;
 }
@@ -1089,6 +1684,39 @@ label {
 
 .metric-card strong {
   font-size: 2rem;
+}
+
+.workflow-card {
+  background: #fff;
+  border: 1px solid #e6dfd4;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.workflow-card span {
+  align-items: center;
+  background: #15191e;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  height: 26px;
+  justify-content: center;
+  margin-bottom: 10px;
+  width: 26px;
+}
+
+.workflow-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.workflow-card p,
+.payment-note,
+.payment-gate p {
+  color: #6b7280;
+  font-size: 0.88rem;
+  margin: 0;
 }
 
 .two-column {
@@ -1217,6 +1845,157 @@ td a {
   margin-top: 18px;
 }
 
+.designer-grid,
+.preview-layout,
+.publish-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.designer-grid {
+  grid-template-columns: minmax(300px, 390px) minmax(260px, 360px) minmax(0, 1fr);
+}
+
+.designer-controls {
+  align-self: start;
+}
+
+.payment-note,
+.payment-gate {
+  background: #fff8ed;
+  border: 1px solid #ead2ad;
+  border-radius: 8px;
+  margin-top: 14px;
+  padding: 10px;
+}
+
+.library-list {
+  display: grid;
+  gap: 8px;
+  max-height: 560px;
+  overflow: auto;
+}
+
+.library-row {
+  align-items: center;
+  background: #fbfaf8;
+  border: 1px solid #e6dfd4;
+  border-radius: 8px;
+  color: #15191e;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  text-align: left;
+}
+
+.library-row small,
+.designed-item small,
+.public-item small {
+  color: #6b7280;
+  display: block;
+  font-size: 0.76rem;
+}
+
+.menu-render {
+  min-height: 620px;
+}
+
+.menu-preview-card,
+.phone-shell {
+  background: #fffdfa;
+  border: 1px solid #e6dfd4;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.menu-group,
+.public-group {
+  border-bottom: 1px solid #ece7de;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+}
+
+.menu-group h4,
+.public-group h4 {
+  font-family: 'Urbanist', sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  margin: 0 0 8px;
+}
+
+.admin-note {
+  margin-bottom: 8px;
+}
+
+.designed-item,
+.public-item {
+  align-items: center;
+  border-bottom: 1px dashed #eadfce;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.designed-item.loose {
+  border-bottom-style: solid;
+}
+
+.preview-layout {
+  grid-template-columns: minmax(300px, 440px) minmax(320px, 520px);
+  align-items: start;
+}
+
+.phone-preview {
+  display: flex;
+  justify-content: center;
+}
+
+.phone-shell {
+  border: 10px solid #15191e;
+  border-radius: 28px;
+  box-shadow: 0 16px 45px rgba(21, 25, 30, 0.18);
+  min-height: 620px;
+  width: min(100%, 390px);
+}
+
+.publish-grid {
+  grid-template-columns: minmax(320px, 520px) minmax(300px, 420px);
+}
+
+.checklist {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checklist li {
+  align-items: center;
+  color: #6b7280;
+  display: flex;
+  gap: 8px;
+}
+
+.checklist li.done {
+  color: #166534;
+  font-weight: 800;
+}
+
+.qr-sheet {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.qr-tile {
+  border: 1px solid #e6dfd4;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
 @media (max-width: 900px) {
   .admin-shell {
     grid-template-columns: 1fr;
@@ -1225,6 +2004,9 @@ td a {
     grid-template-columns: repeat(2, 1fr);
   }
   .two-column,
+  .designer-grid,
+  .preview-layout,
+  .publish-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }

@@ -28,9 +28,52 @@ const routes = [
         component: () => import('./pages/onboarding/OnboardingWizard.vue'),
     },
     {
-        path: '/admin',
-        name: 'AdminDashboard',
+        path: '/dashboard',
+        redirect: '/dashboard/home',
+    },
+    {
+        path: '/dashboard/home',
+        name: 'DashboardHome',
         component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/vendors',
+        name: 'DashboardVendors',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/items',
+        name: 'DashboardItems',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/items/:itemId',
+        name: 'DashboardItemAnalytics',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/designer',
+        name: 'DashboardMenuDesigner',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/preview',
+        name: 'DashboardMenuPreview',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events/publish',
+        name: 'DashboardEventPublish',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/qr',
+        name: 'DashboardQr',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/admin',
+        redirect: '/dashboard/home',
     },
     {
         path: '/:qrHash',
