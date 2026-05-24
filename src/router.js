@@ -42,6 +42,11 @@ const routes = [
         component: () => import('./pages/AdminDashboard.vue'),
     },
     {
+        path: '/dashboard/events',
+        name: 'DashboardEvents',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
         path: '/dashboard/items',
         name: 'DashboardItems',
         component: () => import('./pages/AdminDashboard.vue'),

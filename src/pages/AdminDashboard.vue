@@ -25,25 +25,23 @@
           <h2>{{ activeTitle }}</h2>
           <p>{{ activeSubtitle }}</p>
         </div>
-        <button class="btn btn-outline-secondary btn-sm" :disabled="loading" @click="loadAll">
-          <i class="bi bi-arrow-clockwise"></i>
-          Refresh
-        </button>
+        <div class="header-actions">
+          <div class="workspace-switcher">
+            <span>Workspace</span>
+            <select v-model.number="selectedVendorId" class="form-select form-select-sm">
+              <option :value="0">Select vendor</option>
+              <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
+                {{ vendor.displayName }}
+              </option>
+            </select>
+            <a v-if="selectedVendor?.hasContactPage" :href="vendorPublicUrl(selectedVendor)" target="_blank" rel="noreferrer">Open card</a>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" :disabled="loading" @click="loadAll">
+            <i class="bi bi-arrow-clockwise"></i>
+            Refresh
+          </button>
+        </div>
       </header>
-
-      <section v-if="activeSection !== 'vendors'" class="vendor-context slim-context">
-        <label>Vendor
-          <select v-model.number="selectedVendorId" class="form-select form-select-sm">
-            <option :value="0">Select vendor</option>
-            <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
-              {{ vendor.displayName }}
-            </option>
-          </select>
-        </label>
-        <span v-if="selectedVendor" class="context-chip">{{ selectedVendor.name }}</span>
-        <a v-if="selectedVendor?.hasContactPage" :href="vendorPublicUrl(selectedVendor)" target="_blank" rel="noreferrer">Vendor page</a>
-        <span v-if="!selectedVendor" class="muted">Pick a vendor to continue.</span>
-      </section>
 
       <div v-if="message" class="alert alert-success py-2">{{ message }}</div>
       <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
@@ -54,26 +52,33 @@
           <table class="table table-sm align-middle action-table">
             <thead><tr><th>Step</th><th>Purpose</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="step in dashboardSteps" :key="step.key" @click="activeSection = step.key">
+              <tr v-for="step in dashboardSteps" :key="step.key">
                 <td><strong>{{ step.label }}</strong></td>
                 <td>{{ step.description }}</td>
                 <td>{{ step.status }}</td>
-                <td><button class="btn btn-outline-primary btn-sm">Open</button></td>
+                <td><RouterLink class="btn btn-outline-primary btn-sm" :to="dashboardRouteBySection[step.key]">Open</RouterLink></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="panel">
-          <h3>Snapshot</h3>
-          <table class="table table-sm align-middle">
-            <tbody>
-              <tr @click="activeSection = 'vendors'"><td>Vendors</td><td class="number-cell">{{ vendors.length }}</td></tr>
-              <tr @click="activeSection = 'publish'"><td>Vendor Events</td><td class="number-cell">{{ vendorEvents.length }}</td></tr>
-              <tr @click="activeSection = 'designer'"><td>Vendor Menus</td><td class="number-cell">{{ vendorMenus.length }}</td></tr>
-              <tr @click="activeSection = 'inventory'"><td>Vendor Items</td><td class="number-cell">{{ vendorItems.length }}</td></tr>
-              <tr @click="activeSection = 'qr'"><td>QR Mappings</td><td class="number-cell">{{ qrMappings.length }}</td></tr>
-            </tbody>
-          </table>
+        <div class="panel analytics-panel">
+          <h3>Workspace Analytics</h3>
+          <div class="bar-list">
+            <div v-for="metric in dashboardMetrics" :key="metric.label" class="bar-row">
+              <div>
+                <strong>{{ metric.label }}</strong>
+                <span>{{ metric.value }}</span>
+              </div>
+              <div class="bar-track"><span :style="{ width: metric.width }"></span></div>
+            </div>
+          </div>
+          <div class="readiness-meter">
+            <div>
+              <strong>Publish readiness</strong>
+              <span>{{ completedChecklistCount }} of {{ publishChecklist.length }} checks complete</span>
+            </div>
+            <div class="bar-track"><span :style="{ width: `${publishReadiness}%` }"></span></div>
+          </div>
         </div>
       </section>
 
@@ -88,75 +93,86 @@
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table">
-              <thead><tr><th>Vendor</th><th>Slug</th><th>Card</th><th>QR</th><th></th></tr></thead>
+              <thead><tr><th>Vendor</th><th>Description</th><th>Created</th><th>Events</th><th>Contact Card</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)">
-                  <td>{{ vendor.displayName }}</td>
-                  <td><code>{{ vendor.name }}</code></td>
+                  <td><strong>{{ vendor.displayName }}</strong><br /><code>{{ vendor.name }}</code></td>
+                  <td>{{ vendor.description || 'No description' }}</td>
+                  <td>{{ formatDate(vendor.createdAt) }}</td>
+                  <td>{{ vendorEventCount(vendor.id) }}</td>
                   <td>{{ vendor.hasContactPage ? 'Active' : 'Inactive' }}</td>
-                  <td><button class="btn btn-outline-primary btn-sm" @click.stop="prepareVendorQr(vendor)">QR</button></td>
-                  <td><button class="btn btn-outline-secondary btn-sm" @click.stop="openVendorEditor(vendor)">Edit</button></td>
+                  <td><button class="btn btn-outline-secondary btn-sm" @click.stop="openVendorEditor(vendor)">Manage</button></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <form v-if="showVendorEditor" class="panel compact-editor" @submit.prevent="saveVendor">
-          <h3>{{ vendorForm.id ? 'Edit Vendor' : 'Create Vendor' }}</h3>
-          <div class="form-grid">
-            <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
-            <label>Slug<input v-model.trim="vendorForm.name" class="form-control" placeholder="radisson-gurgaon" /></label>
-            <p class="hint wide">Use a URL-safe unique slug. If a vendor already exists, add city, branch, year, or a short suffix like <code>radisson-gurgaon-02</code>.</p>
-            <label class="wide">Contact Lines<input v-model.trim="vendorContactText" class="form-control" placeholder="Phone, email, website" /></label>
-            <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
-            <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="2"></textarea></label>
-            <label class="check"><input v-model="vendorForm.hasContactPage" type="checkbox" /> Contact card active</label>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" type="submit" :disabled="loading">Save Vendor</button>
-            <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor">Close</button>
-            <button class="btn btn-outline-primary" type="button" :disabled="!vendorForm.id" @click="prepareVendorQr()">Generate Vendor QR</button>
-          </div>
-          <div v-if="vendorQrDraft.url" class="preview-box">
-            <div><span>Destination</span><code>{{ vendorQrDraft.url }}</code></div>
-            <div><span>QR Hash</span><input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" /></div>
-            <img v-if="vendorQrCodeDataUrl" class="qr-image" :src="vendorQrCodeDataUrl" alt="Vendor QR code" />
-            <button class="btn btn-primary btn-sm" type="button" @click="saveVendorQr">Save Vendor QR</button>
-          </div>
-        </form>
+        <div v-if="showVendorEditor" class="modal-backdrop-custom" @click.self="closeVendorEditor">
+          <form class="vendor-modal" @submit.prevent="saveVendor">
+            <div class="modal-title-row">
+              <div>
+                <h3>{{ vendorForm.id ? 'Manage Vendor' : 'Create Vendor' }}</h3>
+                <p class="hint">Vendor details and the contact-card QR live together so setup can be verified in one place.</p>
+              </div>
+              <button class="icon-button" type="button" aria-label="Close" @click="closeVendorEditor"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="vendor-modal-grid">
+              <div class="modal-pane">
+                <div class="form-grid">
+                  <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
+                  <label>Public identifier<input v-model.trim="vendorForm.name" class="form-control" placeholder="radisson-gurgaon" @input="syncVendorQrDraft" /></label>
+                  <p class="hint wide">If this vendor already exists, use a clearer identifier such as city, branch, year, or a short suffix like <code>radisson-gurgaon-02</code>.</p>
+                  <label class="wide">Contact Lines<input v-model.trim="vendorContactText" class="form-control" placeholder="Phone, email, website" /></label>
+                  <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
+                  <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="3"></textarea></label>
+                  <label class="check"><input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" /> Contact card active</label>
+                </div>
+                <div class="actions">
+                  <button class="btn btn-primary" type="submit" :disabled="loading">Save Vendor</button>
+                  <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor">Cancel</button>
+                </div>
+              </div>
+              <div class="modal-pane qr-pane">
+                <h4>Contact Card QR</h4>
+                <p class="hint">The QR points to the short reusable URL and resolves to the vendor contact card.</p>
+                <div class="preview-box">
+                  <div><span>Destination</span><code>{{ vendorQrDraft.url || 'Save a vendor to generate destination' }}</code></div>
+                  <label>QR Hash<input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" @input="renderVendorQr" /></label>
+                  <div v-if="vendorQrCodeDataUrl && vendorForm.hasContactPage" class="qr-preview-card">
+                    <img class="qr-image" :src="vendorQrCodeDataUrl" alt="Vendor QR code" />
+                    <a :href="`${originUrl}/${vendorQrDraft.qrHash}`" target="_blank" rel="noreferrer">{{ originUrl }}/{{ vendorQrDraft.qrHash }}</a>
+                  </div>
+                  <p v-else class="muted">Enable the contact card and save the vendor before using this QR.</p>
+                  <button class="btn btn-primary btn-sm" type="button" :disabled="!vendorForm.id || !vendorForm.hasContactPage || !vendorQrDraft.qrHash" @click="saveVendorQr">Save Vendor QR</button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
 
-      <section v-if="activeSection === 'events'" class="two-column">
-        <form class="panel" @submit.prevent="saveEvent">
-          <h3>{{ eventForm.id ? 'Edit Event' : 'Create Event' }}</h3>
-          <p class="hint">Events belong to the selected vendor. They do not need their own QR unless you later add an event landing page.</p>
-          <div class="form-grid">
-            <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sangeet Night" @blur="fillEventSlug" /></label>
-            <label>Slug<input v-model.trim="eventForm.name" class="form-control" placeholder="sangeet-night-2026" /></label>
-            <label>Status<select v-model="eventForm.status" class="form-select"><option value="draft">Draft</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
-            <label>Start<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
-            <label>End<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
-            <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" type="submit" :disabled="!selectedVendor || loading">Save Event</button>
-            <button class="btn btn-outline-secondary" type="button" @click="resetEvent">Clear</button>
-          </div>
-        </form>
-
+      <section v-if="activeSection === 'events'" class="stack-layout">
         <div class="panel">
-          <h3>Events For {{ selectedVendor?.displayName || 'Vendor' }}</h3>
+          <div class="panel-heading">
+            <div>
+              <h3>Events</h3>
+              <p class="hint">Create event shells, clone repeat setups later, and keep publishing as the final validation step.</p>
+            </div>
+            <button class="btn btn-primary" @click="resetEvent">New Event</button>
+          </div>
           <div class="table-wrap">
-            <table class="table table-sm align-middle">
-              <thead><tr><th>Event</th><th>Status</th><th>Linked Menus</th><th></th></tr></thead>
+            <table class="table table-sm align-middle action-table">
+              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
                   <td><strong>{{ event.displayName }}</strong><br /><code>{{ event.name }}</code></td>
+                  <td>{{ eventWindow(event) }}</td>
                   <td><span class="badge text-bg-light">{{ event.status }}</span></td>
-                  <td>{{ eventMenus(event.id).map((menu) => menu.displayName).join(', ') || 'None' }}</td>
-                  <td><button class="btn btn-outline-primary btn-sm" @click="editEvent(event)">Edit</button></td>
+                  <td>{{ eventMenus(event.id).length }}</td>
+                  <td><button class="btn btn-outline-secondary btn-sm" @click="loadEventIntoForm(event); activeSection = 'publish'">Design</button></td>
                 </tr>
+                <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events for this vendor yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -224,10 +240,17 @@
             <button class="btn btn-primary" :disabled="!dirtyItemRows.length" @click="saveDirtyItemRows">Save Changed Rows</button>
           </div>
         </div>
-        <div class="table-filters">
-          <label>Search<input v-model.trim="itemSearch" class="form-control" placeholder="Search name, slug, type, tag" /></label>
-          <label>Menu<select v-model.number="itemMenuFilter" class="form-select"><option :value="0">All menus</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
-          <label>Type<select v-model="itemTypeFilter" class="form-select"><option value="">All types</option><option v-for="type in itemTypeOptions" :key="type" :value="type">{{ type }}</option></select></label>
+        <div class="table-filters compact-filters">
+          <div class="sheet-search"><i class="bi bi-search"></i><input v-model.trim="itemSearch" class="form-control" placeholder="Search name, identifier, type, or tag" /></div>
+          <select v-model.number="itemMenuFilter" class="form-select">
+            <option :value="0">All menus</option>
+            <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option>
+          </select>
+          <select v-model="itemTypeFilter" class="form-select">
+            <option value="">All types</option>
+            <option v-for="type in itemTypeOptions" :key="type" :value="type">{{ type }}</option>
+          </select>
+          <button class="btn btn-outline-secondary btn-sm" @click="clearItemFilters">Clear</button>
         </div>
 
         <div class="table-wrap">
@@ -299,20 +322,17 @@
 
       <section v-if="activeSection === 'designer'" class="designer-grid">
         <div class="panel designer-controls">
-          <h3>Menu Designer</h3>
-          <p class="hint">Visual nested editor. Drag items from the library into the menu, drop onto categories to re-parent, or use row actions when precision is easier.</p>
-          <div class="form-grid">
+          <div>
+            <h3>Menu Designer</h3>
+            <p class="hint">Choose the event and working menu once, then build visually from reusable items.</p>
+          </div>
+          <div class="designer-ribbon">
             <label>Event<select v-model.number="selectedEventIdForItems" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
             <label>Working Menu<select v-model.number="selectedMenuIdForItems" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
-            <label>New Custom Menu<input v-model.trim="designerMenuName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
-            <label class="check"><input v-model="designerFullMenuQr" type="checkbox" /> Enable full-menu QR</label>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">Create Custom Menu</button>
-            <button class="btn btn-outline-primary" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">Use Menu For Event</button>
-          </div>
-          <div class="payment-note">
-            Payment checkpoint later: after menu design is valid and before publishing/QR activation.
+            <label>Custom Menu<input v-model.trim="designerMenuName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
+            <label class="check compact-check"><input v-model="designerFullMenuQr" type="checkbox" /> Full-menu QR</label>
+            <button class="btn btn-primary" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">Create Menu</button>
+            <button class="btn btn-outline-primary" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">Use For Event</button>
           </div>
         </div>
 
@@ -402,10 +422,10 @@
       <section v-if="activeSection === 'publish'" class="publish-grid">
         <form class="panel" @submit.prevent="saveEvent">
           <h3>Event Design</h3>
-          <p class="hint">Create or edit the event shell, attach menus, validate, then publish.</p>
+          <p class="hint">Create a new event, repeat an existing setup later, then attach menus and publish after validation.</p>
           <div class="form-grid">
             <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
-            <label>Slug<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
+            <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
             <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
             <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
             <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
@@ -436,17 +456,27 @@
         <div class="panel wide-panel">
           <h3>Post-Publish QR Sheet</h3>
           <p class="hint">After publish, this becomes the printable/clickable list of menu and item QR targets. Timers use the event active window.</p>
-          <div class="qr-sheet">
-            <article v-for="menu in selectedEventMenus" :key="menu.id" class="qr-tile">
-              <strong>{{ menu.displayName }}</strong>
-              <code>{{ menuPathFor(selectedEventForItems, menu) }}</code>
-              <span>{{ eventTimerLabel(selectedEventForItems) }}</span>
-            </article>
-            <article v-for="item in selectedEventItems" :key="item.id" class="qr-tile">
-              <strong>{{ itemLabel(item) }}</strong>
-              <code>{{ itemPathFor(selectedEventForItems, item) }}</code>
-              <span>{{ eventTimerLabel(selectedEventForItems) }}</span>
-            </article>
+          <div class="table-wrap qr-sheet-table">
+            <table class="table table-sm align-middle">
+              <thead><tr><th>Target</th><th>Type</th><th>Public Path</th><th>Status</th><th>QR / Analytics</th></tr></thead>
+              <tbody>
+                <tr v-for="menu in selectedEventMenus" :key="`menu-${menu.id}`">
+                  <td><strong>{{ menu.displayName }}</strong></td>
+                  <td>Menu</td>
+                  <td><code>{{ menuPathFor(selectedEventForItems, menu) }}</code></td>
+                  <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
+                  <td><button class="btn btn-outline-secondary btn-sm" :title="`Menu QR target for ${menu.displayName}`">Preview</button></td>
+                </tr>
+                <tr v-for="item in selectedEventItems" :key="`item-${item.id}`">
+                  <td><strong>{{ itemLabel(item) }}</strong><br /><span class="muted">{{ menuName(item.menuId) }}</span></td>
+                  <td>{{ item.type || 'Item' }}</td>
+                  <td><code>{{ itemPathFor(selectedEventForItems, item) }}</code></td>
+                  <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
+                  <td><button class="btn btn-outline-secondary btn-sm" :title="itemUsageTitle(item.id)">Preview</button></td>
+                </tr>
+                <tr v-if="!selectedEventMenus.length && !selectedEventItems.length"><td colspan="5" class="muted">Select an event with linked menus to preview the QR sheet.</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -600,7 +630,7 @@ import MenuTree from '../components/MenuTree.vue';
 import { API_BASE_URL } from '../config';
 
 type SectionKey = 'home' | 'vendors' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'events' | 'menus' | 'items';
-type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean };
+type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
@@ -611,6 +641,7 @@ type DraftItem = { clientId: string; id?: number; menuId: number; parentId: numb
 const sections = [
   { key: 'home', label: 'Dashboard Home', icon: 'bi bi-grid-1x2' },
   { key: 'vendors', label: 'Vendors', icon: 'bi bi-shop' },
+  { key: 'events', label: 'Events', icon: 'bi bi-calendar-event' },
   { key: 'inventory', label: 'Item Library', icon: 'bi bi-box-seam' },
   { key: 'designer', label: 'Menu Designer', icon: 'bi bi-layout-three-columns' },
   { key: 'preview', label: 'Menu Preview', icon: 'bi bi-phone' },
@@ -624,19 +655,20 @@ const router = useRouter();
 const dashboardRouteBySection: Record<SectionKey, string> = {
   home: '/dashboard/home',
   vendors: '/dashboard/vendors',
+  events: '/dashboard/events',
   inventory: '/dashboard/items',
   analytics: '/dashboard/items',
   designer: '/dashboard/menus/designer',
   preview: '/dashboard/menus/preview',
   publish: '/dashboard/events/publish',
   qr: '/dashboard/qr',
-  events: '/dashboard/events/publish',
   menus: '/dashboard/menus/designer',
   items: '/dashboard/items',
 };
 
 function sectionFromPath(path: string): SectionKey {
   if (path.startsWith('/dashboard/vendors')) return 'vendors';
+  if (path === '/dashboard/events') return 'events';
   if (path.startsWith('/dashboard/items/')) return 'analytics';
   if (path.startsWith('/dashboard/items')) return 'inventory';
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
@@ -743,6 +775,20 @@ const publishChecklist = computed(() => [
   { label: 'Linked menus contain items', done: selectedEventItems.value.length > 0 },
 ]);
 const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
+const originUrl = computed(() => window.location.origin);
+const completedChecklistCount = computed(() => publishChecklist.value.filter((item) => item.done).length);
+const publishReadiness = computed(() => Math.round((completedChecklistCount.value / publishChecklist.value.length) * 100));
+const dashboardMetrics = computed(() => {
+  const values = [
+    { label: 'Vendors', value: vendors.value.length },
+    { label: 'Events', value: vendorEvents.value.length },
+    { label: 'Menus', value: vendorMenus.value.length },
+    { label: 'Items', value: vendorItems.value.length },
+    { label: 'QR Mappings', value: qrMappings.value.length },
+  ];
+  const max = Math.max(...values.map((item) => item.value), 1);
+  return values.map((item) => ({ ...item, width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }));
+});
 
 const activeTitle = computed(() => sections.find((section) => section.key === activeSection.value)?.label ?? 'Admin');
 const activeSubtitle = computed(() => {
@@ -923,6 +969,26 @@ function vendorPublicUrl(vendor: Vendor) {
   return `${window.location.origin}/vendor/${vendor.name}`;
 }
 
+function formatDate(value?: string) {
+  if (!value) return 'Later';
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+
+function eventWindow(event: EventRow) {
+  if (!event.startTime && !event.endTime) return 'Dates not set';
+  return `${formatDate(event.startTime)} - ${formatDate(event.endTime)}`;
+}
+
+function vendorEventCount(vendorId: number) {
+  return events.value.filter((event) => event.vendorId === vendorId).length;
+}
+
+function clearItemFilters() {
+  itemSearch.value = '';
+  itemMenuFilter.value = 0;
+  itemTypeFilter.value = '';
+}
+
 function fillVendorSlug() {
   if (!vendorForm.name) vendorForm.name = slugify(vendorForm.displayName);
 }
@@ -954,6 +1020,7 @@ function openVendorEditor(vendor?: Vendor) {
   } else {
     resetVendor();
     showVendorEditor.value = true;
+    syncVendorQrDraft();
   }
 }
 
@@ -976,6 +1043,27 @@ function editVendor(vendor: Vendor) {
   selectedVendorId.value = vendor.id;
   showVendorEditor.value = true;
   activeSection.value = 'vendors';
+  syncVendorQrDraft();
+}
+
+async function renderVendorQr() {
+  vendorQrCodeDataUrl.value = vendorQrDraft.qrHash
+    ? await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 })
+    : '';
+}
+
+async function syncVendorQrDraft() {
+  if (!vendorForm.name) {
+    vendorQrDraft.url = '';
+    vendorQrDraft.qrHash = '';
+    vendorQrCodeDataUrl.value = '';
+    return;
+  }
+  vendorQrDraft.url = `/vendor/${vendorForm.name}`;
+  if (!vendorQrDraft.qrHash || vendorQrDraft.qrHash.endsWith('-card')) {
+    vendorQrDraft.qrHash = `${vendorForm.name}-card`;
+  }
+  await renderVendorQr();
 }
 
 async function saveVendor() {
@@ -1002,9 +1090,7 @@ async function prepareVendorQr(vendorArg?: Vendor) {
   vendorContactText.value = vendor.contact?.join(', ') ?? '';
   showVendorEditor.value = true;
   selectedVendorId.value = vendor.id;
-  vendorQrDraft.url = `/vendor/${vendor.name}`;
-  vendorQrDraft.qrHash = vendorQrDraft.qrHash || `${vendor.name}-card`;
-  vendorQrCodeDataUrl.value = await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 });
+  await syncVendorQrDraft();
 }
 
 async function saveVendorQr() {
@@ -1578,6 +1664,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   text-align: left;
+  text-decoration: none;
   padding: 10px 12px;
   border-radius: 8px;
 }
@@ -1594,7 +1681,6 @@ onMounted(async () => {
 }
 
 .workspace-header,
-.vendor-context,
 .panel-heading {
   display: flex;
   align-items: center;
@@ -1610,7 +1696,6 @@ onMounted(async () => {
   font-size: 0.88rem;
 }
 
-.vendor-context,
 .metric-card,
 .panel,
 .adhoc-box {
@@ -1620,20 +1705,38 @@ onMounted(async () => {
   padding: 16px;
 }
 
-.vendor-context {
-  position: sticky;
-  top: 0;
-  z-index: 3;
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
 }
 
-.slim-context {
-  padding: 10px 12px;
-  align-items: end;
-  justify-content: flex-start;
+.workspace-switcher {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e6dfd4;
+  border-radius: 999px;
+  display: flex;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
 }
 
-.slim-context label {
-  min-width: 240px;
+.workspace-switcher span {
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workspace-switcher select {
+  border: 0;
+  min-width: 190px;
+}
+
+.workspace-switcher a,
+.admin-main a.btn,
+.nav-button {
+  text-decoration: none;
 }
 
 .context-chip {
@@ -1646,11 +1749,6 @@ onMounted(async () => {
   padding: 6px 10px;
 }
 
-.vendor-context > div:first-child {
-  min-width: 320px;
-}
-
-.vendor-context label,
 label {
   display: grid;
   gap: 6px;
@@ -1674,6 +1772,64 @@ label {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 14px;
+}
+
+.home-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.action-table tbody tr {
+  cursor: default;
+}
+
+.analytics-panel {
+  align-self: start;
+}
+
+.bar-list {
+  display: grid;
+  gap: 14px;
+}
+
+.bar-row,
+.readiness-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.bar-row > div:first-child,
+.readiness-meter > div:first-child {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bar-row span,
+.readiness-meter span {
+  color: #6b7280;
+  font-size: 0.86rem;
+}
+
+.bar-track {
+  background: #f1ede6;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.bar-track span {
+  background: #bd945a;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.readiness-meter {
+  border-top: 1px solid #ece7de;
+  margin-top: 18px;
+  padding-top: 18px;
 }
 
 .metric-card span {
@@ -1792,6 +1948,30 @@ label {
   overflow: auto;
 }
 
+.compact-filters {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, 210px) minmax(130px, 180px) auto;
+  margin-bottom: 10px;
+}
+
+.sheet-search {
+  position: relative;
+}
+
+.sheet-search i {
+  color: #6b7280;
+  left: 12px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sheet-search input {
+  padding-left: 34px;
+}
+
 .editable-table {
   min-width: 980px;
 }
@@ -1830,6 +2010,84 @@ td a {
   gap: 8px;
 }
 
+.modal-backdrop-custom {
+  align-items: center;
+  background: rgba(21, 25, 30, 0.52);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 50;
+}
+
+.vendor-modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(21, 25, 30, 0.28);
+  max-height: calc(100vh - 48px);
+  max-width: 1120px;
+  overflow: auto;
+  padding: 20px;
+  width: min(100%, 1120px);
+}
+
+.modal-title-row {
+  align-items: start;
+  border-bottom: 1px solid #ece7de;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.icon-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #15191e;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.icon-button:hover {
+  background: #f4f1ed;
+}
+
+.vendor-modal-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+}
+
+.modal-pane {
+  min-width: 0;
+}
+
+.qr-pane {
+  background: #fbfaf8;
+  border: 1px solid #e6dfd4;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.qr-pane h4 {
+  font-family: 'Urbanist', sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  margin: 0 0 4px;
+}
+
+.qr-preview-card {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
 .preview-box div {
   display: grid;
   gap: 2px;
@@ -1853,11 +2111,24 @@ td a {
 }
 
 .designer-grid {
-  grid-template-columns: minmax(300px, 390px) minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
 }
 
 .designer-controls {
   align-self: start;
+  grid-column: 1 / -1;
+}
+
+.designer-ribbon {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto auto auto;
+  margin-top: 12px;
+}
+
+.compact-check {
+  padding-top: 0;
 }
 
 .payment-note,
@@ -1982,18 +2253,9 @@ td a {
   font-weight: 800;
 }
 
-.qr-sheet {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.qr-tile {
-  border: 1px solid #e6dfd4;
-  border-radius: 8px;
-  display: grid;
-  gap: 6px;
-  padding: 12px;
+.qr-sheet-table code {
+  white-space: normal;
+  word-break: break-word;
 }
 
 @media (max-width: 900px) {
@@ -2010,15 +2272,25 @@ td a {
   .form-grid {
     grid-template-columns: 1fr;
   }
-  .vendor-context,
   .workspace-header,
   .panel-heading {
     align-items: stretch;
     flex-direction: column;
   }
   .item-toolbar,
-  .vendor-context > div:first-child {
+  .header-actions {
     min-width: 0;
+  }
+  .home-layout,
+  .vendor-modal-grid,
+  .compact-filters,
+  .designer-ribbon {
+    grid-template-columns: 1fr;
+  }
+  .workspace-switcher {
+    align-items: stretch;
+    border-radius: 8px;
+    flex-direction: column;
   }
 }
 </style>

@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config';
 const sections = [
     { key: 'home', label: 'Dashboard Home', icon: 'bi bi-grid-1x2' },
     { key: 'vendors', label: 'Vendors', icon: 'bi bi-shop' },
+    { key: 'events', label: 'Events', icon: 'bi bi-calendar-event' },
     { key: 'inventory', label: 'Item Library', icon: 'bi bi-box-seam' },
     { key: 'designer', label: 'Menu Designer', icon: 'bi bi-layout-three-columns' },
     { key: 'preview', label: 'Menu Preview', icon: 'bi bi-phone' },
@@ -18,19 +19,21 @@ const router = useRouter();
 const dashboardRouteBySection = {
     home: '/dashboard/home',
     vendors: '/dashboard/vendors',
+    events: '/dashboard/events',
     inventory: '/dashboard/items',
     analytics: '/dashboard/items',
     designer: '/dashboard/menus/designer',
     preview: '/dashboard/menus/preview',
     publish: '/dashboard/events/publish',
     qr: '/dashboard/qr',
-    events: '/dashboard/events/publish',
     menus: '/dashboard/menus/designer',
     items: '/dashboard/items',
 };
 function sectionFromPath(path) {
     if (path.startsWith('/dashboard/vendors'))
         return 'vendors';
+    if (path === '/dashboard/events')
+        return 'events';
     if (path.startsWith('/dashboard/items/'))
         return 'analytics';
     if (path.startsWith('/dashboard/items'))
@@ -139,6 +142,20 @@ const publishChecklist = computed(() => [
     { label: 'Linked menus contain items', done: selectedEventItems.value.length > 0 },
 ]);
 const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
+const originUrl = computed(() => window.location.origin);
+const completedChecklistCount = computed(() => publishChecklist.value.filter((item) => item.done).length);
+const publishReadiness = computed(() => Math.round((completedChecklistCount.value / publishChecklist.value.length) * 100));
+const dashboardMetrics = computed(() => {
+    const values = [
+        { label: 'Vendors', value: vendors.value.length },
+        { label: 'Events', value: vendorEvents.value.length },
+        { label: 'Menus', value: vendorMenus.value.length },
+        { label: 'Items', value: vendorItems.value.length },
+        { label: 'QR Mappings', value: qrMappings.value.length },
+    ];
+    const max = Math.max(...values.map((item) => item.value), 1);
+    return values.map((item) => ({ ...item, width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }));
+});
 const activeTitle = computed(() => sections.find((section) => section.key === activeSection.value)?.label ?? 'Admin');
 const activeSubtitle = computed(() => {
     const copy = {
@@ -303,6 +320,24 @@ function toDateTimeLocal(value) {
 function vendorPublicUrl(vendor) {
     return `${window.location.origin}/vendor/${vendor.name}`;
 }
+function formatDate(value) {
+    if (!value)
+        return 'Later';
+    return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+function eventWindow(event) {
+    if (!event.startTime && !event.endTime)
+        return 'Dates not set';
+    return `${formatDate(event.startTime)} - ${formatDate(event.endTime)}`;
+}
+function vendorEventCount(vendorId) {
+    return events.value.filter((event) => event.vendorId === vendorId).length;
+}
+function clearItemFilters() {
+    itemSearch.value = '';
+    itemMenuFilter.value = 0;
+    itemTypeFilter.value = '';
+}
 function fillVendorSlug() {
     if (!vendorForm.name)
         vendorForm.name = slugify(vendorForm.displayName);
@@ -334,6 +369,7 @@ function openVendorEditor(vendor) {
     else {
         resetVendor();
         showVendorEditor.value = true;
+        syncVendorQrDraft();
     }
 }
 function closeVendorEditor() {
@@ -353,6 +389,25 @@ function editVendor(vendor) {
     selectedVendorId.value = vendor.id;
     showVendorEditor.value = true;
     activeSection.value = 'vendors';
+    syncVendorQrDraft();
+}
+async function renderVendorQr() {
+    vendorQrCodeDataUrl.value = vendorQrDraft.qrHash
+        ? await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 })
+        : '';
+}
+async function syncVendorQrDraft() {
+    if (!vendorForm.name) {
+        vendorQrDraft.url = '';
+        vendorQrDraft.qrHash = '';
+        vendorQrCodeDataUrl.value = '';
+        return;
+    }
+    vendorQrDraft.url = `/vendor/${vendorForm.name}`;
+    if (!vendorQrDraft.qrHash || vendorQrDraft.qrHash.endsWith('-card')) {
+        vendorQrDraft.qrHash = `${vendorForm.name}-card`;
+    }
+    await renderVendorQr();
 }
 async function saveVendor() {
     try {
@@ -379,9 +434,7 @@ async function prepareVendorQr(vendorArg) {
     vendorContactText.value = vendor.contact?.join(', ') ?? '';
     showVendorEditor.value = true;
     selectedVendorId.value = vendor.id;
-    vendorQrDraft.url = `/vendor/${vendor.name}`;
-    vendorQrDraft.qrHash = vendorQrDraft.qrHash || `${vendor.name}-card`;
-    vendorQrCodeDataUrl.value = await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 });
+    await syncVendorQrDraft();
 }
 async function saveVendorQr() {
     try {
@@ -922,13 +975,19 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['nav-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['adhoc-box']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
-/** @type {__VLS_StyleScopedClasses['slim-context']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
+/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
+/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
+/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
+/** @type {__VLS_StyleScopedClasses['admin-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
 /** @type {__VLS_StyleScopedClasses['metric-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['metric-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['workflow-card']} */ ;
@@ -938,7 +997,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['item-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['item-context']} */ ;
 /** @type {__VLS_StyleScopedClasses['context-picker']} */ ;
+/** @type {__VLS_StyleScopedClasses['sheet-search']} */ ;
+/** @type {__VLS_StyleScopedClasses['sheet-search']} */ ;
 /** @type {__VLS_StyleScopedClasses['linked-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-pane']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['adhoc-box']} */ ;
@@ -963,11 +1026,15 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['preview-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['publish-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['item-toolbar']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
+/** @type {__VLS_StyleScopedClasses['header-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-modal-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-filters']} */ ;
+/** @type {__VLS_StyleScopedClasses['designer-ribbon']} */ ;
+/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1017,6 +1084,34 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2
 (__VLS_ctx.activeTitle);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
 (__VLS_ctx.activeSubtitle);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "header-actions" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "workspace-switcher" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+    value: (__VLS_ctx.selectedVendorId),
+    ...{ class: "form-select form-select-sm" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: (0),
+});
+for (const [vendor] of __VLS_getVForSourceType((__VLS_ctx.vendors))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+        key: (vendor.id),
+        value: (vendor.id),
+    });
+    (vendor.displayName);
+}
+if (__VLS_ctx.selectedVendor?.hasContactPage) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+        href: (__VLS_ctx.vendorPublicUrl(__VLS_ctx.selectedVendor)),
+        target: "_blank",
+        rel: "noreferrer",
+    });
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (__VLS_ctx.loadAll) },
     ...{ class: "btn btn-outline-secondary btn-sm" },
@@ -1025,44 +1120,6 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElement
 __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
     ...{ class: "bi bi-arrow-clockwise" },
 });
-if (__VLS_ctx.activeSection !== 'vendors') {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "vendor-context slim-context" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
-        value: (__VLS_ctx.selectedVendorId),
-        ...{ class: "form-select form-select-sm" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-        value: (0),
-    });
-    for (const [vendor] of __VLS_getVForSourceType((__VLS_ctx.vendors))) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-            key: (vendor.id),
-            value: (vendor.id),
-        });
-        (vendor.displayName);
-    }
-    if (__VLS_ctx.selectedVendor) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "context-chip" },
-        });
-        (__VLS_ctx.selectedVendor.name);
-    }
-    if (__VLS_ctx.selectedVendor?.hasContactPage) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-            href: (__VLS_ctx.vendorPublicUrl(__VLS_ctx.selectedVendor)),
-            target: "_blank",
-            rel: "noreferrer",
-        });
-    }
-    if (!__VLS_ctx.selectedVendor) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "muted" },
-        });
-    }
-}
 if (__VLS_ctx.message) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "alert alert-success py-2" },
@@ -1095,11 +1152,6 @@ if (__VLS_ctx.activeSection === 'home') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
     for (const [step] of __VLS_getVForSourceType((__VLS_ctx.dashboardSteps))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'home'))
-                        return;
-                    __VLS_ctx.activeSection = step.key;
-                } },
             key: (step.key),
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
@@ -1110,78 +1162,58 @@ if (__VLS_ctx.activeSection === 'home') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (step.status);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        const __VLS_4 = {}.RouterLink;
+        /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
+        // @ts-ignore
+        const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({
             ...{ class: "btn btn-outline-primary btn-sm" },
+            to: (__VLS_ctx.dashboardRouteBySection[step.key]),
+        }));
+        const __VLS_6 = __VLS_5({
+            ...{ class: "btn btn-outline-primary btn-sm" },
+            to: (__VLS_ctx.dashboardRouteBySection[step.key]),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_5));
+        __VLS_7.slots.default;
+        var __VLS_7;
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "panel analytics-panel" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "bar-list" },
+    });
+    for (const [metric] of __VLS_getVForSourceType((__VLS_ctx.dashboardMetrics))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            key: (metric.label),
+            ...{ class: "bar-row" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (metric.label);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        (metric.value);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "bar-track" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ style: ({ width: metric.width }) },
         });
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "panel" },
+        ...{ class: "readiness-meter" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.table, __VLS_intrinsicElements.table)({
-        ...{ class: "table table-sm align-middle" },
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    (__VLS_ctx.completedChecklistCount);
+    (__VLS_ctx.publishChecklist.length);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "bar-track" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.activeSection === 'home'))
-                    return;
-                __VLS_ctx.activeSection = 'vendors';
-            } },
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ style: ({ width: `${__VLS_ctx.publishReadiness}%` }) },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-        ...{ class: "number-cell" },
-    });
-    (__VLS_ctx.vendors.length);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.activeSection === 'home'))
-                    return;
-                __VLS_ctx.activeSection = 'publish';
-            } },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-        ...{ class: "number-cell" },
-    });
-    (__VLS_ctx.vendorEvents.length);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.activeSection === 'home'))
-                    return;
-                __VLS_ctx.activeSection = 'designer';
-            } },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-        ...{ class: "number-cell" },
-    });
-    (__VLS_ctx.vendorMenus.length);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.activeSection === 'home'))
-                    return;
-                __VLS_ctx.activeSection = 'inventory';
-            } },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-        ...{ class: "number-cell" },
-    });
-    (__VLS_ctx.vendorItems.length);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.activeSection === 'home'))
-                    return;
-                __VLS_ctx.activeSection = 'qr';
-            } },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-        ...{ class: "number-cell" },
-    });
-    (__VLS_ctx.qrMappings.length);
 }
 if (__VLS_ctx.activeSection === 'vendors') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1219,6 +1251,7 @@ if (__VLS_ctx.activeSection === 'vendors') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
     for (const [vendor] of __VLS_getVForSourceType((__VLS_ctx.vendors))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
@@ -1230,21 +1263,19 @@ if (__VLS_ctx.activeSection === 'vendors') {
             key: (vendor.id),
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (vendor.displayName);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
         (vendor.name);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        (vendor.hasContactPage ? 'Active' : 'Inactive');
+        (vendor.description || 'No description');
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'vendors'))
-                        return;
-                    __VLS_ctx.prepareVendorQr(vendor);
-                } },
-            ...{ class: "btn btn-outline-primary btn-sm" },
-        });
+        (__VLS_ctx.formatDate(vendor.createdAt));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        (__VLS_ctx.vendorEventCount(vendor.id));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        (vendor.hasContactPage ? 'Active' : 'Inactive');
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
@@ -1256,12 +1287,38 @@ if (__VLS_ctx.activeSection === 'vendors') {
         });
     }
     if (__VLS_ctx.showVendorEditor) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ onClick: (__VLS_ctx.closeVendorEditor) },
+            ...{ class: "modal-backdrop-custom" },
+        });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
             ...{ onSubmit: (__VLS_ctx.saveVendor) },
-            ...{ class: "panel compact-editor" },
+            ...{ class: "vendor-modal" },
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-title-row" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-        (__VLS_ctx.vendorForm.id ? 'Edit Vendor' : 'Create Vendor');
+        (__VLS_ctx.vendorForm.id ? 'Manage Vendor' : 'Create Vendor');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.closeVendorEditor) },
+            ...{ class: "icon-button" },
+            type: "button",
+            'aria-label': "Close",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-x-lg" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "vendor-modal-grid" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-pane" },
+        });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "form-grid" },
         });
@@ -1274,6 +1331,7 @@ if (__VLS_ctx.activeSection === 'vendors') {
         (__VLS_ctx.vendorForm.displayName);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onInput: (__VLS_ctx.syncVendorQrDraft) },
             ...{ class: "form-control" },
             placeholder: "radisson-gurgaon",
         });
@@ -1303,12 +1361,13 @@ if (__VLS_ctx.activeSection === 'vendors') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
             value: (__VLS_ctx.vendorForm.description),
             ...{ class: "form-control" },
-            rows: "2",
+            rows: "3",
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
             ...{ class: "check" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onChange: (__VLS_ctx.syncVendorQrDraft) },
             type: "checkbox",
         });
         (__VLS_ctx.vendorForm.hasContactPage);
@@ -1325,137 +1384,85 @@ if (__VLS_ctx.activeSection === 'vendors') {
             ...{ class: "btn btn-outline-secondary" },
             type: "button",
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'vendors'))
-                        return;
-                    if (!(__VLS_ctx.showVendorEditor))
-                        return;
-                    __VLS_ctx.prepareVendorQr();
-                } },
-            ...{ class: "btn btn-outline-primary" },
-            type: "button",
-            disabled: (!__VLS_ctx.vendorForm.id),
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-pane qr-pane" },
         });
-        if (__VLS_ctx.vendorQrDraft.url) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h4, __VLS_intrinsicElements.h4)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "preview-box" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
+        (__VLS_ctx.vendorQrDraft.url || 'Save a vendor to generate destination');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onInput: (__VLS_ctx.renderVendorQr) },
+            ...{ class: "form-control" },
+            placeholder: "radisson-gurgaon-card",
+        });
+        (__VLS_ctx.vendorQrDraft.qrHash);
+        if (__VLS_ctx.vendorQrCodeDataUrl && __VLS_ctx.vendorForm.hasContactPage) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "preview-box" },
+                ...{ class: "qr-preview-card" },
             });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-            (__VLS_ctx.vendorQrDraft.url);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-                ...{ class: "form-control" },
-                placeholder: "radisson-gurgaon-card",
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.img)({
+                ...{ class: "qr-image" },
+                src: (__VLS_ctx.vendorQrCodeDataUrl),
+                alt: "Vendor QR code",
             });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+                href: (`${__VLS_ctx.originUrl}/${__VLS_ctx.vendorQrDraft.qrHash}`),
+                target: "_blank",
+                rel: "noreferrer",
+            });
+            (__VLS_ctx.originUrl);
             (__VLS_ctx.vendorQrDraft.qrHash);
-            if (__VLS_ctx.vendorQrCodeDataUrl) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.img)({
-                    ...{ class: "qr-image" },
-                    src: (__VLS_ctx.vendorQrCodeDataUrl),
-                    alt: "Vendor QR code",
-                });
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-                ...{ onClick: (__VLS_ctx.saveVendorQr) },
-                ...{ class: "btn btn-primary btn-sm" },
-                type: "button",
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "muted" },
             });
         }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.saveVendorQr) },
+            ...{ class: "btn btn-primary btn-sm" },
+            type: "button",
+            disabled: (!__VLS_ctx.vendorForm.id || !__VLS_ctx.vendorForm.hasContactPage || !__VLS_ctx.vendorQrDraft.qrHash),
+        });
     }
 }
 if (__VLS_ctx.activeSection === 'events') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "two-column" },
+        ...{ class: "stack-layout" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
-        ...{ onSubmit: (__VLS_ctx.saveEvent) },
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "panel-heading" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    (__VLS_ctx.eventForm.id ? 'Edit Event' : 'Create Event');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "hint" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-grid" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        ...{ onBlur: (__VLS_ctx.fillEventSlug) },
-        ...{ class: "form-control" },
-        placeholder: "Sangeet Night",
-    });
-    (__VLS_ctx.eventForm.displayName);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        ...{ class: "form-control" },
-        placeholder: "sangeet-night-2026",
-    });
-    (__VLS_ctx.eventForm.name);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
-        value: (__VLS_ctx.eventForm.status),
-        ...{ class: "form-select" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-        value: "draft",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-        value: "active",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-        value: "inactive",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        type: "datetime-local",
-        ...{ class: "form-control" },
-    });
-    (__VLS_ctx.eventForm.startTime);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        type: "datetime-local",
-        ...{ class: "form-control" },
-    });
-    (__VLS_ctx.eventForm.endTime);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
-        ...{ class: "wide" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
-        value: (__VLS_ctx.eventForm.eventDescription),
-        rows: "2",
-        ...{ class: "form-control" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "actions" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ class: "btn btn-primary" },
-        type: "submit",
-        disabled: (!__VLS_ctx.selectedVendor || __VLS_ctx.loading),
-    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.resetEvent) },
-        ...{ class: "btn btn-outline-secondary" },
-        type: "button",
+        ...{ class: "btn btn-primary" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "panel" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    (__VLS_ctx.selectedVendor?.displayName || 'Vendor');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-wrap" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.table, __VLS_intrinsicElements.table)({
-        ...{ class: "table table-sm align-middle" },
+        ...{ class: "table table-sm align-middle action-table" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
@@ -1472,20 +1479,30 @@ if (__VLS_ctx.activeSection === 'events') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
         (event.name);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        (__VLS_ctx.eventWindow(event));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "badge text-bg-light" },
         });
         (event.status);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        (__VLS_ctx.eventMenus(event.id).map((menu) => menu.displayName).join(', ') || 'None');
+        (__VLS_ctx.eventMenus(event.id).length);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.activeSection === 'events'))
                         return;
-                    __VLS_ctx.editEvent(event);
+                    __VLS_ctx.loadEventIntoForm(event);
+                    __VLS_ctx.activeSection = 'publish';
                 } },
-            ...{ class: "btn btn-outline-primary btn-sm" },
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+        });
+    }
+    if (!__VLS_ctx.vendorEvents.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
+            colspan: "5",
+            ...{ class: "muted" },
         });
     }
 }
@@ -1690,15 +1707,19 @@ if (__VLS_ctx.activeSection === 'inventory') {
         disabled: (!__VLS_ctx.dirtyItemRows.length),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "table-filters" },
+        ...{ class: "table-filters compact-filters" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "sheet-search" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-search" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
         ...{ class: "form-control" },
-        placeholder: "Search name, slug, type, tag",
+        placeholder: "Search name, identifier, type, or tag",
     });
     (__VLS_ctx.itemSearch);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
         value: (__VLS_ctx.itemMenuFilter),
         ...{ class: "form-select" },
@@ -1713,7 +1734,6 @@ if (__VLS_ctx.activeSection === 'inventory') {
         });
         (menu.displayName);
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
         value: (__VLS_ctx.itemTypeFilter),
         ...{ class: "form-select" },
@@ -1728,6 +1748,10 @@ if (__VLS_ctx.activeSection === 'inventory') {
         });
         (type);
     }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.clearItemFilters) },
+        ...{ class: "btn btn-outline-secondary btn-sm" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-wrap" },
     });
@@ -1956,12 +1980,13 @@ if (__VLS_ctx.activeSection === 'designer') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel designer-controls" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "hint" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-grid" },
+        ...{ class: "designer-ribbon" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
@@ -2000,15 +2025,12 @@ if (__VLS_ctx.activeSection === 'designer') {
     });
     (__VLS_ctx.designerMenuName);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
-        ...{ class: "check" },
+        ...{ class: "check compact-check" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
         type: "checkbox",
     });
     (__VLS_ctx.designerFullMenuQr);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "actions" },
-    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.createDesignerMenu) },
         ...{ class: "btn btn-primary" },
@@ -2018,9 +2040,6 @@ if (__VLS_ctx.activeSection === 'designer') {
         ...{ onClick: (__VLS_ctx.linkSelectedMenuToEvent) },
         ...{ class: "btn btn-outline-primary" },
         disabled: (!__VLS_ctx.selectedEventIdForItems || !__VLS_ctx.selectedMenuIdForItems),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "payment-note" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel" },
@@ -2248,20 +2267,20 @@ if (__VLS_ctx.activeSection === 'preview') {
     for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedMenuTree))) {
         /** @type {[typeof MenuTree, ]} */ ;
         // @ts-ignore
-        const __VLS_4 = __VLS_asFunctionalComponent(MenuTree, new MenuTree({
+        const __VLS_8 = __VLS_asFunctionalComponent(MenuTree, new MenuTree({
             key: (item.id),
             item: (item),
             level: (0),
             eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
             menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
         }));
-        const __VLS_5 = __VLS_4({
+        const __VLS_9 = __VLS_8({
             key: (item.id),
             item: (item),
             level: (0),
             eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
             menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_4));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_8));
     }
 }
 if (__VLS_ctx.activeSection === 'publish') {
@@ -2367,31 +2386,69 @@ if (__VLS_ctx.activeSection === 'publish') {
         ...{ class: "hint" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "qr-sheet" },
+        ...{ class: "table-wrap qr-sheet-table" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.table, __VLS_intrinsicElements.table)({
+        ...{ class: "table table-sm align-middle" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
     for (const [menu] of __VLS_getVForSourceType((__VLS_ctx.selectedEventMenus))) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.article, __VLS_intrinsicElements.article)({
-            key: (menu.id),
-            ...{ class: "qr-tile" },
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
+            key: (`menu-${menu.id}`),
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (menu.displayName);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
         (__VLS_ctx.menuPathFor(__VLS_ctx.selectedEventForItems, menu));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (__VLS_ctx.eventTimerLabel(__VLS_ctx.selectedEventForItems));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+            title: (`Menu QR target for ${menu.displayName}`),
+        });
     }
     for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedEventItems))) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.article, __VLS_intrinsicElements.article)({
-            key: (item.id),
-            ...{ class: "qr-tile" },
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
+            key: (`item-${item.id}`),
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (__VLS_ctx.itemLabel(item));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "muted" },
+        });
+        (__VLS_ctx.menuName(item.menuId));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        (item.type || 'Item');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
         (__VLS_ctx.itemPathFor(__VLS_ctx.selectedEventForItems, item));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (__VLS_ctx.eventTimerLabel(__VLS_ctx.selectedEventForItems));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+            title: (__VLS_ctx.itemUsageTitle(item.id)),
+        });
+    }
+    if (!__VLS_ctx.selectedEventMenus.length && !__VLS_ctx.selectedEventItems.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
+            colspan: "5",
+            ...{ class: "muted" },
+        });
     }
 }
 if (__VLS_ctx.activeSection === 'items') {
@@ -2934,17 +2991,15 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['admin-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['header-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-select-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi-arrow-clockwise']} */ ;
-/** @type {__VLS_StyleScopedClasses['vendor-context']} */ ;
-/** @type {__VLS_StyleScopedClasses['slim-context']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-select-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['context-chip']} */ ;
-/** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['alert']} */ ;
 /** @type {__VLS_StyleScopedClasses['alert-success']} */ ;
 /** @type {__VLS_StyleScopedClasses['py-2']} */ ;
@@ -2961,14 +3016,12 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
-/** @type {__VLS_StyleScopedClasses['number-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['number-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['number-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['number-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['number-cell']} */ ;
+/** @type {__VLS_StyleScopedClasses['analytics-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
+/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
@@ -2981,13 +3034,17 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-table']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-editor']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-backdrop-custom']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-modal']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-title-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-x-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-modal-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-pane']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
@@ -3005,40 +3062,34 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-preview-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['qr-image']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['two-column']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['wide']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-table']} */ ;
 /** @type {__VLS_StyleScopedClasses['badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-bg-light']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['two-column']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -3083,9 +3134,16 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-filters']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-filters']} */ ;
+/** @type {__VLS_StyleScopedClasses['sheet-search']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-search']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
@@ -3122,17 +3180,16 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['designer-controls']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['designer-ribbon']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['check']} */ ;
-/** @type {__VLS_StyleScopedClasses['actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-check']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['payment-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['mb-2']} */ ;
@@ -3204,9 +3261,19 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['wide-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['qr-sheet']} */ ;
-/** @type {__VLS_StyleScopedClasses['qr-tile']} */ ;
-/** @type {__VLS_StyleScopedClasses['qr-tile']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-sheet-table']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -3329,7 +3396,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedVendor: selectedVendor,
             vendorEvents: vendorEvents,
             vendorMenus: vendorMenus,
-            vendorItems: vendorItems,
             selectedMenuItems: selectedMenuItems,
             selectedMenuForItems: selectedMenuForItems,
             selectedEventForItems: selectedEventForItems,
@@ -3347,6 +3413,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedEventItems: selectedEventItems,
             publishChecklist: publishChecklist,
             canPublish: canPublish,
+            originUrl: originUrl,
+            completedChecklistCount: completedChecklistCount,
+            publishReadiness: publishReadiness,
+            dashboardMetrics: dashboardMetrics,
             activeTitle: activeTitle,
             activeSubtitle: activeSubtitle,
             dashboardSteps: dashboardSteps,
@@ -3355,6 +3425,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             itemsForQrEvent: itemsForQrEvent,
             loadAll: loadAll,
             vendorPublicUrl: vendorPublicUrl,
+            formatDate: formatDate,
+            eventWindow: eventWindow,
+            vendorEventCount: vendorEventCount,
+            clearItemFilters: clearItemFilters,
             fillVendorSlug: fillVendorSlug,
             fillEventSlug: fillEventSlug,
             fillMenuSlug: fillMenuSlug,
@@ -3363,11 +3437,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectVendor: selectVendor,
             openVendorEditor: openVendorEditor,
             closeVendorEditor: closeVendorEditor,
+            renderVendorQr: renderVendorQr,
+            syncVendorQrDraft: syncVendorQrDraft,
             saveVendor: saveVendor,
-            prepareVendorQr: prepareVendorQr,
             saveVendorQr: saveVendorQr,
             resetEvent: resetEvent,
-            editEvent: editEvent,
             saveEvent: saveEvent,
             resetMenu: resetMenu,
             editMenu: editMenu,
