@@ -1,5 +1,6 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { API_BASE_URL } from '../config';
 const route = useRoute();
 const router = useRouter();
 const loading = ref(true);
@@ -14,13 +15,12 @@ onMounted(async () => {
         return;
     }
     try {
-        // Replace <backend-domain> with your actual backend domain
-        const apiResponse = await fetch(`https://peshkash-backend.onrender.com/api/details/${qrHash}`);
+        const apiResponse = await fetch(`${API_BASE_URL}/details/${qrHash}`);
         if (apiResponse.ok) {
             const data = await apiResponse.json();
             const redirectUrl = data.redirectionUrl;
             if (redirectUrl) {
-                router.push(redirectUrl);
+                router.push(redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`);
             }
             else {
                 errorMessage.value = 'API response missing redirectionUrl.';

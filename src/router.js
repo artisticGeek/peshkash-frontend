@@ -18,6 +18,103 @@ const routes = [
         component: ItemDetailPage
     },
     {
+        path: '/vendor/:vendorName',
+        name: 'VendorCard',
+        component: () => import('./pages/VendorCardPage.vue')
+    },
+    {
+        path: '/onboard/:vendorName',
+        name: 'Onboarding',
+        component: () => import('./pages/onboarding/OnboardingWizard.vue'),
+    },
+    {
+        path: '/dashboard',
+        redirect: '/dashboard/home',
+    },
+    {
+        path: '/dashboard/home',
+        name: 'DashboardHome',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/vendors',
+        name: 'DashboardVendors',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/vendors/:vendorId',
+        name: 'DashboardVendorWorkspace',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events',
+        name: 'DashboardEvents',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events/:eventId',
+        name: 'DashboardEventWorkspace',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events/:eventId/publish',
+        name: 'DashboardEventPublishContext',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events/:eventId/qr-sheet',
+        name: 'DashboardEventQrSheet',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/items',
+        name: 'DashboardItems',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/items/:itemId',
+        name: 'DashboardItemAnalytics',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/designer',
+        redirect: '/dashboard/menus/studio',
+    },
+    {
+        path: '/dashboard/menus/studio',
+        name: 'DashboardMenuStudio',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/:menuId/studio',
+        name: 'DashboardMenuStudioContext',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/:menuId/preview',
+        name: 'DashboardMenuPreviewContext',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/menus/preview',
+        name: 'DashboardMenuPreview',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/events/publish',
+        name: 'DashboardEventPublish',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/dashboard/qr',
+        name: 'DashboardQr',
+        component: () => import('./pages/AdminDashboard.vue'),
+    },
+    {
+        path: '/admin',
+        redirect: '/dashboard/home',
+    },
+    {
         path: '/:qrHash',
         component: QrRedirect
     }

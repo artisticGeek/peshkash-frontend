@@ -32,6 +32,19 @@ p,
   font-family: var(--rx-font-body);
 }
 
+.pk-landing a {
+  text-decoration: none;
+}
+
+.pk-landing a:hover {
+  text-decoration: none;
+}
+
+.pk-landing footer a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.22rem;
+}
+
 /* Landing page specific button styles */
 .pk-landing .btn-primary {
   background-color: var(--rx-main-color);
