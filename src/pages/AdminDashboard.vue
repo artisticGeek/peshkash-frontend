@@ -37,36 +37,26 @@
       <div v-if="message" class="alert alert-success py-2">{{ message }}</div>
       <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
 
-      <section v-if="activeSection === 'home'" class="command-center">
-        <div class="hero-panel">
+      <section v-if="activeSection === 'home'" class="home-workspace">
+        <div class="panel home-intro">
           <div>
-            <p class="eyebrow">Command Center</p>
-            <h3>{{ selectedVendor?.displayName || 'Select a vendor' }}</h3>
-            <p class="hint">Direct workspaces are always available. Use event readiness when you want guidance before publish.</p>
+            <p class="eyebrow">Dashboard</p>
+            <h3>{{ selectedVendor?.displayName || 'Select a vendor to begin' }}</h3>
+            <p class="hint">A quiet overview of current work. Open a workspace only when you need to act.</p>
           </div>
-          <div class="hero-actions">
+          <div class="home-actions">
             <RouterLink class="btn btn-primary" to="/dashboard/events">Open Events</RouterLink>
-            <RouterLink class="btn btn-outline-primary" to="/dashboard/menus/studio">Open Menu Studio</RouterLink>
+            <RouterLink class="btn btn-outline-primary" to="/dashboard/items">Item Library</RouterLink>
           </div>
         </div>
 
-        <div class="panel analytics-panel">
-          <h3>Workspace Analytics</h3>
-          <div class="bar-list">
-            <div v-for="metric in dashboardMetrics" :key="metric.label" class="bar-row">
-              <div>
-                <strong>{{ metric.label }}</strong>
-                <span>{{ metric.value }}</span>
-              </div>
-              <div class="bar-track"><span :style="{ width: metric.width }"></span></div>
+        <div class="panel home-summary">
+          <h3>Overview</h3>
+          <div class="summary-grid">
+            <div v-for="metric in dashboardMetrics" :key="metric.label" class="summary-stat">
+              <span>{{ metric.label }}</span>
+              <strong>{{ metric.value }}</strong>
             </div>
-          </div>
-          <div class="readiness-meter">
-            <div>
-              <strong>Publish readiness</strong>
-              <span>{{ completedChecklistCount }} of {{ publishChecklist.length }} checks complete</span>
-            </div>
-            <div class="bar-track"><span :style="{ width: `${publishReadiness}%` }"></span></div>
           </div>
         </div>
 
@@ -80,24 +70,19 @@
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table">
-              <thead><tr><th>Event</th><th>Window</th><th>Menus</th><th>Readiness</th><th></th></tr></thead>
+              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
-                  <td><strong>{{ event.displayName }}</strong><br /><code>{{ adminEventRoute(event) }}</code></td>
+                  <td><strong>{{ event.displayName }}</strong><br /><span class="muted">{{ event.name }}</span></td>
                   <td>{{ eventWindow(event) }}</td>
+                  <td><span class="soft-pill">{{ event.status }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
-                  <td>{{ eventReadiness(event) }}%</td>
                   <td><RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink></td>
                 </tr>
-                <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events yet. Create one from Events or Publish Assistant.</td></tr>
+                <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events yet. Create one from Events.</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-
-        <div class="panel">
-          <h3>Reference Routes</h3>
-          <ReferenceRoutes :routes="dashboardReferenceRoutes" @copy="copyRoute" />
         </div>
       </section>
 
@@ -111,7 +96,6 @@
           <div class="hero-actions">
             <button class="btn btn-primary" @click="openVendorEditor(selectedVendor)">Manage Vendor</button>
             <RouterLink class="btn btn-outline-primary" to="/dashboard/events">Open Events</RouterLink>
-            <button class="btn btn-outline-secondary" @click="copyRoute(adminVendorRoute(selectedVendor))">Copy Route</button>
           </div>
         </div>
         <div class="panel">
@@ -192,24 +176,35 @@
             </div>
             <button class="btn btn-primary" @click="startNewEvent">New Event</button>
           </div>
-          <div class="reference-strip" v-if="selectedVendor">
-            <span>Vendor route</span>
-            <code>{{ adminVendorRoute(selectedVendor) }}</code>
-            <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminVendorRoute(selectedVendor))">Copy</button>
-          </div>
+          <form v-if="showEventEditor" class="inline-editor" @submit.prevent="saveEvent">
+            <div class="form-grid">
+              <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
+              <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
+              <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
+              <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
+              <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">Save Event</button>
+              <button class="btn btn-outline-secondary" type="button" @click="closeEventEditor">Cancel</button>
+            </div>
+          </form>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table">
-              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th>Route</th><th></th></tr></thead>
+              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
                   <td><strong>{{ event.displayName }}</strong><br /><code>{{ event.name }}</code></td>
                   <td>{{ eventWindow(event) }}</td>
                   <td><span class="badge text-bg-light">{{ event.status }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
-                  <td><code>{{ adminEventRoute(event) }}</code></td>
-                  <td><RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink></td>
+                  <td class="row-actions">
+                    <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink>
+                    <button class="btn btn-outline-secondary btn-sm" @click="editEventInline(event)">Edit</button>
+                    <RouterLink class="btn btn-outline-primary btn-sm" :to="adminPublishRoute(event)">Publish</RouterLink>
+                  </td>
                 </tr>
-                <tr v-if="!vendorEvents.length"><td colspan="6" class="muted">No events for this vendor yet.</td></tr>
+                <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events for this vendor yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -230,7 +225,7 @@
           </div>
         </div>
 
-        <div v-if="selectedEventForItems" class="workspace-grid">
+          <div v-if="selectedEventForItems" class="workspace-grid">
           <div class="panel">
             <h3>Readiness</h3>
             <ul class="checklist premium-checklist">
@@ -240,11 +235,6 @@
               </li>
             </ul>
             <div class="bar-track"><span :style="{ width: `${eventReadiness(selectedEventForItems)}%` }"></span></div>
-          </div>
-
-          <div class="panel">
-            <h3>Reference Routes</h3>
-            <ReferenceRoutes :routes="eventReferenceRoutes(selectedEventForItems)" @copy="copyRoute" />
           </div>
 
           <div class="panel wide-panel">
@@ -276,24 +266,19 @@
             <div class="panel-heading">
               <div>
                 <h3>QR Sheet Preview</h3>
-                <p class="hint">Printable/event-check view for the menu and item targets.</p>
+                <p class="hint">Printable/event-check view with scannable QR previews.</p>
               </div>
-              <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminQrSheetRoute(selectedEventForItems))">Copy QR Sheet Route</button>
+              <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminQrSheetRoute(selectedEventForItems)">Open QR Sheet</RouterLink>
             </div>
-            <div class="table-wrap qr-sheet-table">
-              <table class="table table-sm align-middle">
-                <thead><tr><th>Target</th><th>Type</th><th>Public Path</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  <tr v-for="target in eventQrTargets(selectedEventForItems)" :key="target.key">
-                    <td><strong>{{ target.label }}</strong><br /><span class="muted">{{ target.context }}</span></td>
-                    <td>{{ target.type }}</td>
-                    <td><code>{{ target.path }}</code></td>
-                    <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
-                    <td><a class="btn btn-outline-secondary btn-sm" :href="buildAbsolute(target.path)" target="_blank" rel="noreferrer">Open</a></td>
-                  </tr>
-                  <tr v-if="!eventQrTargets(selectedEventForItems).length"><td colspan="5" class="muted">Link a menu to generate QR targets.</td></tr>
-                </tbody>
-              </table>
+            <div class="qr-preview-list">
+              <QrTargetPreview
+                v-for="target in eventQrTargets(selectedEventForItems)"
+                :key="target.key"
+                :label="target.label"
+                :type="target.type"
+                :path="target.path"
+              />
+              <p v-if="!eventQrTargets(selectedEventForItems).length" class="muted">Link a menu to generate QR targets.</p>
             </div>
           </div>
         </div>
@@ -362,7 +347,7 @@
             <p class="hint">All reusable items for the selected vendor. Search, filter, edit inline, and open item analysis from the usage column.</p>
           </div>
           <div class="item-toolbar">
-            <button class="btn btn-outline-primary" :disabled="!selectedMenuIdForItems" @click="() => addDraftItemRow()">Add Row</button>
+            <button class="btn btn-outline-primary" :disabled="!vendorMenus.length" @click="() => addDraftItemRow(defaultItemMenuId())">Add Row</button>
             <button class="btn btn-primary" :disabled="!dirtyItemRows.length" @click="saveDirtyItemRows">Save Changed Rows</button>
           </div>
         </div>
@@ -386,7 +371,11 @@
               <tr v-for="row in inventoryRows" :key="row.clientId">
                 <td><input v-model.trim="row.displayName" class="form-control" placeholder="Paneer Tikka" @input="markItemDirty(row)" @blur="fillRowSlug(row)" /></td>
                 <td><input v-model.trim="row.name" class="form-control" placeholder="paneer-tikka" @input="markItemDirty(row)" /></td>
-                <td>{{ menuName(row.menuId) }}</td>
+                <td>
+                  <select v-model.number="row.menuId" class="form-select" @change="row.parentId = 0; markItemDirty(row)">
+                    <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option>
+                  </select>
+                </td>
                 <td>
                   <select v-model.number="row.parentId" class="form-select" @change="markItemDirty(row)">
                     <option :value="0">No parent</option>
@@ -460,11 +449,6 @@
             <button class="btn btn-primary" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">Create Menu</button>
             <button class="btn btn-outline-primary" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">Use For Event</button>
           </div>
-          <div class="reference-strip" v-if="selectedMenuForItems">
-            <span>Studio route</span>
-            <code>{{ adminMenuStudioRoute(selectedMenuForItems) }}</code>
-            <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminMenuStudioRoute(selectedMenuForItems))">Copy</button>
-          </div>
         </div>
 
         <div class="panel">
@@ -496,8 +480,21 @@
               <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
               <p class="hint">Public-like nested canvas. Admin notes stay private.</p>
             </div>
-            <RouterLink class="btn btn-outline-secondary btn-sm" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'">Preview</RouterLink>
+            <div class="actions slim-actions">
+              <button class="btn btn-outline-primary btn-sm" :disabled="!selectedMenuForItems" @click="showQuickMenuItem = !showQuickMenuItem">Add Item</button>
+              <RouterLink class="btn btn-outline-secondary btn-sm" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'">Preview</RouterLink>
+            </div>
           </div>
+          <form v-if="showQuickMenuItem && selectedMenuForItems" class="quick-add-row" @submit.prevent="createQuickMenuItem">
+            <input v-model.trim="quickItem.displayName" class="form-control" placeholder="Item or category name" @blur="quickItem.name = quickItem.name || slugify(quickItem.displayName)" />
+            <select v-model.number="quickItem.parentId" class="form-select">
+              <option :value="0">No parent</option>
+              <option v-for="item in selectedMenuItems" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option>
+            </select>
+            <input v-model.trim="quickItem.type" class="form-control" placeholder="type" />
+            <input v-model.trim="quickItem.enumType" class="form-control" placeholder="tag" />
+            <button class="btn btn-primary" type="submit">Save</button>
+          </form>
           <div class="admin-tree">
             <div v-for="item in selectedMenuTree" :key="item.id" class="tree-root">
               <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
@@ -562,10 +559,9 @@
             <h3>{{ selectedEventForItems.displayName }}</h3>
             <p class="hint">Guided validation for the selected event. Direct event management stays available in the event workspace.</p>
           </div>
-          <div class="actions">
-            <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(selectedEventForItems)">Event Workspace</RouterLink>
-            <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminPublishRoute(selectedEventForItems))">Copy Publish Route</button>
-          </div>
+            <div class="actions">
+              <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(selectedEventForItems)">Event Workspace</RouterLink>
+            </div>
         </div>
         <form class="panel" @submit.prevent="saveEvent">
           <h3>Event Design</h3>
@@ -638,23 +634,17 @@
             </div>
             <div class="actions">
               <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(selectedEventForItems)">Event Workspace</RouterLink>
-              <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminQrSheetRoute(selectedEventForItems))">Copy Sheet Route</button>
             </div>
           </div>
-          <div class="table-wrap qr-sheet-table">
-            <table class="table table-sm align-middle">
-              <thead><tr><th>Target</th><th>Type</th><th>Public Path</th><th>Short QR</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr v-for="target in eventQrTargets(selectedEventForItems)" :key="target.key">
-                  <td><strong>{{ target.label }}</strong><br /><span class="muted">{{ target.context }}</span></td>
-                  <td>{{ target.type }}</td>
-                  <td><a :href="buildAbsolute(target.path)" target="_blank" rel="noreferrer">{{ target.path }}</a></td>
-                  <td><span class="muted">Create in QR Studio</span></td>
-                  <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
-                </tr>
-                <tr v-if="!eventQrTargets(selectedEventForItems).length"><td colspan="5" class="muted">No menu or item targets yet.</td></tr>
-              </tbody>
-            </table>
+          <div class="qr-sheet-grid">
+            <QrTargetPreview
+              v-for="target in eventQrTargets(selectedEventForItems)"
+              :key="target.key"
+              :label="target.label"
+              :type="target.type"
+              :path="target.path"
+            />
+            <p v-if="!eventQrTargets(selectedEventForItems).length" class="muted">No menu or item targets yet.</p>
           </div>
         </div>
         <div v-else class="panel empty-state">
@@ -791,11 +781,6 @@
 
         <div class="panel">
           <h3>QR Mappings</h3>
-          <div v-if="selectedEventForItems" class="reference-strip">
-            <span>Event QR sheet</span>
-            <code>{{ adminQrSheetRoute(selectedEventForItems) }}</code>
-            <button class="btn btn-outline-secondary btn-sm" @click="copyRoute(adminQrSheetRoute(selectedEventForItems))">Copy</button>
-          </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle">
               <thead><tr><th>QR</th><th>Destination</th><th>Active</th><th>Links</th><th></th></tr></thead>
@@ -821,7 +806,7 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import ReferenceRoutes from '../components/admin/ReferenceRoutes.vue';
+import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import WorkspaceSwitcher from '../components/admin/WorkspaceSwitcher.vue';
 import MenuTree from '../components/MenuTree.vue';
 import { API_BASE_URL } from '../config';
@@ -894,6 +879,8 @@ const selectedMenuIdForItems = ref(0);
 const selectedEventIdForItems = ref(0);
 const showItemContextPicker = ref(false);
 const showVendorEditor = ref(false);
+const showEventEditor = ref(false);
+const showQuickMenuItem = ref(false);
 const designerMenuName = ref('');
 const designerFullMenuQr = ref(false);
 const designerNotes = reactive<Record<number, string>>({});
@@ -929,6 +916,7 @@ const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, eventId: 0, 
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
 const adhocForm = reactive({ parentId: 0, name: '', displayName: '', customMenuDisplayName: '', addToSourceMenu: false });
 const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', destination: 'source' as 'source' | 'adhoc' | 'both' });
+const quickItem = reactive({ parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
 
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
@@ -995,12 +983,6 @@ const dashboardMetrics = computed(() => {
   const max = Math.max(...values.map((item) => item.value), 1);
   return values.map((item) => ({ ...item, width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }));
 });
-const dashboardReferenceRoutes = computed(() => [
-  { label: 'Vendor Workspace', url: selectedVendor.value ? adminVendorRoute(selectedVendor.value) : '/dashboard/vendors' },
-  { label: 'Events', url: '/dashboard/events' },
-  { label: 'Menu Studio', url: selectedMenuForItems.value ? adminMenuStudioRoute(selectedMenuForItems.value) : '/dashboard/menus/studio' },
-  { label: 'QR Studio', url: '/dashboard/qr' },
-]);
 
 const activeTitle = computed(() => {
   const contextual: Partial<Record<SectionKey, string>> = {
@@ -1222,10 +1204,6 @@ function isNavActive(section: SectionKey) {
   return false;
 }
 
-function adminVendorRoute(vendor: Vendor) {
-  return `/dashboard/vendors/${vendor.id}`;
-}
-
 function adminEventRoute(event: EventRow) {
   return `/dashboard/events/${event.id}`;
 }
@@ -1246,14 +1224,12 @@ function adminMenuPreviewRoute(menu: MenuRow) {
   return `/dashboard/menus/${menu.id}/preview`;
 }
 
-async function copyRoute(path: string) {
-  const url = path.startsWith('http') ? path : `${window.location.origin}${path}`;
-  await navigator.clipboard?.writeText(url);
-  setNotice('Route copied');
-}
-
 function menuItems(menuId: number) {
   return items.value.filter((item) => item.menuId === menuId);
+}
+
+function defaultItemMenuId() {
+  return itemMenuFilter.value || selectedMenuIdForItems.value || vendorMenus.value[0]?.id || 0;
 }
 
 function eventChecklist(event: EventRow) {
@@ -1272,14 +1248,6 @@ function eventChecklist(event: EventRow) {
 function eventReadiness(event: EventRow) {
   const checks = eventChecklist(event);
   return Math.round((checks.filter((item) => item.done).length / checks.length) * 100);
-}
-
-function eventReferenceRoutes(event: EventRow) {
-  return [
-    { label: 'Event Workspace', url: adminEventRoute(event) },
-    { label: 'Publish Assistant', url: adminPublishRoute(event) },
-    { label: 'QR Sheet', url: adminQrSheetRoute(event) },
-  ];
 }
 
 function eventQrTargets(event: EventRow) {
@@ -1463,7 +1431,17 @@ function editEvent(event: EventRow) {
 
 function startNewEvent() {
   resetEvent();
-  router.push('/dashboard/events/publish');
+  showEventEditor.value = true;
+}
+
+function editEventInline(event: EventRow) {
+  editEvent(event);
+  showEventEditor.value = true;
+}
+
+function closeEventEditor() {
+  showEventEditor.value = false;
+  resetEvent();
 }
 
 async function saveEvent() {
@@ -1478,7 +1456,8 @@ async function saveEvent() {
     resetEvent();
     await loadAll();
     const savedEvent = data ? normalizeEvent(data) : events.value.find((event) => event.name === payload.name && event.vendorId === selectedVendorId.value);
-    if (savedEvent) {
+    showEventEditor.value = false;
+    if (savedEvent && activeSection.value !== 'events') {
       selectedEventIdForItems.value = savedEvent.id;
       router.push(adminEventRoute(savedEvent));
     }
@@ -1648,7 +1627,7 @@ async function saveAdhocItem() {
 function cloneItemPayload(item: ItemRow, menuId: number) {
   return {
     menuId,
-    name: item.name,
+    name: slugify(item.name || itemLabel(item)),
     displayName: itemLabel(item),
     description: item.description,
     ingredients: item.ingredients,
@@ -1658,6 +1637,31 @@ function cloneItemPayload(item: ItemRow, menuId: number) {
     isActive: item.isActive,
     parentId: null,
   };
+}
+
+async function createQuickMenuItem() {
+  try {
+    if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
+    if (!quickItem.displayName.trim()) throw new Error('Add an item name first');
+    quickItem.name = quickItem.name || slugify(quickItem.displayName);
+    requireSlug(quickItem.name, 'Item slug');
+    await axios.post(adminUrl('/items'), {
+      menuId: selectedMenuIdForItems.value,
+      name: quickItem.name,
+      displayName: quickItem.displayName,
+      type: quickItem.type || 'item',
+      enumType: quickItem.enumType,
+      parentId: quickItem.parentId || null,
+      isActive: true,
+    });
+    Object.assign(quickItem, { parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
+    showQuickMenuItem.value = false;
+    await loadAll();
+    syncItemRows();
+    setNotice('Item added to menu');
+  } catch (err) {
+    setError(err);
+  }
 }
 
 async function saveImportedItem() {
@@ -2144,10 +2148,74 @@ label {
 }
 
 .command-center,
+.home-workspace,
 .event-workspace,
 .workspace-grid {
   display: grid;
   gap: 16px;
+}
+
+.home-workspace {
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+}
+
+.home-intro {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.home-intro h3 {
+  font-family: 'Urbanist', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.home-actions,
+.row-actions,
+.slim-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-summary {
+  align-self: start;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-stat {
+  align-items: center;
+  border-bottom: 1px solid #eee6db;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.summary-stat span {
+  color: #6b7280;
+}
+
+.summary-stat strong {
+  color: #7a542a;
+  font-size: 1.2rem;
+}
+
+.soft-pill {
+  background: #f7efe3;
+  border: 1px solid #ead8bd;
+  border-radius: 999px;
+  color: #7a542a;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 4px 9px;
 }
 
 .command-center {
@@ -2383,48 +2451,28 @@ label {
   padding-left: 34px;
 }
 
-.reference-list {
-  display: grid;
-  gap: 8px;
-}
-
-.reference-row,
-.reference-strip {
-  align-items: center;
-  background: #fbfaf8;
-  border: 1px solid #ece4d8;
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr) auto;
-  padding: 10px;
-}
-
-.reference-row span,
-.reference-strip span {
-  color: #6b7280;
-  font-size: 0.76rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.reference-row code,
-.reference-strip code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-strip {
-  margin: 12px 0 14px;
-}
-
 .compact-heading {
   margin-bottom: 8px;
 }
 
 .studio-search {
   margin-bottom: 10px;
+}
+
+.inline-editor,
+.quick-add-row {
+  background: #fbfaf8;
+  border: 1px solid #ece4d8;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.quick-add-row {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) minmax(100px, 140px) minmax(100px, 140px) auto;
 }
 
 .editable-table {
@@ -2720,6 +2768,12 @@ td a {
   word-break: break-word;
 }
 
+.qr-preview-list,
+.qr-sheet-grid {
+  display: grid;
+  gap: 4px;
+}
+
 .premium-checklist {
   margin-bottom: 14px;
 }
@@ -2772,8 +2826,10 @@ td a {
   .designer-grid,
   .preview-layout,
   .publish-grid,
+  .home-workspace,
   .command-center,
   .workspace-grid,
+  .quick-add-row,
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -2789,9 +2845,7 @@ td a {
   .home-layout,
   .vendor-modal-grid,
   .compact-filters,
-  .designer-ribbon,
-  .reference-row,
-  .reference-strip {
+  .designer-ribbon {
     grid-template-columns: 1fr;
   }
   .hero-panel,

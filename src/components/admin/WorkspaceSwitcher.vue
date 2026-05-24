@@ -7,7 +7,9 @@
         {{ vendor.displayName }}
       </option>
     </select>
-    <a v-if="selectedVendor?.hasContactPage" :href="vendorUrl" target="_blank" rel="noreferrer">Open card</a>
+    <a v-if="selectedVendor?.hasContactPage" class="card-link" :href="vendorUrl" target="_blank" rel="noreferrer" title="Open vendor card" aria-label="Open vendor card">
+      <i class="bi bi-box-arrow-up-right"></i>
+    </a>
   </div>
 </template>
 
@@ -52,8 +54,21 @@ const vendorUrl = computed(() => props.selectedVendor ? `${window.location.origi
   min-width: 190px;
 }
 
-.workspace-switcher a {
+.card-link {
+  align-items: center;
+  border: 1px solid #e6dfd4;
+  border-radius: 999px;
+  color: #7a542a;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
   text-decoration: none;
+  width: 30px;
+}
+
+.card-link:hover {
+  background: #f7efe3;
+  color: #15191e;
 }
 
 @media (max-width: 900px) {

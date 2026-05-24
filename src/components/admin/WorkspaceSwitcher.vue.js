@@ -8,7 +8,7 @@ let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
-/** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-link']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
@@ -35,14 +35,23 @@ for (const [vendor] of __VLS_getVForSourceType((__VLS_ctx.vendors))) {
 }
 if (__VLS_ctx.selectedVendor?.hasContactPage) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+        ...{ class: "card-link" },
         href: (__VLS_ctx.vendorUrl),
         target: "_blank",
         rel: "noreferrer",
+        title: "Open vendor card",
+        'aria-label': "Open vendor card",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-box-arrow-up-right" },
     });
 }
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-link']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-box-arrow-up-right']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
