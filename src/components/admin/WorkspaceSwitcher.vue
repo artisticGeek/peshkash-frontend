@@ -34,12 +34,13 @@ const vendorUrl = computed(() => props.selectedVendor ? `${window.location.origi
 <style scoped>
 .workspace-switcher {
   align-items: center;
-  background: #fff;
-  border: 1px solid #e6dfd4;
-  border-radius: 999px;
+  background: #fffcf7;
+  border: 1px solid #e8dccb;
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(42, 34, 24, 0.05);
   display: flex;
   gap: 10px;
-  padding: 6px 8px 6px 12px;
+  padding: 7px 8px 7px 12px;
 }
 
 .workspace-switcher span {
@@ -51,13 +52,14 @@ const vendorUrl = computed(() => props.selectedVendor ? `${window.location.origi
 
 .workspace-switcher select {
   border: 0;
+  background: transparent;
   min-width: 190px;
 }
 
 .card-link {
   align-items: center;
-  border: 1px solid #e6dfd4;
-  border-radius: 999px;
+  border: 1px solid #d8bd8f;
+  border-radius: 5px;
   color: #7a542a;
   display: inline-flex;
   height: 30px;

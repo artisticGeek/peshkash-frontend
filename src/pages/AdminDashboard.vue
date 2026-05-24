@@ -40,23 +40,38 @@
       <section v-if="activeSection === 'home'" class="home-workspace">
         <div class="panel home-intro">
           <div>
-            <p class="eyebrow">Dashboard</p>
+            <p class="eyebrow">Workspace</p>
             <h3>{{ selectedVendor?.displayName || 'Select a vendor to begin' }}</h3>
-            <p class="hint">A quiet overview of current work. Open a workspace only when you need to act.</p>
+            <p class="hint">Recent operational surfaces only. Detailed setup happens inside Vendors, Events, Menu Studio, and QR Studio.</p>
           </div>
           <div class="home-actions">
-            <RouterLink class="btn btn-primary" to="/dashboard/events">Open Events</RouterLink>
-            <RouterLink class="btn btn-outline-primary" to="/dashboard/items">Item Library</RouterLink>
+            <RouterLink class="icon-action primary" to="/dashboard/events" title="Open events">
+              <i class="bi bi-calendar-event"></i><span>Events</span>
+            </RouterLink>
+            <RouterLink class="icon-action" to="/dashboard/items" title="Open item library">
+              <i class="bi bi-box-seam"></i><span>Items</span>
+            </RouterLink>
           </div>
         </div>
 
         <div class="panel home-summary">
-          <h3>Overview</h3>
-          <div class="summary-grid">
-            <div v-for="metric in dashboardMetrics" :key="metric.label" class="summary-stat">
-              <span>{{ metric.label }}</span>
-              <strong>{{ metric.value }}</strong>
-            </div>
+          <h3>Open Work</h3>
+          <div class="work-stack">
+            <RouterLink class="work-row" to="/dashboard/vendors">
+              <i class="bi bi-shop"></i>
+              <span>Vendors</span>
+              <strong>{{ vendors.length }}</strong>
+            </RouterLink>
+            <RouterLink class="work-row" to="/dashboard/events">
+              <i class="bi bi-calendar2-week"></i>
+              <span>Events</span>
+              <strong>{{ vendorEvents.length }}</strong>
+            </RouterLink>
+            <RouterLink class="work-row" to="/dashboard/qr">
+              <i class="bi bi-qr-code"></i>
+              <span>QR Mappings</span>
+              <strong>{{ qrMappings.length }}</strong>
+            </RouterLink>
           </div>
         </div>
 
@@ -64,9 +79,9 @@
           <div class="panel-heading">
             <div>
               <h3>Event Workspaces</h3>
-              <p class="hint">Current vendor events with contextual links that can be shared with admins or future vendor users.</p>
+              <p class="hint">Current vendor events. Open one to manage menus, products, QR targets, and publish readiness.</p>
             </div>
-            <RouterLink class="btn btn-outline-primary btn-sm" to="/dashboard/events">All Events</RouterLink>
+            <RouterLink class="icon-button outlined" to="/dashboard/events" title="All events" aria-label="All events"><i class="bi bi-arrow-right"></i></RouterLink>
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table">
@@ -77,7 +92,7 @@
                   <td>{{ eventWindow(event) }}</td>
                   <td><span class="soft-pill">{{ event.status }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
-                  <td><RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink></td>
+                  <td><RouterLink class="icon-button outlined" :to="adminEventRoute(event)" title="Open event" aria-label="Open event"><i class="bi bi-box-arrow-up-right"></i></RouterLink></td>
                 </tr>
                 <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events yet. Create one from Events.</td></tr>
               </tbody>
@@ -141,25 +156,43 @@
                   <label class="wide">Contact Lines<input v-model.trim="vendorContactText" class="form-control" placeholder="Phone, email, website" /></label>
                   <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
                   <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="3"></textarea></label>
-                  <label class="check"><input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" /> Contact card active</label>
+                  <label class="product-toggle wide" :class="{ selected: vendorForm.hasContactPage }">
+                    <input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" />
+                    <i class="bi bi-person-vcard"></i>
+                    <span>
+                      <strong>Add contact card product</strong>
+                      <small>Includes vendor public card and a reusable QR mapping when the vendor is saved.</small>
+                    </span>
+                  </label>
                 </div>
                 <div class="actions">
-                  <button class="btn btn-primary" type="submit" :disabled="loading">Save Vendor</button>
-                  <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor">Cancel</button>
+                  <button class="btn btn-primary" type="submit" :disabled="loading">
+                    <i class="bi bi-check2-circle"></i>
+                    Save Vendor
+                  </button>
+                  <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor" aria-label="Cancel"><i class="bi bi-x-lg"></i></button>
                 </div>
               </div>
               <div class="modal-pane qr-pane">
                 <h4>Contact Card QR</h4>
-                <p class="hint">The QR points to the short reusable URL and resolves to the vendor contact card.</p>
+                <p class="hint">Preview stays inactive until the vendor is saved. Saving a contact-card product activates this mapping.</p>
                 <div class="preview-box">
                   <div><span>Destination</span><code>{{ vendorQrDraft.url || 'Save a vendor to generate destination' }}</code></div>
                   <label>QR Hash<input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" @input="renderVendorQr" /></label>
                   <div v-if="vendorQrCodeDataUrl && vendorForm.hasContactPage" class="qr-preview-card">
+                    <span class="qr-status" :class="{ active: vendorQrIsActive }">
+                      <i :class="vendorQrIsActive ? 'bi bi-check-circle-fill' : 'bi bi-clock-history'"></i>
+                      {{ vendorQrIsActive ? 'Active reusable QR' : 'Draft QR, activates on save' }}
+                    </span>
                     <img class="qr-image" :src="vendorQrCodeDataUrl" alt="Vendor QR code" />
-                    <a :href="`${originUrl}/${vendorQrDraft.qrHash}`" target="_blank" rel="noreferrer">{{ originUrl }}/{{ vendorQrDraft.qrHash }}</a>
+                    <a v-if="vendorQrIsActive" :href="`${originUrl}/${vendorQrDraft.qrHash}`" target="_blank" rel="noreferrer">{{ originUrl }}/{{ vendorQrDraft.qrHash }}</a>
+                    <code v-else>{{ originUrl }}/{{ vendorQrDraft.qrHash }}</code>
                   </div>
-                  <p v-else class="muted">Enable the contact card and save the vendor before using this QR.</p>
-                  <button class="btn btn-primary btn-sm" type="button" :disabled="!vendorForm.id || !vendorForm.hasContactPage || !vendorQrDraft.qrHash" @click="saveVendorQr">Save Vendor QR</button>
+                  <p v-else class="muted">Add the contact card product to preview and activate the vendor QR.</p>
+                  <button class="btn btn-primary btn-sm" type="button" :disabled="!vendorForm.id || !vendorForm.hasContactPage || !vendorQrDraft.qrHash" @click="saveVendorQr">
+                    <i class="bi bi-qr-code"></i>
+                    Activate QR
+                  </button>
                 </div>
               </div>
             </div>
@@ -234,7 +267,10 @@
                 {{ item.label }}
               </li>
             </ul>
-            <div class="bar-track"><span :style="{ width: `${eventReadiness(selectedEventForItems)}%` }"></span></div>
+            <div class="payment-gate compact-gate">
+              <strong>Products before publish</strong>
+              <p>Choose billable products once, then publish. Payment can sit cleanly after this confirmation.</p>
+            </div>
           </div>
 
           <div class="panel wide-panel">
@@ -247,18 +283,40 @@
             </div>
             <div class="table-wrap">
               <table class="table table-sm align-middle action-table">
-                <thead><tr><th>Menu</th><th>Items</th><th>Public URL</th><th>Admin Route</th><th></th></tr></thead>
+                <thead><tr><th>Menu</th><th>Items</th><th>Public URL</th><th></th></tr></thead>
                 <tbody>
                   <tr v-for="menu in selectedEventMenus" :key="menu.id">
                     <td><strong>{{ menu.displayName }}</strong><br /><code>{{ menu.name }}</code></td>
                     <td>{{ menuItems(menu.id).length }}</td>
                     <td><a :href="buildAbsolute(menuPathFor(selectedEventForItems, menu))" target="_blank" rel="noreferrer">Open public menu</a></td>
-                    <td><code>{{ adminMenuStudioRoute(menu) }}</code></td>
                     <td><RouterLink class="btn btn-outline-secondary btn-sm" :to="adminMenuStudioRoute(menu)">Studio</RouterLink></td>
                   </tr>
-                  <tr v-if="!selectedEventMenus.length"><td colspan="5" class="muted">No menus linked yet.</td></tr>
+                  <tr v-if="!selectedEventMenus.length"><td colspan="4" class="muted">No menus linked yet.</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div class="panel wide-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>Products For This Event</h3>
+                <p class="hint">A single pre-publish tray for features that later become pricing line items.</p>
+              </div>
+              <RouterLink class="btn btn-primary btn-sm" :to="adminPublishRoute(selectedEventForItems)">
+                <i class="bi bi-bag-check"></i>
+                Review Products
+              </RouterLink>
+            </div>
+            <div class="product-grid">
+              <div v-for="product in eventProducts" :key="product.key" class="product-card" :class="{ selected: product.selected }">
+                <i :class="product.icon"></i>
+                <div>
+                  <strong>{{ product.label }}</strong>
+                  <small>{{ product.description }}</small>
+                </div>
+                <span>{{ product.selected ? 'Selected' : 'Available' }}</span>
+              </div>
             </div>
           </div>
 
@@ -445,9 +503,18 @@
             <label>Event<select v-model.number="selectedEventIdForItems" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
             <label>Working Menu<select v-model.number="selectedMenuIdForItems" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
             <label>Custom Menu<input v-model.trim="designerMenuName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
-            <label class="check compact-check"><input v-model="designerFullMenuQr" type="checkbox" /> Full-menu QR</label>
-            <button class="btn btn-primary" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">Create Menu</button>
-            <button class="btn btn-outline-primary" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">Use For Event</button>
+            <button class="product-chip" :class="{ selected: designerFullMenuQr }" @click="designerFullMenuQr = !designerFullMenuQr" type="button">
+              <i class="bi bi-qr-code"></i>
+              <span>Full-menu QR</span>
+            </button>
+            <button class="btn btn-primary icon-label" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">
+              <i class="bi bi-plus-lg"></i>
+              Create
+            </button>
+            <button class="btn btn-outline-primary icon-label" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">
+              <i class="bi bi-bag-plus"></i>
+              Add To Event
+            </button>
           </div>
         </div>
 
@@ -478,11 +545,11 @@
           <div class="panel-heading">
             <div>
               <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
-              <p class="hint">Public-like nested canvas. Admin notes stay private.</p>
+              <p class="hint">Preview-first canvas. Use the structure rail only when you need to re-parent or fine tune.</p>
             </div>
             <div class="actions slim-actions">
-              <button class="btn btn-outline-primary btn-sm" :disabled="!selectedMenuForItems" @click="showQuickMenuItem = !showQuickMenuItem">Add Item</button>
-              <RouterLink class="btn btn-outline-secondary btn-sm" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'">Preview</RouterLink>
+              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Add item" aria-label="Add item" @click="showQuickMenuItem = !showQuickMenuItem"><i class="bi bi-plus-lg"></i></button>
+              <RouterLink class="icon-button outlined" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'" title="Open preview" aria-label="Open preview"><i class="bi bi-phone"></i></RouterLink>
             </div>
           </div>
           <form v-if="showQuickMenuItem && selectedMenuForItems" class="quick-add-row" @submit.prevent="createQuickMenuItem">
@@ -495,6 +562,26 @@
             <input v-model.trim="quickItem.enumType" class="form-control" placeholder="tag" />
             <button class="btn btn-primary" type="submit">Save</button>
           </form>
+          <div class="studio-live-preview">
+            <div class="phone-shell studio-phone" @dragover.prevent @drop="dropOnMenuRoot">
+              <p class="eyebrow">{{ selectedEventForItems?.displayName || 'Event Preview' }}</p>
+              <h3>{{ selectedMenuForItems?.displayName || 'Menu Preview' }}</h3>
+              <MenuTree
+                v-for="item in selectedMenuTree"
+                :key="item.id"
+                :item="item"
+                :level="0"
+                :event-name="selectedEventForItems?.name || ''"
+                :menu-name="selectedMenuForItems?.name || ''"
+              />
+              <p v-if="!selectedMenuItems.length" class="muted">Drop library items here or add a new item.</p>
+            </div>
+
+            <div class="structure-panel">
+              <div class="structure-heading">
+                <strong>Structure</strong>
+                <small>Drag items here to change parents.</small>
+              </div>
           <div class="admin-tree">
             <div v-for="item in selectedMenuTree" :key="item.id" class="tree-root">
               <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
@@ -520,6 +607,8 @@
               </div>
             </div>
             <p v-if="!selectedMenuItems.length" class="muted">No items in this menu yet. Add from the library or create rows in Item Library.</p>
+          </div>
+            </div>
           </div>
         </div>
       </section>
@@ -586,9 +675,23 @@
               {{ item.label }}
             </li>
           </ul>
+          <div class="product-cart">
+            <div class="cart-title">
+              <i class="bi bi-bag-check"></i>
+              <strong>Products Before Payment</strong>
+            </div>
+            <label v-for="product in publishProducts" :key="product.key" class="cart-line" :class="{ selected: product.selected }">
+              <input v-model="productSelections[product.key]" type="checkbox" />
+              <i :class="product.icon"></i>
+              <span>
+                <strong>{{ product.label }}</strong>
+                <small>{{ product.description }}</small>
+              </span>
+            </label>
+          </div>
           <div class="payment-gate">
             <strong>Future payment gate</strong>
-            <p>Payment should happen here, after validation and before making the event active or enabling final QR mappings.</p>
+            <p>Payment should happen after this product tray and validation, before making the event active or enabling final QR mappings.</p>
           </div>
           <div class="actions">
             <button class="btn btn-outline-secondary" :disabled="!selectedEventForItems" @click="loadEventIntoForm(selectedEventForItems!)">Edit Selected Event</button>
@@ -914,6 +1017,12 @@ const menuForm = reactive<any>({ id: null, name: '', displayName: '', descriptio
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
+const productSelections = reactive<Record<string, boolean>>({
+  contactCard: false,
+  fullMenuQr: false,
+  itemQrSheet: true,
+  menuPreview: true,
+});
 const adhocForm = reactive({ parentId: 0, name: '', displayName: '', customMenuDisplayName: '', addToSourceMenu: false });
 const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', destination: 'source' as 'source' | 'adhoc' | 'both' });
 const quickItem = reactive({ parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
@@ -959,8 +1068,6 @@ const menuPreviewUrl = computed(() => selectedEventForItems.value && selectedMen
 const selectedEventMenus = computed(() => selectedEventIdForItems.value ? eventMenus(selectedEventIdForItems.value) : []);
 const selectedEventMenuIds = computed(() => selectedEventMenus.value.map((menu) => menu.id));
 const selectedEventItems = computed(() => items.value.filter((item) => selectedEventMenuIds.value.includes(item.menuId)));
-const activeEvents = computed(() => vendorEvents.value.filter((event) => event.status === 'active'));
-const draftEvents = computed(() => vendorEvents.value.filter((event) => event.status !== 'active'));
 const publishChecklist = computed(() => [
   { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
   { label: 'Event selected or saved', done: Boolean(selectedEventForItems.value || eventForm.id) },
@@ -970,20 +1077,43 @@ const publishChecklist = computed(() => [
 ]);
 const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
 const originUrl = computed(() => window.location.origin);
-const completedChecklistCount = computed(() => publishChecklist.value.filter((item) => item.done).length);
-const publishReadiness = computed(() => Math.round((completedChecklistCount.value / publishChecklist.value.length) * 100));
-const dashboardMetrics = computed(() => {
-  const values = [
-    { label: 'Active Events', value: activeEvents.value.length },
-    { label: 'Draft Events', value: draftEvents.value.length },
-    { label: 'Menus', value: vendorMenus.value.length },
-    { label: 'Items', value: vendorItems.value.length },
-    { label: 'QR Mappings', value: qrMappings.value.length },
-  ];
-  const max = Math.max(...values.map((item) => item.value), 1);
-  return values.map((item) => ({ ...item, width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }));
-});
-
+const vendorQrIsActive = computed(() => Boolean(
+  vendorForm.id
+  && vendorForm.hasContactPage
+  && vendorQrDraft.qrHash
+  && qrMappings.value.some((mapping) => mapping.qrHash === vendorQrDraft.qrHash && mapping.url === vendorQrDraft.url && mapping.isActive)
+));
+const publishProducts = computed(() => [
+  {
+    key: 'contactCard',
+    label: 'Vendor contact card',
+    description: selectedVendor.value?.hasContactPage ? 'Reusable vendor-card QR is active.' : 'Enable from Vendor management when needed.',
+    icon: 'bi bi-person-vcard',
+    selected: Boolean(productSelections.contactCard || selectedVendor.value?.hasContactPage),
+  },
+  {
+    key: 'fullMenuQr',
+    label: 'Full menu QR',
+    description: selectedMenuForItems.value ? `Create one QR for ${selectedMenuForItems.value.displayName}.` : 'Select a menu to offer a full-menu QR.',
+    icon: 'bi bi-qr-code',
+    selected: Boolean(productSelections.fullMenuQr || designerFullMenuQr.value),
+  },
+  {
+    key: 'itemQrSheet',
+    label: 'Item QR sheet',
+    description: 'Printable item-level targets for dish/counter QR plates.',
+    icon: 'bi bi-file-earmark-spreadsheet',
+    selected: Boolean(productSelections.itemQrSheet),
+  },
+  {
+    key: 'menuPreview',
+    label: 'Public preview',
+    description: 'Previewable menu before publish and QR printing.',
+    icon: 'bi bi-phone',
+    selected: Boolean(productSelections.menuPreview),
+  },
+]);
+const eventProducts = computed(() => publishProducts.value.filter((product) => product.key !== 'contactCard' || selectedVendor.value?.hasContactPage));
 const activeTitle = computed(() => {
   const contextual: Partial<Record<SectionKey, string>> = {
     vendorWorkspace: selectedVendor.value?.displayName || 'Vendor Workspace',
@@ -998,14 +1128,14 @@ const activeSubtitle = computed(() => {
   const copy: Record<SectionKey, string> = {
     home: 'Work from a selected vendor and move through setup without losing context.',
     vendors: 'Create vendors, activate contact cards, and generate vendor QR mappings.',
-    vendorWorkspace: 'Contextual vendor workspace with routes that can be copied for future vendor-facing use.',
+    vendorWorkspace: 'Manage vendor details, contact-card product, and reusable ownership context.',
     inventory: 'Manage reusable vendor items before they are assembled into menus.',
     analytics: 'Inspect where an item is used and leave space for scans, ratings, and first-added history.',
     designer: 'Assemble event-ready menus from existing items, adhoc items, and custom menu copies.',
     preview: 'Review the menu as guests will see it before QR mapping or publish.',
     publish: 'Validate event setup and keep the future payment checkpoint in one place.',
     events: 'Create events under the selected vendor. Events do not need standalone QR codes.',
-    eventWorkspace: 'Operate one event: menus, QR readiness, previews, publish state, and reference routes.',
+    eventWorkspace: 'Operate one event: menus, products, QR readiness, previews, and publish state.',
     qrSheet: 'Printable and testable menu/item QR target sheet for one event.',
     menus: 'Create source menus independently, then map them to events when needed.',
     items: 'Add source or adhoc items quickly in a table-first workflow.',
@@ -1013,15 +1143,6 @@ const activeSubtitle = computed(() => {
   };
   return copy[activeSection.value];
 });
-
-const dashboardSteps = computed(() => [
-  { key: 'vendors' as SectionKey, label: 'Vendor Setup', description: 'Create or reuse a vendor and generate contact QR codes.', status: `${vendors.value.length} vendors` },
-  { key: 'events' as SectionKey, label: 'Event Workspace', description: 'Open direct event workspaces for setup and validation.', status: `${vendorEvents.value.length} events` },
-  { key: 'inventory' as SectionKey, label: 'Item Library', description: 'Maintain the exhaustive reusable item list with filters and analytics.', status: `${vendorItems.value.length} items` },
-  { key: 'designer' as SectionKey, label: 'Menu Designer', description: 'Build nested menus visually from reusable items.', status: `${vendorMenus.value.length} menus` },
-  { key: 'publish' as SectionKey, label: 'Publish', description: 'Validate event setup. Future payment gate lives here.', status: canPublish.value ? 'Ready' : 'Needs checks' },
-  { key: 'qr' as SectionKey, label: 'QR Mapping', description: 'Create reusable mappings and render actual QR codes.', status: `${qrMappings.value.length} mappings` },
-]);
 
 const selectedEventMenuLinks = computed(() => eventMenuMap.value[linkForm.eventId] ?? []);
 const menusForQrEvent = computed(() => eventMenuMap.value[qrForm.eventId] ?? []);
@@ -1245,11 +1366,6 @@ function eventChecklist(event: EventRow) {
   ];
 }
 
-function eventReadiness(event: EventRow) {
-  const checks = eventChecklist(event);
-  return Math.round((checks.filter((item) => item.done).length / checks.length) * 100);
-}
-
 function eventQrTargets(event: EventRow) {
   const menusForEvent = eventMenus(event.id);
   return [
@@ -1392,9 +1508,14 @@ async function saveVendor() {
       ? await axios.put<Vendor>(adminUrl(`/vendors/${vendorForm.id}`), payload)
       : await axios.post<Vendor>(adminUrl('/vendors'), payload);
     selectedVendorId.value = data.id;
+    Object.assign(vendorForm, normalizeVendor(data));
+    await syncVendorQrDraft();
+    if (vendorForm.hasContactPage) {
+      await saveVendorQrMapping();
+    }
     await loadAll();
     editVendor(data);
-    setNotice('Vendor saved. You can now create a vendor QR on this page.');
+    setNotice(vendorForm.hasContactPage ? 'Vendor and contact-card QR saved' : 'Vendor saved');
   } catch (err) {
     setError(err);
   }
@@ -1412,13 +1533,20 @@ async function prepareVendorQr(vendorArg?: Vendor) {
 
 async function saveVendorQr() {
   try {
-    requireSlug(vendorQrDraft.qrHash, 'QR hash');
-    await axios.post(adminUrl('/qr-mappings'), { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true });
+    await saveVendorQrMapping();
     await loadAll();
     setNotice('Vendor QR mapping saved');
   } catch (err) {
     setError(err);
   }
+}
+
+async function saveVendorQrMapping() {
+  if (!vendorForm.id) throw new Error('Save the vendor before activating the QR');
+  if (!vendorForm.hasContactPage) throw new Error('Add the contact card product before activating this QR');
+  await syncVendorQrDraft();
+  requireSlug(vendorQrDraft.qrHash, 'QR hash');
+  await axios.post(adminUrl('/qr-mappings'), { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true });
 }
 
 function resetEvent() {
@@ -1962,6 +2090,18 @@ watch(selectedVendorId, (vendorId) => {
 
 watch([selectedMenuIdForItems, items], syncItemRows);
 
+watch(selectedVendor, (vendor) => {
+  productSelections.contactCard = Boolean(vendor?.hasContactPage);
+}, { immediate: true });
+
+watch(designerFullMenuQr, (value) => {
+  productSelections.fullMenuQr = value;
+});
+
+watch(() => productSelections.fullMenuQr, (value) => {
+  designerFullMenuQr.value = value;
+});
+
 watch(() => qrForm.qrHash, () => {
   qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
   if (qrPreview.shortQrUrl) QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
@@ -1984,12 +2124,13 @@ onMounted(async () => {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px 1fr;
-  background: #f6f3ee;
-  color: #15191e;
+  background: #f7f2ea;
+  color: #2f2a24;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .admin-sidebar {
-  background: #15191e;
+  background: #171512;
   color: #fff;
   padding: 24px;
   display: flex;
@@ -2010,7 +2151,7 @@ onMounted(async () => {
 .workspace-header h2,
 .panel h3,
 .adhoc-box h4 {
-  font-family: 'Urbanist', sans-serif;
+  font-family: inherit;
   margin: 0;
 }
 
@@ -2059,17 +2200,58 @@ onMounted(async () => {
 .workspace-header p,
 .hint {
   margin: 4px 0 0;
-  color: #6b7280;
+  color: #6f665c;
   font-size: 0.88rem;
 }
 
 .metric-card,
 .panel,
 .adhoc-box {
-  background: #fff;
-  border: 1px solid #e6dfd4;
-  border-radius: 8px;
+  background: #fffcf7;
+  border: 1px solid #e8dccb;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(42, 34, 24, 0.045);
   padding: 16px;
+}
+
+.btn,
+.form-control,
+.form-select {
+  border-radius: 5px;
+  font-family: inherit;
+}
+
+.btn {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: #b98f56;
+  border-color: #b98f56;
+  color: #171512;
+}
+
+.btn-primary:hover {
+  background: #9f743d;
+  border-color: #9f743d;
+  color: #fff;
+}
+
+.btn-outline-primary,
+.btn-outline-secondary {
+  border-color: #9f743d;
+  color: #8b5527;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover {
+  background: #9f743d;
+  border-color: #9f743d;
+  color: #fff;
 }
 
 .header-actions {
@@ -2120,7 +2302,7 @@ label {
   display: grid;
   gap: 6px;
   font-size: 0.82rem;
-  color: #374151;
+  color: #443a31;
   font-weight: 700;
 }
 
@@ -2156,7 +2338,7 @@ label {
 }
 
 .home-workspace {
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
 }
 
 .home-intro {
@@ -2167,7 +2349,7 @@ label {
 }
 
 .home-intro h3 {
-  font-family: 'Urbanist', sans-serif;
+  font-family: inherit;
   font-size: 1.2rem;
   font-weight: 900;
 }
@@ -2185,32 +2367,58 @@ label {
   align-self: start;
 }
 
-.summary-grid {
+.work-stack {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.summary-stat {
+.work-row,
+.icon-action {
   align-items: center;
-  border-bottom: 1px solid #eee6db;
+  background: #fbf6ef;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  color: #3a3026;
   display: flex;
+  gap: 10px;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 10px 12px;
+  text-decoration: none;
 }
 
-.summary-stat span {
-  color: #6b7280;
+.work-row:hover,
+.icon-action:hover {
+  border-color: #c49a63;
+  color: #171512;
 }
 
-.summary-stat strong {
-  color: #7a542a;
-  font-size: 1.2rem;
+.work-row i,
+.icon-action i {
+  color: #9f743d;
+}
+
+.work-row span {
+  flex: 1;
+}
+
+.icon-action {
+  justify-content: center;
+}
+
+.icon-action.primary {
+  background: #b98f56;
+  border-color: #b98f56;
+  color: #171512;
+}
+
+.icon-action.primary i {
+  color: #171512;
 }
 
 .soft-pill {
   background: #f7efe3;
   border: 1px solid #ead8bd;
-  border-radius: 999px;
+  border-radius: 5px;
   color: #7a542a;
   display: inline-flex;
   font-size: 0.78rem;
@@ -2233,7 +2441,7 @@ label {
     linear-gradient(135deg, rgba(255,255,255,0.98), rgba(250,247,241,0.94)),
     radial-gradient(circle at 15% 20%, rgba(189,148,90,0.18), transparent 32%);
   border: 1px solid #e4d7c5;
-  border-radius: 14px;
+  border-radius: 6px;
   box-shadow: 0 18px 45px rgba(21, 25, 30, 0.07);
   display: flex;
   justify-content: space-between;
@@ -2242,7 +2450,7 @@ label {
 }
 
 .hero-panel h3 {
-  font-family: 'Urbanist', sans-serif;
+  font-family: inherit;
   font-size: 1.35rem;
   font-weight: 900;
   margin: 0;
@@ -2265,50 +2473,6 @@ label {
 
 .analytics-panel {
   align-self: start;
-}
-
-.bar-list {
-  display: grid;
-  gap: 14px;
-}
-
-.bar-row,
-.readiness-meter {
-  display: grid;
-  gap: 8px;
-}
-
-.bar-row > div:first-child,
-.readiness-meter > div:first-child {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-
-.bar-row span,
-.readiness-meter span {
-  color: #6b7280;
-  font-size: 0.86rem;
-}
-
-.bar-track {
-  background: #f1ede6;
-  border-radius: 999px;
-  height: 10px;
-  overflow: hidden;
-}
-
-.bar-track span {
-  background: #bd945a;
-  border-radius: inherit;
-  display: block;
-  height: 100%;
-}
-
-.readiness-meter {
-  border-top: 1px solid #ece7de;
-  margin-top: 18px;
-  padding-top: 18px;
 }
 
 .metric-card span {
@@ -2463,7 +2627,7 @@ label {
 .quick-add-row {
   background: #fbfaf8;
   border: 1px solid #ece4d8;
-  border-radius: 8px;
+  border-radius: 5px;
   margin-bottom: 14px;
   padding: 14px;
 }
@@ -2507,7 +2671,7 @@ td a {
   margin-top: 12px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 5px;
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -2526,7 +2690,7 @@ td a {
 
 .vendor-modal {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 6px;
   box-shadow: 0 24px 70px rgba(21, 25, 30, 0.28);
   max-height: calc(100vh - 48px);
   max-width: 1120px;
@@ -2548,12 +2712,27 @@ td a {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 5px;
   color: #15191e;
   display: inline-flex;
   height: 36px;
   justify-content: center;
   width: 36px;
+}
+
+.icon-button.outlined {
+  border: 1px solid #d8bd8f;
+  color: #8b5527;
+  text-decoration: none;
+}
+
+.icon-button.outlined:hover {
+  background: #f7efe3;
+}
+
+.icon-button.small {
+  height: 28px;
+  width: 28px;
 }
 
 .icon-button:hover {
@@ -2573,12 +2752,12 @@ td a {
 .qr-pane {
   background: #fbfaf8;
   border: 1px solid #e6dfd4;
-  border-radius: 8px;
+  border-radius: 5px;
   padding: 14px;
 }
 
 .qr-pane h4 {
-  font-family: 'Urbanist', sans-serif;
+  font-family: inherit;
   font-size: 1rem;
   font-weight: 900;
   margin: 0 0 4px;
@@ -2589,6 +2768,61 @@ td a {
   display: grid;
   gap: 10px;
   justify-items: start;
+}
+
+.qr-status {
+  align-items: center;
+  background: #fff8ed;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  color: #8b5527;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 5px 8px;
+}
+
+.qr-status.active {
+  background: #eef7ec;
+  border-color: #b9d7b2;
+  color: #39681c;
+}
+
+.product-toggle {
+  align-items: center;
+  background: #fbf6ef;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto auto 1fr;
+  padding: 12px;
+}
+
+.product-toggle input {
+  margin: 0;
+}
+
+.product-toggle i {
+  color: #9f743d;
+  font-size: 1.2rem;
+}
+
+.product-toggle small,
+.product-card small,
+.cart-line small {
+  color: #74695d;
+  display: block;
+  font-weight: 500;
+}
+
+.product-toggle.selected,
+.product-card.selected,
+.cart-line.selected {
+  background: #fff8ed;
+  border-color: #c49a63;
 }
 
 .preview-box div {
@@ -2634,13 +2868,90 @@ td a {
   padding-top: 0;
 }
 
+.product-chip {
+  align-items: center;
+  background: #fbf6ef;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  color: #6d4c24;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.product-chip.selected {
+  background: #fff8ed;
+  border-color: #b98f56;
+  color: #171512;
+}
+
+.icon-label i,
+.product-chip i {
+  font-size: 0.95rem;
+}
+
 .payment-note,
 .payment-gate {
   background: #fff8ed;
   border: 1px solid #ead2ad;
-  border-radius: 8px;
+  border-radius: 5px;
   margin-top: 14px;
   padding: 10px;
+}
+
+.compact-gate {
+  margin-top: 0;
+}
+
+.product-grid,
+.product-cart {
+  display: grid;
+  gap: 10px;
+}
+
+.product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.product-card,
+.cart-line {
+  align-items: center;
+  background: #fbf6ef;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  padding: 12px;
+}
+
+.product-card > i,
+.cart-line > i,
+.cart-title i {
+  color: #9f743d;
+  font-size: 1.15rem;
+}
+
+.product-card > span {
+  color: #8b5527;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.product-cart {
+  margin-top: 16px;
+}
+
+.cart-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.cart-line {
+  cursor: pointer;
+  grid-template-columns: auto auto 1fr;
 }
 
 .library-list {
@@ -2654,7 +2965,7 @@ td a {
   align-items: center;
   background: #fbfaf8;
   border: 1px solid #e6dfd4;
-  border-radius: 8px;
+  border-radius: 5px;
   color: #15191e;
   display: flex;
   justify-content: space-between;
@@ -2674,11 +2985,73 @@ td a {
   min-height: 620px;
 }
 
+.studio-live-preview {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(320px, 430px) minmax(280px, 1fr);
+  margin-top: 12px;
+}
+
+.studio-phone {
+  border-width: 8px;
+  box-shadow: 0 18px 44px rgba(42, 34, 24, 0.13);
+  min-height: 560px;
+  width: 100%;
+}
+
+.structure-panel {
+  background: #fbf6ef;
+  border: 1px solid #e7d7c0;
+  border-radius: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.structure-heading {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.structure-heading small {
+  color: #74695d;
+}
+
+.admin-tree {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-tree-row {
+  align-items: center;
+  background: #fffcf7;
+  border: 1px solid #eadfce;
+  border-radius: 5px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 8px 10px;
+}
+
+.admin-tree-row.child {
+  margin-left: 22px;
+}
+
+.admin-tree-row span {
+  min-width: 0;
+}
+
+.tree-children-admin {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+
 .menu-preview-card,
 .phone-shell {
   background: #fffdfa;
   border: 1px solid #e6dfd4;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 18px;
 }
 
@@ -2691,7 +3064,7 @@ td a {
 
 .menu-group h4,
 .public-group h4 {
-  font-family: 'Urbanist', sans-serif;
+  font-family: inherit;
   font-size: 1rem;
   font-weight: 900;
   margin: 0 0 8px;
