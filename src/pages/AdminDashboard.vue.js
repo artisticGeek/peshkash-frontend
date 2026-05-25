@@ -2,7 +2,7 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import ReferenceRoutes from '../components/admin/ReferenceRoutes.vue';
+import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import WorkspaceSwitcher from '../components/admin/WorkspaceSwitcher.vue';
 import MenuTree from '../components/MenuTree.vue';
 import { API_BASE_URL } from '../config';
@@ -12,8 +12,7 @@ const sections = [
     { key: 'events', label: 'Events', icon: 'bi bi-calendar-event' },
     { key: 'inventory', label: 'Item Library', icon: 'bi bi-box-seam' },
     { key: 'designer', label: 'Menu Studio', icon: 'bi bi-layout-three-columns' },
-    { key: 'publish', label: 'Publish Assistant', icon: 'bi bi-send-check' },
-    { key: 'qr', label: 'QR Studio', icon: 'bi bi-qr-code' },
+    { key: 'qr', label: 'QR Bank', icon: 'bi bi-qr-code' },
 ];
 const route = useRoute();
 const router = useRouter();
@@ -41,7 +40,7 @@ function sectionFromPath(path) {
     if (/^\/dashboard\/events\/\d+\/qr-sheet/.test(path))
         return 'qrSheet';
     if (/^\/dashboard\/events\/\d+\/publish/.test(path))
-        return 'publish';
+        return 'eventWorkspace';
     if (/^\/dashboard\/events\/\d+/.test(path))
         return 'eventWorkspace';
     if (path === '/dashboard/events')
@@ -74,10 +73,18 @@ const selectedMenuIdForItems = ref(0);
 const selectedEventIdForItems = ref(0);
 const showItemContextPicker = ref(false);
 const showVendorEditor = ref(false);
+const showEventEditor = ref(false);
+const showQuickMenuItem = ref(false);
+const showArrangeDrawer = ref(false);
+const showQrEditor = ref(false);
+const showPublishDrawer = ref(false);
 const designerMenuName = ref('');
 const designerFullMenuQr = ref(false);
 const designerNotes = reactive({});
 const designerSearch = ref('');
+const designerDraftItems = ref([]);
+const designerOriginalParents = ref({});
+const designerTempId = ref(-1);
 const itemSearch = ref('');
 const itemMenuFilter = ref(0);
 const itemTypeFilter = ref('');
@@ -90,9 +97,16 @@ const events = ref([]);
 const menus = ref([]);
 const items = ref([]);
 const qrMappings = ref([]);
+const selectedQrMapping = ref(null);
 const previews = reactive({ menus: [], items: [] });
 const eventMenuMap = ref({});
 const vendorContactText = ref('');
+const vendorPhone = ref('');
+const vendorEmail = ref('');
+const vendorWebsite = ref('');
+const vendorMapUrl = ref('');
+const vendorBusinessDays = ref('');
+const vendorBusinessHours = ref('');
 const qrTargetType = ref('vendor');
 const qrPreview = reactive({ shortQrUrl: '', finalPublicUrl: '' });
 const qrCodeDataUrl = ref('');
@@ -104,8 +118,15 @@ const menuForm = reactive({ id: null, name: '', displayName: '', description: ''
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive({ qrHash: '', url: '', isActive: true, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
+const productSelections = reactive({
+    contactCard: false,
+    fullMenuQr: false,
+    itemQrSheet: true,
+    menuPreview: true,
+});
 const adhocForm = reactive({ parentId: 0, name: '', displayName: '', customMenuDisplayName: '', addToSourceMenu: false });
 const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', destination: 'source' });
+const quickItem = reactive({ parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
 const vendorMenus = computed(() => menus.value.filter((menu) => menu.vendorId === selectedVendorId.value));
@@ -114,6 +135,13 @@ const vendorItems = computed(() => items.value.filter((item) => vendorMenuIds.va
 const selectedMenuItems = computed(() => items.value.filter((item) => item.menuId === selectedMenuIdForItems.value));
 const selectedMenuForItems = computed(() => vendorMenus.value.find((menu) => menu.id === selectedMenuIdForItems.value));
 const selectedEventForItems = computed(() => vendorEvents.value.find((event) => event.id === selectedEventIdForItems.value));
+const selectedDesignerItems = computed(() => designerDraftItems.value);
+const selectedDesignerTree = computed(() => buildItemTree(selectedDesignerItems.value));
+const designerDirty = computed(() => {
+    const hasNewItems = designerDraftItems.value.some((item) => item.id < 0);
+    const hasParentChanges = designerDraftItems.value.some((item) => item.id > 0 && (item.parentId || undefined) !== designerOriginalParents.value[item.id]);
+    return hasNewItems || hasParentChanges;
+});
 const dirtyItemRows = computed(() => itemRows.value.filter((row) => row.isDirty || row.isNew));
 const miscMenu = computed(() => vendorMenus.value.find((menu) => menu.name === miscMenuSlug.value));
 const miscMenuSlug = computed(() => selectedVendor.value ? `${selectedVendor.value.name}-misc` : '');
@@ -148,8 +176,6 @@ const menuPreviewUrl = computed(() => selectedEventForItems.value && selectedMen
 const selectedEventMenus = computed(() => selectedEventIdForItems.value ? eventMenus(selectedEventIdForItems.value) : []);
 const selectedEventMenuIds = computed(() => selectedEventMenus.value.map((menu) => menu.id));
 const selectedEventItems = computed(() => items.value.filter((item) => selectedEventMenuIds.value.includes(item.menuId)));
-const activeEvents = computed(() => vendorEvents.value.filter((event) => event.status === 'active'));
-const draftEvents = computed(() => vendorEvents.value.filter((event) => event.status !== 'active'));
 const publishChecklist = computed(() => [
     { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
     { label: 'Event selected or saved', done: Boolean(selectedEventForItems.value || eventForm.id) },
@@ -159,25 +185,41 @@ const publishChecklist = computed(() => [
 ]);
 const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
 const originUrl = computed(() => window.location.origin);
-const completedChecklistCount = computed(() => publishChecklist.value.filter((item) => item.done).length);
-const publishReadiness = computed(() => Math.round((completedChecklistCount.value / publishChecklist.value.length) * 100));
-const dashboardMetrics = computed(() => {
-    const values = [
-        { label: 'Active Events', value: activeEvents.value.length },
-        { label: 'Draft Events', value: draftEvents.value.length },
-        { label: 'Menus', value: vendorMenus.value.length },
-        { label: 'Items', value: vendorItems.value.length },
-        { label: 'QR Mappings', value: qrMappings.value.length },
-    ];
-    const max = Math.max(...values.map((item) => item.value), 1);
-    return values.map((item) => ({ ...item, width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }));
-});
-const dashboardReferenceRoutes = computed(() => [
-    { label: 'Vendor Workspace', url: selectedVendor.value ? adminVendorRoute(selectedVendor.value) : '/dashboard/vendors' },
-    { label: 'Events', url: '/dashboard/events' },
-    { label: 'Menu Studio', url: selectedMenuForItems.value ? adminMenuStudioRoute(selectedMenuForItems.value) : '/dashboard/menus/studio' },
-    { label: 'QR Studio', url: '/dashboard/qr' },
+const vendorQrIsActive = computed(() => Boolean(vendorForm.id
+    && vendorForm.hasContactPage
+    && vendorQrDraft.qrHash
+    && qrMappings.value.some((mapping) => mapping.qrHash === vendorQrDraft.qrHash && mapping.url === vendorQrDraft.url && mapping.isActive)));
+const publishProducts = computed(() => [
+    {
+        key: 'contactCard',
+        label: 'Vendor contact card',
+        description: selectedVendor.value?.hasContactPage ? 'Reusable vendor-card QR is active.' : 'Enable from Vendor management when needed.',
+        icon: 'bi bi-person-vcard',
+        selected: Boolean(productSelections.contactCard || selectedVendor.value?.hasContactPage),
+    },
+    {
+        key: 'fullMenuQr',
+        label: 'Full menu QR',
+        description: selectedMenuForItems.value ? `Create one QR for ${selectedMenuForItems.value.displayName}.` : 'Select a menu to add a menu-level QR.',
+        icon: 'bi bi-qr-code',
+        selected: Boolean(productSelections.fullMenuQr || designerFullMenuQr.value),
+    },
+    {
+        key: 'itemQrSheet',
+        label: 'Item QR sheet',
+        description: 'Printable item-level targets for dish/counter QR plates.',
+        icon: 'bi bi-file-earmark-spreadsheet',
+        selected: Boolean(productSelections.itemQrSheet),
+    },
+    {
+        key: 'menuPreview',
+        label: 'Public preview',
+        description: 'Previewable menu before publish and QR printing.',
+        icon: 'bi bi-phone',
+        selected: Boolean(productSelections.menuPreview),
+    },
 ]);
+const eventProducts = computed(() => publishProducts.value.filter((product) => product.key !== 'contactCard' || selectedVendor.value?.hasContactPage));
 const activeTitle = computed(() => {
     const contextual = {
         vendorWorkspace: selectedVendor.value?.displayName || 'Vendor Workspace',
@@ -192,29 +234,21 @@ const activeSubtitle = computed(() => {
     const copy = {
         home: 'Work from a selected vendor and move through setup without losing context.',
         vendors: 'Create vendors, activate contact cards, and generate vendor QR mappings.',
-        vendorWorkspace: 'Contextual vendor workspace with routes that can be copied for future vendor-facing use.',
+        vendorWorkspace: 'Manage vendor details, contact-card product, and reusable ownership context.',
         inventory: 'Manage reusable vendor items before they are assembled into menus.',
         analytics: 'Inspect where an item is used and leave space for scans, ratings, and first-added history.',
         designer: 'Assemble event-ready menus from existing items, adhoc items, and custom menu copies.',
         preview: 'Review the menu as guests will see it before QR mapping or publish.',
-        publish: 'Validate event setup and keep the future payment checkpoint in one place.',
+        publish: 'Review event setup and activate when the menu and QR targets are ready.',
         events: 'Create events under the selected vendor. Events do not need standalone QR codes.',
-        eventWorkspace: 'Operate one event: menus, QR readiness, previews, publish state, and reference routes.',
+        eventWorkspace: 'Operate one event: menus, assets, QR readiness, previews, and publish state.',
         qrSheet: 'Printable and testable menu/item QR target sheet for one event.',
         menus: 'Create source menus independently, then map them to events when needed.',
         items: 'Add source or adhoc items quickly in a table-first workflow.',
-        qr: 'Create and remap reusable QR hashes for vendor cards, menus, or items.',
+        qr: 'Browse reusable QR assets, inspect current mappings, and remap when needed.',
     };
     return copy[activeSection.value];
 });
-const dashboardSteps = computed(() => [
-    { key: 'vendors', label: 'Vendor Setup', description: 'Create or reuse a vendor and generate contact QR codes.', status: `${vendors.value.length} vendors` },
-    { key: 'events', label: 'Event Workspace', description: 'Open direct event workspaces for setup and validation.', status: `${vendorEvents.value.length} events` },
-    { key: 'inventory', label: 'Item Library', description: 'Maintain the exhaustive reusable item list with filters and analytics.', status: `${vendorItems.value.length} items` },
-    { key: 'designer', label: 'Menu Designer', description: 'Build nested menus visually from reusable items.', status: `${vendorMenus.value.length} menus` },
-    { key: 'publish', label: 'Publish', description: 'Validate event setup. Future payment gate lives here.', status: canPublish.value ? 'Ready' : 'Needs checks' },
-    { key: 'qr', label: 'QR Mapping', description: 'Create reusable mappings and render actual QR codes.', status: `${qrMappings.value.length} mappings` },
-]);
 const selectedEventMenuLinks = computed(() => eventMenuMap.value[linkForm.eventId] ?? []);
 const menusForQrEvent = computed(() => eventMenuMap.value[qrForm.eventId] ?? []);
 const itemsForQrEvent = computed(() => {
@@ -301,6 +335,11 @@ function syncItemRows() {
     const existingRows = vendorItems.value.map(toItemRow);
     itemRows.value = [...newRows, ...existingRows];
 }
+function resetDesignerDraft() {
+    designerDraftItems.value = selectedMenuItems.value.map((item) => ({ ...item }));
+    designerOriginalParents.value = Object.fromEntries(selectedMenuItems.value.map((item) => [item.id, item.parentId]));
+    designerTempId.value = -1;
+}
 function normalizePreview(preview) {
     return {
         ...preview,
@@ -357,7 +396,7 @@ function vendorPublicUrl(vendor) {
 }
 function formatDate(value) {
     if (!value)
-        return 'Later';
+        return 'Not set';
     return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
 }
 function eventWindow(event) {
@@ -384,8 +423,15 @@ function isNavActive(section) {
         return true;
     return false;
 }
-function adminVendorRoute(vendor) {
-    return `/dashboard/vendors/${vendor.id}`;
+function goBack() {
+    if (activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet' || activeSection.value === 'publish')
+        router.push('/dashboard/events');
+    else if (activeSection.value === 'analytics')
+        router.push('/dashboard/items');
+    else if (activeSection.value === 'vendorWorkspace')
+        router.push('/dashboard/vendors');
+    else
+        router.push('/dashboard/home');
 }
 function adminEventRoute(event) {
     return `/dashboard/events/${event.id}`;
@@ -402,13 +448,11 @@ function adminMenuStudioRoute(menu) {
 function adminMenuPreviewRoute(menu) {
     return `/dashboard/menus/${menu.id}/preview`;
 }
-async function copyRoute(path) {
-    const url = path.startsWith('http') ? path : `${window.location.origin}${path}`;
-    await navigator.clipboard?.writeText(url);
-    setNotice('Route copied');
-}
 function menuItems(menuId) {
     return items.value.filter((item) => item.menuId === menuId);
+}
+function defaultItemMenuId() {
+    return itemMenuFilter.value || selectedMenuIdForItems.value || vendorMenus.value[0]?.id || 0;
 }
 function eventChecklist(event) {
     const linkedMenus = eventMenus(event.id);
@@ -420,17 +464,6 @@ function eventChecklist(event) {
         { label: 'At least one menu linked', done: linkedMenus.length > 0 },
         { label: 'Linked menus contain items', done: linkedItems.length > 0 },
         { label: 'QR sheet has targets', done: linkedMenus.length + linkedItems.length > 0 },
-    ];
-}
-function eventReadiness(event) {
-    const checks = eventChecklist(event);
-    return Math.round((checks.filter((item) => item.done).length / checks.length) * 100);
-}
-function eventReferenceRoutes(event) {
-    return [
-        { label: 'Event Workspace', url: adminEventRoute(event) },
-        { label: 'Publish Assistant', url: adminPublishRoute(event) },
-        { label: 'QR Sheet', url: adminQrSheetRoute(event) },
     ];
 }
 function eventQrTargets(event) {
@@ -470,6 +503,8 @@ function hydrateRouteContext() {
             selectedVendorId.value = event.vendorId;
             selectedEventIdForItems.value = event.id;
             editEvent(event);
+            if (route.path.endsWith('/publish'))
+                showPublishDrawer.value = true;
         }
     }
     if (menuId) {
@@ -525,6 +560,12 @@ function closeVendorEditor() {
 function resetVendor() {
     Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false });
     vendorContactText.value = '';
+    vendorPhone.value = '';
+    vendorEmail.value = '';
+    vendorWebsite.value = '';
+    vendorMapUrl.value = '';
+    vendorBusinessDays.value = '';
+    vendorBusinessHours.value = '';
     vendorQrDraft.qrHash = '';
     vendorQrDraft.url = '';
     vendorQrCodeDataUrl.value = '';
@@ -532,10 +573,33 @@ function resetVendor() {
 function editVendor(vendor) {
     Object.assign(vendorForm, vendor);
     vendorContactText.value = vendor.contact?.join(', ') ?? '';
+    hydrateVendorContactFields(vendor.contact ?? []);
+    hydrateVendorContactFields(vendor.contact ?? []);
     selectedVendorId.value = vendor.id;
     showVendorEditor.value = true;
     activeSection.value = 'vendors';
     syncVendorQrDraft();
+}
+function hydrateVendorContactFields(contact) {
+    const find = (label) => contact.find((line) => line.toLowerCase().startsWith(`${label.toLowerCase()}:`))?.split(':').slice(1).join(':').trim() || '';
+    vendorPhone.value = find('Phone');
+    vendorEmail.value = find('Email');
+    vendorWebsite.value = find('Website');
+    vendorMapUrl.value = find('Google Maps');
+    vendorBusinessDays.value = find('Business Days');
+    vendorBusinessHours.value = find('Business Hours');
+    if (!vendorPhone.value && !vendorEmail.value && contact.length)
+        vendorPhone.value = contact[0] || '';
+}
+function vendorContactPayload() {
+    return [
+        ['Phone', vendorPhone.value],
+        ['Email', vendorEmail.value],
+        ['Website', vendorWebsite.value],
+        ['Google Maps', vendorMapUrl.value],
+        ['Business Days', vendorBusinessDays.value],
+        ['Business Hours', vendorBusinessHours.value],
+    ].filter(([, value]) => String(value).trim()).map(([label, value]) => `${label}: ${String(value).trim()}`);
 }
 async function renderVendorQr() {
     vendorQrCodeDataUrl.value = vendorQrDraft.qrHash
@@ -559,14 +623,19 @@ async function saveVendor() {
     try {
         fillVendorSlug();
         requireSlug(vendorForm.name, 'Vendor slug');
-        const payload = { ...vendorForm, contact: vendorContactText.value.split(',').map((value) => value.trim()).filter(Boolean) };
+        const payload = { ...vendorForm, contact: vendorContactPayload() };
         const { data } = vendorForm.id
             ? await axios.put(adminUrl(`/vendors/${vendorForm.id}`), payload)
             : await axios.post(adminUrl('/vendors'), payload);
         selectedVendorId.value = data.id;
+        Object.assign(vendorForm, normalizeVendor(data));
+        await syncVendorQrDraft();
+        if (vendorForm.hasContactPage) {
+            await saveVendorQrMapping();
+        }
         await loadAll();
         editVendor(data);
-        setNotice('Vendor saved. You can now create a vendor QR on this page.');
+        setNotice(vendorForm.hasContactPage ? 'Vendor and contact-card QR saved' : 'Vendor saved');
     }
     catch (err) {
         setError(err);
@@ -584,14 +653,22 @@ async function prepareVendorQr(vendorArg) {
 }
 async function saveVendorQr() {
     try {
-        requireSlug(vendorQrDraft.qrHash, 'QR hash');
-        await axios.post(adminUrl('/qr-mappings'), { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true });
+        await saveVendorQrMapping();
         await loadAll();
         setNotice('Vendor QR mapping saved');
     }
     catch (err) {
         setError(err);
     }
+}
+async function saveVendorQrMapping() {
+    if (!vendorForm.id)
+        throw new Error('Save the vendor before activating the QR');
+    if (!vendorForm.hasContactPage)
+        throw new Error('Add the contact card product before activating this QR');
+    await syncVendorQrDraft();
+    requireSlug(vendorQrDraft.qrHash, 'QR hash');
+    await axios.post(adminUrl('/qr-mappings'), { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true });
 }
 function resetEvent() {
     Object.assign(eventForm, { id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
@@ -601,7 +678,20 @@ function editEvent(event) {
 }
 function startNewEvent() {
     resetEvent();
-    router.push('/dashboard/events/publish');
+    showEventEditor.value = true;
+}
+function editEventInline(event) {
+    editEvent(event);
+    showEventEditor.value = true;
+}
+function openPublishDrawer(event) {
+    selectedEventIdForItems.value = event.id;
+    editEvent(event);
+    showPublishDrawer.value = true;
+}
+function closeEventEditor() {
+    showEventEditor.value = false;
+    resetEvent();
 }
 async function saveEvent() {
     try {
@@ -616,7 +706,8 @@ async function saveEvent() {
         resetEvent();
         await loadAll();
         const savedEvent = data ? normalizeEvent(data) : events.value.find((event) => event.name === payload.name && event.vendorId === selectedVendorId.value);
-        if (savedEvent) {
+        showEventEditor.value = false;
+        if (savedEvent && activeSection.value !== 'events') {
             selectedEventIdForItems.value = savedEvent.id;
             router.push(adminEventRoute(savedEvent));
         }
@@ -788,7 +879,7 @@ async function saveAdhocItem() {
 function cloneItemPayload(item, menuId) {
     return {
         menuId,
-        name: item.name,
+        name: slugify(item.name || itemLabel(item)),
         displayName: itemLabel(item),
         description: item.description,
         ingredients: item.ingredients,
@@ -798,6 +889,79 @@ function cloneItemPayload(item, menuId) {
         isActive: item.isActive,
         parentId: null,
     };
+}
+function uniqueDraftSlug(base) {
+    const clean = slugify(base || 'item');
+    const existing = new Set([...items.value, ...designerDraftItems.value].map((item) => item.name));
+    if (!existing.has(clean))
+        return clean;
+    let index = 2;
+    while (existing.has(`${clean}-${index}`))
+        index += 1;
+    return `${clean}-${index}`;
+}
+async function createQuickMenuItem() {
+    try {
+        if (!selectedMenuIdForItems.value)
+            throw new Error('Select a working menu first');
+        if (!quickItem.displayName.trim())
+            throw new Error('Add an item name first');
+        quickItem.name = uniqueDraftSlug(quickItem.name || quickItem.displayName);
+        requireSlug(quickItem.name, 'Item slug');
+        designerDraftItems.value.push({
+            id: designerTempId.value--,
+            menuId: selectedMenuIdForItems.value,
+            name: quickItem.name,
+            displayName: quickItem.displayName,
+            type: quickItem.type || 'item',
+            enumType: quickItem.enumType,
+            parentId: quickItem.parentId || undefined,
+            isActive: true,
+        });
+        Object.assign(quickItem, { parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
+        showQuickMenuItem.value = false;
+    }
+    catch (err) {
+        setError(err);
+    }
+}
+async function saveDesignerChanges() {
+    try {
+        if (!selectedMenuIdForItems.value)
+            throw new Error('Select a working menu first');
+        const idMap = new Map();
+        const newItems = designerDraftItems.value.filter((item) => item.id < 0);
+        for (const item of newItems) {
+            const parentId = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
+            const { data } = await axios.post(adminUrl('/items'), {
+                menuId: selectedMenuIdForItems.value,
+                name: item.name,
+                displayName: item.displayName,
+                description: item.description,
+                ingredients: item.ingredients,
+                image: item.image,
+                type: item.type || 'item',
+                enumType: item.enumType,
+                parentId: parentId || null,
+                isActive: item.isActive,
+            });
+            idMap.set(item.id, Number(data.id));
+        }
+        for (const item of designerDraftItems.value.filter((row) => row.id > 0)) {
+            const nextParent = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
+            if ((nextParent || undefined) !== designerOriginalParents.value[item.id]) {
+                await axios.put(adminUrl(`/items/${item.id}`), { ...item, parentId: nextParent || null });
+            }
+        }
+        await loadAll();
+        syncItemRows();
+        resetDesignerDraft();
+        showArrangeDrawer.value = false;
+        setNotice('Menu saved');
+    }
+    catch (err) {
+        setError(err);
+    }
 }
 async function saveImportedItem() {
     try {
@@ -903,7 +1067,7 @@ async function dropOnMenuRoot() {
             await copyItemToDesignedMenu(item);
     }
     else if (draggedDesignedItemId.value) {
-        const item = items.value.find((row) => row.id === draggedDesignedItemId.value);
+        const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
         if (item)
             await setItemParent(item, null);
     }
@@ -918,7 +1082,7 @@ async function dropOnDesignedItem(target) {
         }
     }
     else if (draggedDesignedItemId.value && draggedDesignedItemId.value !== target.id) {
-        const item = items.value.find((row) => row.id === draggedDesignedItemId.value);
+        const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
         if (item)
             await setItemParent(item, target.id);
     }
@@ -926,17 +1090,12 @@ async function dropOnDesignedItem(target) {
     draggedDesignedItemId.value = null;
 }
 async function setItemParent(item, parentId) {
-    try {
-        if (parentId === item.id)
-            throw new Error('An item cannot be its own parent');
-        await axios.put(adminUrl(`/items/${item.id}`), { ...item, parentId });
-        await loadAll();
-        syncItemRows();
-        setNotice('Menu nesting updated');
-    }
-    catch (err) {
-        setError(err);
-    }
+    if (parentId === item.id)
+        return setError(new Error('An item cannot be its own parent'));
+    const draft = designerDraftItems.value.find((row) => row.id === item.id);
+    if (!draft)
+        return;
+    draft.parentId = parentId || undefined;
 }
 async function createDesignerMenu() {
     try {
@@ -982,17 +1141,17 @@ async function linkSelectedMenuToEvent() {
     }
 }
 async function copyItemToDesignedMenu(item, parentId = null) {
-    try {
-        if (!selectedMenuIdForItems.value)
-            throw new Error('Select a working menu first');
-        await axios.post(adminUrl('/items'), { ...cloneItemPayload(item, selectedMenuIdForItems.value), parentId });
-        await loadAll();
-        syncItemRows();
-        setNotice(`${itemLabel(item)} added to ${selectedMenuForItems.value?.displayName || 'menu'}`);
-    }
-    catch (err) {
-        setError(err);
-    }
+    if (!selectedMenuIdForItems.value)
+        return setError(new Error('Select a working menu first'));
+    const baseSlug = slugify(item.name || itemLabel(item));
+    designerDraftItems.value.push({
+        ...item,
+        id: designerTempId.value--,
+        menuId: selectedMenuIdForItems.value,
+        name: uniqueDraftSlug(baseSlug),
+        displayName: itemLabel(item),
+        parentId: parentId || undefined,
+    });
 }
 function loadEventIntoForm(event) {
     selectedEventIdForItems.value = event.id;
@@ -1005,7 +1164,8 @@ async function publishSelectedEvent() {
             throw new Error('Select an event to publish');
         await axios.put(adminUrl(`/events/${event.id}`), { ...event, status: 'active' });
         await loadAll();
-        setNotice('Event published. Payment gate will be inserted here before activation later.');
+        showPublishDrawer.value = false;
+        setNotice('Event published');
     }
     catch (err) {
         setError(err);
@@ -1075,6 +1235,44 @@ function editQr(mapping) {
     QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
     qrTargetType.value = 'custom';
 }
+function openQrEditor(mapping) {
+    selectedQrMapping.value = mapping || null;
+    showQrEditor.value = true;
+    if (mapping)
+        editQr(mapping);
+}
+function closeQrEditor() {
+    showQrEditor.value = false;
+    selectedQrMapping.value = null;
+}
+function qrTargetLabel(mapping) {
+    if (mapping.url?.startsWith('/vendor/')) {
+        const slug = mapping.url.split('/').pop();
+        return vendors.value.find((vendor) => vendor.name === slug)?.displayName || 'Vendor card';
+    }
+    if (mapping.url?.includes('/item/')) {
+        const slug = decodeURIComponent(mapping.url.split('/item/')[1] || '');
+        return items.value.find((item) => item.name === slug)?.displayName || 'Item target';
+    }
+    if (mapping.url?.startsWith('/event/'))
+        return 'Event menu';
+    return 'Custom path';
+}
+function qrVendorLabel(mapping) {
+    if (mapping.url?.startsWith('/vendor/')) {
+        const slug = mapping.url.split('/').pop();
+        return vendors.value.find((vendor) => vendor.name === slug)?.displayName || 'Vendor card';
+    }
+    const eventSlug = mapping.url?.split('/event/')[1]?.split('/')[0];
+    const event = events.value.find((row) => row.name === eventSlug);
+    return event?.vendor?.displayName || vendors.value.find((vendor) => vendor.id === event?.vendorId)?.displayName || 'Not linked';
+}
+function qrEventLabels(mapping) {
+    const eventSlug = mapping.url?.split('/event/')[1]?.split('/')[0];
+    if (!eventSlug)
+        return 'No event linked';
+    return events.value.find((event) => event.name === eventSlug)?.displayName || eventSlug;
+}
 async function saveQr() {
     try {
         requireSlug(qrForm.qrHash, 'QR hash');
@@ -1085,6 +1283,7 @@ async function saveQr() {
         qrPreview.finalPublicUrl = data.finalPublicUrl;
         qrCodeDataUrl.value = await QRCode.toDataURL(data.shortQrUrl, { margin: 1, width: 180 });
         await loadAll();
+        selectedQrMapping.value = data;
         setNotice('QR mapping saved');
     }
     catch (err) {
@@ -1106,6 +1305,16 @@ watch(selectedVendorId, (vendorId) => {
     syncItemRows();
 });
 watch([selectedMenuIdForItems, items], syncItemRows);
+watch([selectedMenuIdForItems, items], resetDesignerDraft);
+watch(selectedVendor, (vendor) => {
+    productSelections.contactCard = Boolean(vendor?.hasContactPage);
+}, { immediate: true });
+watch(designerFullMenuQr, (value) => {
+    productSelections.fullMenuQr = value;
+});
+watch(() => productSelections.fullMenuQr, (value) => {
+    designerFullMenuQr.value = value;
+});
 watch(() => qrForm.qrHash, () => {
     qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
     if (qrPreview.shortQrUrl)
@@ -1133,11 +1342,27 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['adhoc-box']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
 /** @type {__VLS_StyleScopedClasses['admin-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-workspace']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-intro']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['command-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['command-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['command-center']} */ ;
@@ -1145,12 +1370,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
-/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
 /** @type {__VLS_StyleScopedClasses['metric-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['metric-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['workflow-card']} */ ;
@@ -1162,21 +1381,49 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['context-picker']} */ ;
 /** @type {__VLS_StyleScopedClasses['sheet-search']} */ ;
 /** @type {__VLS_StyleScopedClasses['sheet-search']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-add-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['linked-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['qr-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-detail-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-detail-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['adhoc-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['designer-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['payment-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['payment-gate']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-cart']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['library-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['studio-phone']} */ ;
+/** @type {__VLS_StyleScopedClasses['structure-heading']} */ ;
+/** @type {__VLS_StyleScopedClasses['admin-tree-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['admin-tree-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['menu-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['public-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['designed-item']} */ ;
@@ -1197,8 +1444,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['designer-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['publish-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-workspace']} */ ;
 /** @type {__VLS_StyleScopedClasses['command-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-add-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
@@ -1208,8 +1457,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['vendor-modal-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-filters']} */ ;
 /** @type {__VLS_StyleScopedClasses['designer-ribbon']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['publish-context']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-switcher']} */ ;
@@ -1265,6 +1512,17 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "header-actions" },
 });
+if (__VLS_ctx.activeSection !== 'home') {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.goBack) },
+        ...{ class: "icon-button outlined" },
+        title: "Back",
+        'aria-label': "Back",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-arrow-left" },
+    });
+}
 /** @type {[typeof WorkspaceSwitcher, ]} */ ;
 // @ts-ignore
 const __VLS_4 = __VLS_asFunctionalComponent(WorkspaceSwitcher, new WorkspaceSwitcher({
@@ -1299,87 +1557,125 @@ if (__VLS_ctx.error) {
 }
 if (__VLS_ctx.activeSection === 'home') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "command-center" },
+        ...{ class: "home-workspace" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "hero-panel" },
+        ...{ class: "panel home-intro" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "eyebrow" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    (__VLS_ctx.selectedVendor?.displayName || 'Select a vendor');
+    (__VLS_ctx.selectedVendor?.displayName || 'Select a vendor to begin');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "hint" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "hero-actions" },
+        ...{ class: "home-actions" },
     });
     const __VLS_7 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
     // @ts-ignore
     const __VLS_8 = __VLS_asFunctionalComponent(__VLS_7, new __VLS_7({
-        ...{ class: "btn btn-primary" },
+        ...{ class: "icon-action primary" },
         to: "/dashboard/events",
+        title: "Open events",
     }));
     const __VLS_9 = __VLS_8({
-        ...{ class: "btn btn-primary" },
+        ...{ class: "icon-action primary" },
         to: "/dashboard/events",
+        title: "Open events",
     }, ...__VLS_functionalComponentArgsRest(__VLS_8));
     __VLS_10.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-calendar-event" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     var __VLS_10;
     const __VLS_11 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
     // @ts-ignore
     const __VLS_12 = __VLS_asFunctionalComponent(__VLS_11, new __VLS_11({
-        ...{ class: "btn btn-outline-primary" },
-        to: "/dashboard/menus/studio",
+        ...{ class: "icon-action" },
+        to: "/dashboard/items",
+        title: "Open item library",
     }));
     const __VLS_13 = __VLS_12({
-        ...{ class: "btn btn-outline-primary" },
-        to: "/dashboard/menus/studio",
+        ...{ class: "icon-action" },
+        to: "/dashboard/items",
+        title: "Open item library",
     }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     __VLS_14.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-box-seam" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     var __VLS_14;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "panel analytics-panel" },
+        ...{ class: "panel home-summary" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "bar-list" },
+        ...{ class: "work-stack" },
     });
-    for (const [metric] of __VLS_getVForSourceType((__VLS_ctx.dashboardMetrics))) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            key: (metric.label),
-            ...{ class: "bar-row" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-        (metric.label);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        (metric.value);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "bar-track" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ style: ({ width: metric.width }) },
-        });
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "readiness-meter" },
+    const __VLS_15 = {}.RouterLink;
+    /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
+    // @ts-ignore
+    const __VLS_16 = __VLS_asFunctionalComponent(__VLS_15, new __VLS_15({
+        ...{ class: "work-row" },
+        to: "/dashboard/vendors",
+    }));
+    const __VLS_17 = __VLS_16({
+        ...{ class: "work-row" },
+        to: "/dashboard/vendors",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_16));
+    __VLS_18.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-shop" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.completedChecklistCount);
-    (__VLS_ctx.publishChecklist.length);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "bar-track" },
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.vendors.length);
+    var __VLS_18;
+    const __VLS_19 = {}.RouterLink;
+    /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
+    // @ts-ignore
+    const __VLS_20 = __VLS_asFunctionalComponent(__VLS_19, new __VLS_19({
+        ...{ class: "work-row" },
+        to: "/dashboard/events",
+    }));
+    const __VLS_21 = __VLS_20({
+        ...{ class: "work-row" },
+        to: "/dashboard/events",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_20));
+    __VLS_22.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-calendar2-week" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ style: ({ width: `${__VLS_ctx.publishReadiness}%` }) },
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.vendorEvents.length);
+    var __VLS_22;
+    const __VLS_23 = {}.RouterLink;
+    /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
+    // @ts-ignore
+    const __VLS_24 = __VLS_asFunctionalComponent(__VLS_23, new __VLS_23({
+        ...{ class: "work-row" },
+        to: "/dashboard/qr",
+    }));
+    const __VLS_25 = __VLS_24({
+        ...{ class: "work-row" },
+        to: "/dashboard/qr",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+    __VLS_26.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-qr-code" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.qrMappings.length);
+    var __VLS_26;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel" },
     });
@@ -1391,19 +1687,26 @@ if (__VLS_ctx.activeSection === 'home') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "hint" },
     });
-    const __VLS_15 = {}.RouterLink;
+    const __VLS_27 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
     // @ts-ignore
-    const __VLS_16 = __VLS_asFunctionalComponent(__VLS_15, new __VLS_15({
-        ...{ class: "btn btn-outline-primary btn-sm" },
+    const __VLS_28 = __VLS_asFunctionalComponent(__VLS_27, new __VLS_27({
+        ...{ class: "icon-button outlined" },
         to: "/dashboard/events",
+        title: "All events",
+        'aria-label': "All events",
     }));
-    const __VLS_17 = __VLS_16({
-        ...{ class: "btn btn-outline-primary btn-sm" },
+    const __VLS_29 = __VLS_28({
+        ...{ class: "icon-button outlined" },
         to: "/dashboard/events",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_16));
-    __VLS_18.slots.default;
-    var __VLS_18;
+        title: "All events",
+        'aria-label': "All events",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
+    __VLS_30.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-arrow-right" },
+    });
+    var __VLS_30;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-wrap" },
     });
@@ -1426,28 +1729,40 @@ if (__VLS_ctx.activeSection === 'home') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (event.displayName);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        (__VLS_ctx.adminEventRoute(event));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "muted" },
+        });
+        (event.name);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (__VLS_ctx.eventWindow(event));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "soft-pill" },
+        });
+        (event.status);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (__VLS_ctx.eventMenus(event.id).length);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        (__VLS_ctx.eventReadiness(event));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        const __VLS_19 = {}.RouterLink;
+        const __VLS_31 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_20 = __VLS_asFunctionalComponent(__VLS_19, new __VLS_19({
-            ...{ class: "btn btn-outline-secondary btn-sm" },
+        const __VLS_32 = __VLS_asFunctionalComponent(__VLS_31, new __VLS_31({
+            ...{ class: "icon-button outlined" },
             to: (__VLS_ctx.adminEventRoute(event)),
+            title: "Open event",
+            'aria-label': "Open event",
         }));
-        const __VLS_21 = __VLS_20({
-            ...{ class: "btn btn-outline-secondary btn-sm" },
+        const __VLS_33 = __VLS_32({
+            ...{ class: "icon-button outlined" },
             to: (__VLS_ctx.adminEventRoute(event)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_20));
-        __VLS_22.slots.default;
-        var __VLS_22;
+            title: "Open event",
+            'aria-label': "Open event",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_32));
+        __VLS_34.slots.default;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-box-arrow-up-right" },
+        });
+        var __VLS_34;
     }
     if (!__VLS_ctx.vendorEvents.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
@@ -1456,27 +1771,6 @@ if (__VLS_ctx.activeSection === 'home') {
             ...{ class: "muted" },
         });
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "panel" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    /** @type {[typeof ReferenceRoutes, ]} */ ;
-    // @ts-ignore
-    const __VLS_23 = __VLS_asFunctionalComponent(ReferenceRoutes, new ReferenceRoutes({
-        ...{ 'onCopy': {} },
-        routes: (__VLS_ctx.dashboardReferenceRoutes),
-    }));
-    const __VLS_24 = __VLS_23({
-        ...{ 'onCopy': {} },
-        routes: (__VLS_ctx.dashboardReferenceRoutes),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_23));
-    let __VLS_26;
-    let __VLS_27;
-    let __VLS_28;
-    const __VLS_29 = {
-        onCopy: (__VLS_ctx.copyRoute)
-    };
-    var __VLS_25;
 }
 if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendorWorkspace') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1509,29 +1803,19 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
                 } },
             ...{ class: "btn btn-primary" },
         });
-        const __VLS_30 = {}.RouterLink;
+        const __VLS_35 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_31 = __VLS_asFunctionalComponent(__VLS_30, new __VLS_30({
+        const __VLS_36 = __VLS_asFunctionalComponent(__VLS_35, new __VLS_35({
             ...{ class: "btn btn-outline-primary" },
             to: "/dashboard/events",
         }));
-        const __VLS_32 = __VLS_31({
+        const __VLS_37 = __VLS_36({
             ...{ class: "btn btn-outline-primary" },
             to: "/dashboard/events",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_31));
-        __VLS_33.slots.default;
-        var __VLS_33;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendorWorkspace'))
-                        return;
-                    if (!(__VLS_ctx.activeSection === 'vendorWorkspace' && __VLS_ctx.selectedVendor))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminVendorRoute(__VLS_ctx.selectedVendor));
-                } },
-            ...{ class: "btn btn-outline-secondary" },
-        });
+        }, ...__VLS_functionalComponentArgsRest(__VLS_36));
+        __VLS_38.slots.default;
+        var __VLS_38;
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel" },
@@ -1654,14 +1938,42 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
             ...{ class: "hint wide" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
-            ...{ class: "wide" },
-        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
             ...{ class: "form-control" },
-            placeholder: "Phone, email, website",
+            placeholder: "+91 90000 00000",
         });
-        (__VLS_ctx.vendorContactText);
+        (__VLS_ctx.vendorPhone);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "events@example.com",
+        });
+        (__VLS_ctx.vendorEmail);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "https://example.com",
+        });
+        (__VLS_ctx.vendorWebsite);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "https://maps.google.com/...",
+        });
+        (__VLS_ctx.vendorMapUrl);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "Mon-Sun",
+        });
+        (__VLS_ctx.vendorBusinessDays);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "10:00 AM - 8:00 PM",
+        });
+        (__VLS_ctx.vendorBusinessHours);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
             ...{ class: "wide" },
         });
@@ -1678,13 +1990,20 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
             rows: "3",
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
-            ...{ class: "check" },
+            ...{ class: "product-toggle wide" },
+            ...{ class: ({ selected: __VLS_ctx.vendorForm.hasContactPage }) },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
             ...{ onChange: (__VLS_ctx.syncVendorQrDraft) },
             type: "checkbox",
         });
         (__VLS_ctx.vendorForm.hasContactPage);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-person-vcard" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "actions" },
         });
@@ -1693,10 +2012,17 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
             type: "submit",
             disabled: (__VLS_ctx.loading),
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-check2-circle" },
+        });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.closeVendorEditor) },
             ...{ class: "btn btn-outline-secondary" },
             type: "button",
+            'aria-label': "Cancel",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-x-lg" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "modal-pane qr-pane" },
@@ -1723,18 +2049,33 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "qr-preview-card" },
             });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "qr-status" },
+                ...{ class: ({ active: __VLS_ctx.vendorQrIsActive }) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                ...{ class: (__VLS_ctx.vendorQrIsActive ? 'bi bi-check-circle-fill' : 'bi bi-clock-history') },
+            });
+            (__VLS_ctx.vendorQrIsActive ? 'Active reusable QR' : 'Draft QR, activates on save');
             __VLS_asFunctionalElement(__VLS_intrinsicElements.img)({
                 ...{ class: "qr-image" },
                 src: (__VLS_ctx.vendorQrCodeDataUrl),
                 alt: "Vendor QR code",
             });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-                href: (`${__VLS_ctx.originUrl}/${__VLS_ctx.vendorQrDraft.qrHash}`),
-                target: "_blank",
-                rel: "noreferrer",
-            });
-            (__VLS_ctx.originUrl);
-            (__VLS_ctx.vendorQrDraft.qrHash);
+            if (__VLS_ctx.vendorQrIsActive) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+                    href: (`${__VLS_ctx.originUrl}/${__VLS_ctx.vendorQrDraft.qrHash}`),
+                    target: "_blank",
+                    rel: "noreferrer",
+                });
+                (__VLS_ctx.originUrl);
+                (__VLS_ctx.vendorQrDraft.qrHash);
+            }
+            else {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
+                (__VLS_ctx.originUrl);
+                (__VLS_ctx.vendorQrDraft.qrHash);
+            }
         }
         else {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1746,6 +2087,9 @@ if (__VLS_ctx.activeSection === 'vendors' || __VLS_ctx.activeSection === 'vendor
             ...{ class: "btn btn-primary btn-sm" },
             type: "button",
             disabled: (!__VLS_ctx.vendorForm.id || !__VLS_ctx.vendorForm.hasContactPage || !__VLS_ctx.vendorQrDraft.qrHash),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-qr-code" },
         });
     }
 }
@@ -1768,22 +2112,59 @@ if (__VLS_ctx.activeSection === 'events') {
         ...{ onClick: (__VLS_ctx.startNewEvent) },
         ...{ class: "btn btn-primary" },
     });
-    if (__VLS_ctx.selectedVendor) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "reference-strip" },
+    if (__VLS_ctx.showEventEditor) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
+            ...{ onSubmit: (__VLS_ctx.saveEvent) },
+            ...{ class: "inline-editor" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        (__VLS_ctx.adminVendorRoute(__VLS_ctx.selectedVendor));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-grid" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onBlur: (__VLS_ctx.fillEventSlug) },
+            ...{ class: "form-control" },
+            placeholder: "Sanya Reception",
+        });
+        (__VLS_ctx.eventForm.displayName);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "sanya-reception",
+        });
+        (__VLS_ctx.eventForm.name);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            type: "datetime-local",
+            ...{ class: "form-control" },
+        });
+        (__VLS_ctx.eventForm.startTime);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            type: "datetime-local",
+            ...{ class: "form-control" },
+        });
+        (__VLS_ctx.eventForm.endTime);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+            ...{ class: "wide" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
+            value: (__VLS_ctx.eventForm.eventDescription),
+            rows: "2",
+            ...{ class: "form-control" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "actions" },
+        });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'events'))
-                        return;
-                    if (!(__VLS_ctx.selectedVendor))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminVendorRoute(__VLS_ctx.selectedVendor));
-                } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
+            ...{ class: "btn btn-primary" },
+            type: "submit",
+            disabled: (!__VLS_ctx.selectedVendor),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.closeEventEditor) },
+            ...{ class: "btn btn-outline-secondary" },
+            type: "button",
         });
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1794,7 +2175,6 @@ if (__VLS_ctx.activeSection === 'events') {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
@@ -1820,28 +2200,46 @@ if (__VLS_ctx.activeSection === 'events') {
         (event.status);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         (__VLS_ctx.eventMenus(event.id).length);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        (__VLS_ctx.adminEventRoute(event));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        const __VLS_34 = {}.RouterLink;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
+            ...{ class: "row-actions" },
+        });
+        const __VLS_39 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_35 = __VLS_asFunctionalComponent(__VLS_34, new __VLS_34({
+        const __VLS_40 = __VLS_asFunctionalComponent(__VLS_39, new __VLS_39({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(event)),
         }));
-        const __VLS_36 = __VLS_35({
+        const __VLS_41 = __VLS_40({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(event)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_35));
-        __VLS_37.slots.default;
-        var __VLS_37;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+        __VLS_42.slots.default;
+        var __VLS_42;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'events'))
+                        return;
+                    __VLS_ctx.editEventInline(event);
+                } },
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'events'))
+                        return;
+                    __VLS_ctx.openPublishDrawer(event);
+                } },
+            ...{ class: "btn btn-outline-primary btn-sm" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-send-check" },
+        });
     }
     if (!__VLS_ctx.vendorEvents.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-            colspan: "6",
+            colspan: "5",
             ...{ class: "muted" },
         });
     }
@@ -1868,45 +2266,45 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "hero-actions" },
         });
-        const __VLS_38 = {}.RouterLink;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'eventWorkspace'))
+                        return;
+                    if (!(__VLS_ctx.selectedEventForItems))
+                        return;
+                    __VLS_ctx.openPublishDrawer(__VLS_ctx.selectedEventForItems);
+                } },
+            ...{ class: "btn btn-primary" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-send-check" },
+        });
+        const __VLS_43 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_39 = __VLS_asFunctionalComponent(__VLS_38, new __VLS_38({
-            ...{ class: "btn btn-primary" },
-            to: (__VLS_ctx.adminPublishRoute(__VLS_ctx.selectedEventForItems)),
-        }));
-        const __VLS_40 = __VLS_39({
-            ...{ class: "btn btn-primary" },
-            to: (__VLS_ctx.adminPublishRoute(__VLS_ctx.selectedEventForItems)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_39));
-        __VLS_41.slots.default;
-        var __VLS_41;
-        const __VLS_42 = {}.RouterLink;
-        /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
-        // @ts-ignore
-        const __VLS_43 = __VLS_asFunctionalComponent(__VLS_42, new __VLS_42({
+        const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({
             ...{ class: "btn btn-outline-primary" },
             to: (__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems)),
         }));
-        const __VLS_44 = __VLS_43({
+        const __VLS_45 = __VLS_44({
             ...{ class: "btn btn-outline-primary" },
             to: (__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_43));
-        __VLS_45.slots.default;
-        var __VLS_45;
-        const __VLS_46 = {}.RouterLink;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+        __VLS_46.slots.default;
+        var __VLS_46;
+        const __VLS_47 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_47 = __VLS_asFunctionalComponent(__VLS_46, new __VLS_46({
+        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({
             ...{ class: "btn btn-outline-secondary" },
             to: "/dashboard/menus/studio",
         }));
-        const __VLS_48 = __VLS_47({
+        const __VLS_49 = __VLS_48({
             ...{ class: "btn btn-outline-secondary" },
             to: "/dashboard/menus/studio",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_47));
-        __VLS_49.slots.default;
-        var __VLS_49;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        __VLS_50.slots.default;
+        var __VLS_50;
     }
     if (__VLS_ctx.selectedEventForItems) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1930,32 +2328,11 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
             (item.label);
         }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "bar-track" },
+            ...{ class: "payment-gate compact-gate" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ style: ({ width: `${__VLS_ctx.eventReadiness(__VLS_ctx.selectedEventForItems)}%` }) },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "panel" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-        /** @type {[typeof ReferenceRoutes, ]} */ ;
-        // @ts-ignore
-        const __VLS_50 = __VLS_asFunctionalComponent(ReferenceRoutes, new ReferenceRoutes({
-            ...{ 'onCopy': {} },
-            routes: (__VLS_ctx.eventReferenceRoutes(__VLS_ctx.selectedEventForItems)),
-        }));
-        const __VLS_51 = __VLS_50({
-            ...{ 'onCopy': {} },
-            routes: (__VLS_ctx.eventReferenceRoutes(__VLS_ctx.selectedEventForItems)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_50));
-        let __VLS_53;
-        let __VLS_54;
-        let __VLS_55;
-        const __VLS_56 = {
-            onCopy: (__VLS_ctx.copyRoute)
-        };
-        var __VLS_52;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+        (__VLS_ctx.eventProducts.filter((product) => product.selected).map((product) => product.label).join(', ') || 'No add-ons selected yet.');
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "panel wide-panel" },
         });
@@ -1967,19 +2344,19 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "hint" },
         });
-        const __VLS_57 = {}.RouterLink;
+        const __VLS_51 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_58 = __VLS_asFunctionalComponent(__VLS_57, new __VLS_57({
+        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({
             ...{ class: "btn btn-outline-primary btn-sm" },
             to: "/dashboard/menus/studio",
         }));
-        const __VLS_59 = __VLS_58({
+        const __VLS_53 = __VLS_52({
             ...{ class: "btn btn-outline-primary btn-sm" },
             to: "/dashboard/menus/studio",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
-        __VLS_60.slots.default;
-        var __VLS_60;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+        __VLS_54.slots.default;
+        var __VLS_54;
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "table-wrap" },
         });
@@ -1988,7 +2365,6 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
@@ -2013,27 +2389,24 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
                 rel: "noreferrer",
             });
             __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-            (__VLS_ctx.adminMenuStudioRoute(menu));
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            const __VLS_61 = {}.RouterLink;
+            const __VLS_55 = {}.RouterLink;
             /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
             // @ts-ignore
-            const __VLS_62 = __VLS_asFunctionalComponent(__VLS_61, new __VLS_61({
+            const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({
                 ...{ class: "btn btn-outline-secondary btn-sm" },
                 to: (__VLS_ctx.adminMenuStudioRoute(menu)),
             }));
-            const __VLS_63 = __VLS_62({
+            const __VLS_57 = __VLS_56({
                 ...{ class: "btn btn-outline-secondary btn-sm" },
                 to: (__VLS_ctx.adminMenuStudioRoute(menu)),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_62));
-            __VLS_64.slots.default;
-            var __VLS_64;
+            }, ...__VLS_functionalComponentArgsRest(__VLS_56));
+            __VLS_58.slots.default;
+            var __VLS_58;
         }
         if (!__VLS_ctx.selectedEventMenus.length) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-                colspan: "5",
+                colspan: "4",
                 ...{ class: "muted" },
             });
         }
@@ -2054,58 +2427,179 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
                         return;
                     if (!(__VLS_ctx.selectedEventForItems))
                         return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems));
+                    __VLS_ctx.openPublishDrawer(__VLS_ctx.selectedEventForItems);
                 } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
+            ...{ class: "btn btn-primary btn-sm" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-bag-check" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "table-wrap qr-sheet-table" },
+            ...{ class: "product-grid" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.table, __VLS_intrinsicElements.table)({
-            ...{ class: "table table-sm align-middle" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
-        for (const [target] of __VLS_getVForSourceType((__VLS_ctx.eventQrTargets(__VLS_ctx.selectedEventForItems)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
-                key: (target.key),
+        for (const [product] of __VLS_getVForSourceType((__VLS_ctx.eventProducts))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                key: (product.key),
+                ...{ class: "product-card" },
+                ...{ class: ({ selected: product.selected }) },
             });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                ...{ class: (product.icon) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-            (target.label);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "muted" },
-            });
-            (target.context);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            (target.type);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-            (target.path);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            (__VLS_ctx.eventTimerLabel(__VLS_ctx.selectedEventForItems));
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-                ...{ class: "btn btn-outline-secondary btn-sm" },
-                href: (__VLS_ctx.buildAbsolute(target.path)),
-                target: "_blank",
-                rel: "noreferrer",
-            });
+            (product.label);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+            (product.description);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            (product.selected ? 'Selected' : 'Available');
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "panel wide-panel" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "panel-heading" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
+        });
+        const __VLS_59 = {}.RouterLink;
+        /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
+        // @ts-ignore
+        const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+            to: (__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems)),
+        }));
+        const __VLS_61 = __VLS_60({
+            ...{ class: "btn btn-outline-secondary btn-sm" },
+            to: (__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems)),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+        __VLS_62.slots.default;
+        var __VLS_62;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "qr-preview-list" },
+        });
+        for (const [target] of __VLS_getVForSourceType((__VLS_ctx.eventQrTargets(__VLS_ctx.selectedEventForItems)))) {
+            /** @type {[typeof QrTargetPreview, ]} */ ;
+            // @ts-ignore
+            const __VLS_63 = __VLS_asFunctionalComponent(QrTargetPreview, new QrTargetPreview({
+                key: (target.key),
+                label: (target.label),
+                type: (target.type),
+                path: (target.path),
+            }));
+            const __VLS_64 = __VLS_63({
+                key: (target.key),
+                label: (target.label),
+                type: (target.type),
+                path: (target.path),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_63));
         }
         if (!__VLS_ctx.eventQrTargets(__VLS_ctx.selectedEventForItems).length) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-                colspan: "5",
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
                 ...{ class: "muted" },
             });
         }
+    }
+    if (__VLS_ctx.showPublishDrawer && __VLS_ctx.selectedEventForItems) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'eventWorkspace'))
+                        return;
+                    if (!(__VLS_ctx.showPublishDrawer && __VLS_ctx.selectedEventForItems))
+                        return;
+                    __VLS_ctx.showPublishDrawer = false;
+                } },
+            ...{ class: "drawer-backdrop" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
+            ...{ class: "side-drawer publish-drawer" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-title-row" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "eyebrow" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+        (__VLS_ctx.selectedEventForItems.displayName);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'eventWorkspace'))
+                        return;
+                    if (!(__VLS_ctx.showPublishDrawer && __VLS_ctx.selectedEventForItems))
+                        return;
+                    __VLS_ctx.showPublishDrawer = false;
+                } },
+            ...{ class: "icon-button" },
+            type: "button",
+            'aria-label': "Close",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-x-lg" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+            ...{ class: "checklist" },
+        });
+        for (const [item] of __VLS_getVForSourceType((__VLS_ctx.publishChecklist))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
+                key: (item.label),
+                ...{ class: ({ done: item.done }) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                ...{ class: (item.done ? 'bi bi-check-circle-fill' : 'bi bi-circle') },
+            });
+            (item.label);
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "product-cart" },
+        });
+        for (const [product] of __VLS_getVForSourceType((__VLS_ctx.publishProducts))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+                key: (product.key),
+                ...{ class: "cart-line" },
+                ...{ class: ({ selected: product.selected }) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+                type: "checkbox",
+            });
+            (__VLS_ctx.productSelections[product.key]);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                ...{ class: (product.icon) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+            (product.label);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+            (product.description);
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "drawer-actions" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'eventWorkspace'))
+                        return;
+                    if (!(__VLS_ctx.showPublishDrawer && __VLS_ctx.selectedEventForItems))
+                        return;
+                    __VLS_ctx.showPublishDrawer = false;
+                } },
+            ...{ class: "btn btn-outline-secondary" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.publishSelectedEvent) },
+            ...{ class: "btn btn-primary" },
+            disabled: (!__VLS_ctx.canPublish),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-send-check" },
+        });
     }
     else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2115,19 +2609,19 @@ if (__VLS_ctx.activeSection === 'eventWorkspace') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "hint" },
         });
-        const __VLS_65 = {}.RouterLink;
+        const __VLS_66 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_66 = __VLS_asFunctionalComponent(__VLS_65, new __VLS_65({
+        const __VLS_67 = __VLS_asFunctionalComponent(__VLS_66, new __VLS_66({
             ...{ class: "btn btn-primary" },
             to: "/dashboard/events",
         }));
-        const __VLS_67 = __VLS_66({
+        const __VLS_68 = __VLS_67({
             ...{ class: "btn btn-primary" },
             to: "/dashboard/events",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_66));
-        __VLS_68.slots.default;
-        var __VLS_68;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+        __VLS_69.slots.default;
+        var __VLS_69;
     }
 }
 if (__VLS_ctx.activeSection === 'menus') {
@@ -2321,9 +2815,9 @@ if (__VLS_ctx.activeSection === 'inventory') {
         ...{ class: "item-toolbar" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (() => __VLS_ctx.addDraftItemRow()) },
+        ...{ onClick: (() => __VLS_ctx.addDraftItemRow(__VLS_ctx.defaultItemMenuId())) },
         ...{ class: "btn btn-outline-primary" },
-        disabled: (!__VLS_ctx.selectedMenuIdForItems),
+        disabled: (!__VLS_ctx.vendorMenus.length),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.saveDirtyItemRows) },
@@ -2426,7 +2920,23 @@ if (__VLS_ctx.activeSection === 'inventory') {
         });
         (row.name);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        (__VLS_ctx.menuName(row.menuId));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+            ...{ onChange: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'inventory'))
+                        return;
+                    row.parentId = 0;
+                    __VLS_ctx.markItemDirty(row);
+                } },
+            value: (row.menuId),
+            ...{ class: "form-select" },
+        });
+        for (const [menu] of __VLS_getVForSourceType((__VLS_ctx.vendorMenus))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+                key: (menu.id),
+                value: (menu.id),
+            });
+            (menu.displayName);
+        }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
             ...{ onChange: (...[$event]) => {
@@ -2648,41 +3158,22 @@ if (__VLS_ctx.activeSection === 'designer') {
         placeholder: "Supreme Custom for Sanya",
     });
     (__VLS_ctx.designerMenuName);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
-        ...{ class: "check compact-check" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        type: "checkbox",
-    });
-    (__VLS_ctx.designerFullMenuQr);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.createDesignerMenu) },
-        ...{ class: "btn btn-primary" },
+        ...{ class: "btn btn-primary icon-label" },
         disabled: (!__VLS_ctx.designerMenuName || !__VLS_ctx.selectedVendor),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-plus-lg" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.linkSelectedMenuToEvent) },
-        ...{ class: "btn btn-outline-primary" },
+        ...{ class: "btn btn-outline-primary icon-label" },
         disabled: (!__VLS_ctx.selectedEventIdForItems || !__VLS_ctx.selectedMenuIdForItems),
     });
-    if (__VLS_ctx.selectedMenuForItems) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "reference-strip" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        (__VLS_ctx.adminMenuStudioRoute(__VLS_ctx.selectedMenuForItems));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'designer'))
-                        return;
-                    if (!(__VLS_ctx.selectedMenuForItems))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminMenuStudioRoute(__VLS_ctx.selectedMenuForItems));
-                } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
-        });
-    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-bag-plus" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "panel" },
     });
@@ -2748,107 +3239,318 @@ if (__VLS_ctx.activeSection === 'designer') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "hint" },
     });
-    const __VLS_69 = {}.RouterLink;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "actions slim-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.activeSection === 'designer'))
+                    return;
+                __VLS_ctx.showQuickMenuItem = !__VLS_ctx.showQuickMenuItem;
+            } },
+        ...{ class: "icon-button outlined" },
+        disabled: (!__VLS_ctx.selectedMenuForItems),
+        title: "Add item",
+        'aria-label': "Add item",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-plus-lg" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.activeSection === 'designer'))
+                    return;
+                __VLS_ctx.showArrangeDrawer = true;
+            } },
+        ...{ class: "icon-button outlined" },
+        disabled: (!__VLS_ctx.selectedMenuForItems),
+        title: "Arrange",
+        'aria-label': "Arrange",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-diagram-3" },
+    });
+    const __VLS_70 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
     // @ts-ignore
-    const __VLS_70 = __VLS_asFunctionalComponent(__VLS_69, new __VLS_69({
-        ...{ class: "btn btn-outline-secondary btn-sm" },
+    const __VLS_71 = __VLS_asFunctionalComponent(__VLS_70, new __VLS_70({
+        ...{ class: "icon-button outlined" },
         ...{ class: ({ disabled: !__VLS_ctx.selectedMenuForItems }) },
         to: (__VLS_ctx.selectedMenuForItems ? __VLS_ctx.adminMenuPreviewRoute(__VLS_ctx.selectedMenuForItems) : '/dashboard/menus/studio'),
+        title: "Open preview",
+        'aria-label': "Open preview",
     }));
-    const __VLS_71 = __VLS_70({
-        ...{ class: "btn btn-outline-secondary btn-sm" },
+    const __VLS_72 = __VLS_71({
+        ...{ class: "icon-button outlined" },
         ...{ class: ({ disabled: !__VLS_ctx.selectedMenuForItems }) },
         to: (__VLS_ctx.selectedMenuForItems ? __VLS_ctx.adminMenuPreviewRoute(__VLS_ctx.selectedMenuForItems) : '/dashboard/menus/studio'),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_70));
-    __VLS_72.slots.default;
-    var __VLS_72;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "admin-tree" },
+        title: "Open preview",
+        'aria-label': "Open preview",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+    __VLS_73.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-phone" },
     });
-    for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedMenuTree))) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    var __VLS_73;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.saveDesignerChanges) },
+        ...{ class: "btn btn-primary btn-sm" },
+        disabled: (!__VLS_ctx.designerDirty),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-check2-circle" },
+    });
+    if (__VLS_ctx.showQuickMenuItem && __VLS_ctx.selectedMenuForItems) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
+            ...{ onSubmit: (__VLS_ctx.createQuickMenuItem) },
+            ...{ class: "quick-add-row" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onBlur: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'designer'))
+                        return;
+                    if (!(__VLS_ctx.showQuickMenuItem && __VLS_ctx.selectedMenuForItems))
+                        return;
+                    __VLS_ctx.quickItem.name = __VLS_ctx.quickItem.name || __VLS_ctx.slugify(__VLS_ctx.quickItem.displayName);
+                } },
+            ...{ class: "form-control" },
+            placeholder: "Item or category name",
+        });
+        (__VLS_ctx.quickItem.displayName);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+            value: (__VLS_ctx.quickItem.parentId),
+            ...{ class: "form-select" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: (0),
+        });
+        for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedDesignerItems))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+                key: (item.id),
+                value: (item.id),
+            });
+            (__VLS_ctx.itemLabel(item));
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "type",
+        });
+        (__VLS_ctx.quickItem.type);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+            placeholder: "tag",
+        });
+        (__VLS_ctx.quickItem.enumType);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ class: "btn btn-primary" },
+            type: "submit",
+        });
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "studio-live-preview" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onDragover: () => { } },
+        ...{ onDrop: (__VLS_ctx.dropOnMenuRoot) },
+        ...{ class: "phone-shell studio-phone" },
+        ...{ class: ({ dirty: __VLS_ctx.designerDirty }) },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "eyebrow" },
+    });
+    (__VLS_ctx.selectedEventForItems?.displayName || 'Event Preview');
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    (__VLS_ctx.selectedMenuForItems?.displayName || 'Menu Preview');
+    for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedDesignerTree))) {
+        /** @type {[typeof MenuTree, ]} */ ;
+        // @ts-ignore
+        const __VLS_74 = __VLS_asFunctionalComponent(MenuTree, new MenuTree({
             key: (item.id),
-            ...{ class: "tree-root" },
+            item: (item),
+            level: (0),
+            eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
+            menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
+        }));
+        const __VLS_75 = __VLS_74({
+            key: (item.id),
+            item: (item),
+            level: (0),
+            eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
+            menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_74));
+    }
+    if (!__VLS_ctx.selectedDesignerItems.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "muted" },
+        });
+    }
+    if (__VLS_ctx.showArrangeDrawer) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'designer'))
+                        return;
+                    if (!(__VLS_ctx.showArrangeDrawer))
+                        return;
+                    __VLS_ctx.showArrangeDrawer = false;
+                } },
+            ...{ class: "drawer-backdrop" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
+            ...{ class: "side-drawer" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ onDragstart: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'designer'))
-                        return;
-                    __VLS_ctx.dragDesignedItem(item);
-                } },
-            ...{ onDragover: () => { } },
-            ...{ onDrop: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'designer'))
-                        return;
-                    __VLS_ctx.dropOnDesignedItem(item);
-                } },
-            ...{ class: "admin-tree-row" },
-            draggable: "true",
+            ...{ class: "modal-title-row" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
-            ...{ class: "bi bi-grip-vertical" },
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-        (__VLS_ctx.itemLabel(item));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-        (item.type || 'item');
-        (__VLS_ctx.childCount(item));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.activeSection === 'designer'))
                         return;
-                    __VLS_ctx.setItemParent(item, null);
+                    if (!(__VLS_ctx.showArrangeDrawer))
+                        return;
+                    __VLS_ctx.showArrangeDrawer = false;
                 } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
+            ...{ class: "icon-button" },
+            type: "button",
+            'aria-label': "Close",
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
-            value: (__VLS_ctx.designerNotes[item.id]),
-            ...{ class: "form-control admin-note" },
-            rows: "1",
-            placeholder: "Private admin/vendor note",
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-x-lg" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "tree-children-admin" },
+            ...{ class: "admin-tree" },
         });
-        for (const [child] of __VLS_getVForSourceType((item.subCategoryLineItems))) {
+        for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedDesignerTree))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                key: (item.id),
+                ...{ class: "tree-root" },
+            });
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ onDragstart: (...[$event]) => {
                         if (!(__VLS_ctx.activeSection === 'designer'))
                             return;
-                        __VLS_ctx.dragDesignedItem(child);
+                        if (!(__VLS_ctx.showArrangeDrawer))
+                            return;
+                        __VLS_ctx.dragDesignedItem(item);
                     } },
                 ...{ onDragover: () => { } },
                 ...{ onDrop: (...[$event]) => {
                         if (!(__VLS_ctx.activeSection === 'designer'))
                             return;
-                        __VLS_ctx.dropOnDesignedItem(child);
+                        if (!(__VLS_ctx.showArrangeDrawer))
+                            return;
+                        __VLS_ctx.dropOnDesignedItem(item);
                     } },
-                key: (child.id),
-                ...{ class: "admin-tree-row child" },
+                ...{ class: "admin-tree-row" },
                 draggable: "true",
             });
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
                 ...{ class: "bi bi-grip-vertical" },
             });
-            (__VLS_ctx.itemLabel(child));
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+            (__VLS_ctx.itemLabel(item));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-            (child.enumType || child.type);
+            (item.type || 'item');
+            (__VLS_ctx.childCount(item));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
                 ...{ onClick: (...[$event]) => {
                         if (!(__VLS_ctx.activeSection === 'designer'))
                             return;
-                        __VLS_ctx.setItemParent(child, item.id);
+                        if (!(__VLS_ctx.showArrangeDrawer))
+                            return;
+                        __VLS_ctx.setItemParent(item, null);
                     } },
-                ...{ class: "btn btn-outline-secondary btn-sm" },
+                ...{ class: "icon-button outlined small" },
+                title: "Move to root",
+                'aria-label': "Move to root",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                ...{ class: "bi bi-arrow-up-square" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
+                value: (__VLS_ctx.designerNotes[item.id]),
+                ...{ class: "form-control admin-note" },
+                rows: "1",
+                placeholder: "Private admin/vendor note",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "tree-children-admin" },
+            });
+            for (const [child] of __VLS_getVForSourceType((item.subCategoryLineItems))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ onDragstart: (...[$event]) => {
+                            if (!(__VLS_ctx.activeSection === 'designer'))
+                                return;
+                            if (!(__VLS_ctx.showArrangeDrawer))
+                                return;
+                            __VLS_ctx.dragDesignedItem(child);
+                        } },
+                    ...{ onDragover: () => { } },
+                    ...{ onDrop: (...[$event]) => {
+                            if (!(__VLS_ctx.activeSection === 'designer'))
+                                return;
+                            if (!(__VLS_ctx.showArrangeDrawer))
+                                return;
+                            __VLS_ctx.dropOnDesignedItem(child);
+                        } },
+                    key: (child.id),
+                    ...{ class: "admin-tree-row child" },
+                    draggable: "true",
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                    ...{ class: "bi bi-grip-vertical" },
+                });
+                (__VLS_ctx.itemLabel(child));
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+                (child.enumType || child.type);
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                    ...{ onClick: (...[$event]) => {
+                            if (!(__VLS_ctx.activeSection === 'designer'))
+                                return;
+                            if (!(__VLS_ctx.showArrangeDrawer))
+                                return;
+                            __VLS_ctx.setItemParent(child, item.id);
+                        } },
+                    ...{ class: "icon-button outlined small" },
+                    title: "Move under this item",
+                    'aria-label': "Move under this item",
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                    ...{ class: "bi bi-arrow-return-right" },
+                });
+            }
+        }
+        if (!__VLS_ctx.selectedDesignerItems.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "muted" },
             });
         }
-    }
-    if (!__VLS_ctx.selectedMenuItems.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "muted" },
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "drawer-actions" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'designer'))
+                        return;
+                    if (!(__VLS_ctx.showArrangeDrawer))
+                        return;
+                    __VLS_ctx.showArrangeDrawer = false;
+                } },
+            ...{ class: "btn btn-outline-secondary" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.saveDesignerChanges) },
+            ...{ class: "btn btn-primary" },
+            disabled: (!__VLS_ctx.designerDirty),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-check2-circle" },
         });
     }
 }
@@ -2908,7 +3610,7 @@ if (__VLS_ctx.activeSection === 'preview') {
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.activeSection === 'preview'))
                     return;
-                __VLS_ctx.activeSection = 'publish';
+                __VLS_ctx.openPublishDrawer(__VLS_ctx.selectedEventForItems);
             } },
         ...{ class: "btn btn-primary" },
         disabled: (!__VLS_ctx.selectedEventForItems || !__VLS_ctx.selectedMenuForItems),
@@ -2928,20 +3630,20 @@ if (__VLS_ctx.activeSection === 'preview') {
     for (const [item] of __VLS_getVForSourceType((__VLS_ctx.selectedMenuTree))) {
         /** @type {[typeof MenuTree, ]} */ ;
         // @ts-ignore
-        const __VLS_73 = __VLS_asFunctionalComponent(MenuTree, new MenuTree({
+        const __VLS_77 = __VLS_asFunctionalComponent(MenuTree, new MenuTree({
             key: (item.id),
             item: (item),
             level: (0),
             eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
             menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
         }));
-        const __VLS_74 = __VLS_73({
+        const __VLS_78 = __VLS_77({
             key: (item.id),
             item: (item),
             level: (0),
             eventName: (__VLS_ctx.selectedEventForItems?.name || ''),
             menuName: (__VLS_ctx.selectedMenuForItems?.name || ''),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_77));
     }
 }
 if (__VLS_ctx.activeSection === 'publish') {
@@ -2964,29 +3666,19 @@ if (__VLS_ctx.activeSection === 'publish') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "actions" },
         });
-        const __VLS_76 = {}.RouterLink;
+        const __VLS_80 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_77 = __VLS_asFunctionalComponent(__VLS_76, new __VLS_76({
+        const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(__VLS_ctx.selectedEventForItems)),
         }));
-        const __VLS_78 = __VLS_77({
+        const __VLS_82 = __VLS_81({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(__VLS_ctx.selectedEventForItems)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_77));
-        __VLS_79.slots.default;
-        var __VLS_79;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'publish'))
-                        return;
-                    if (!(__VLS_ctx.selectedEventForItems))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminPublishRoute(__VLS_ctx.selectedEventForItems));
-                } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
-        });
+        }, ...__VLS_functionalComponentArgsRest(__VLS_81));
+        __VLS_83.slots.default;
+        var __VLS_83;
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
         ...{ onSubmit: (__VLS_ctx.saveEvent) },
@@ -3056,6 +3748,35 @@ if (__VLS_ctx.activeSection === 'publish') {
             ...{ class: (item.done ? 'bi bi-check-circle-fill' : 'bi bi-circle') },
         });
         (item.label);
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "product-cart" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "cart-title" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "bi bi-bag-check" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    for (const [product] of __VLS_getVForSourceType((__VLS_ctx.publishProducts))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+            key: (product.key),
+            ...{ class: "cart-line" },
+            ...{ class: ({ selected: product.selected }) },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            type: "checkbox",
+        });
+        (__VLS_ctx.productSelections[product.key]);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: (product.icon) },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (product.label);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        (product.description);
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "payment-gate" },
@@ -3175,75 +3896,40 @@ if (__VLS_ctx.activeSection === 'qrSheet') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "actions" },
         });
-        const __VLS_80 = {}.RouterLink;
+        const __VLS_84 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
+        const __VLS_85 = __VLS_asFunctionalComponent(__VLS_84, new __VLS_84({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(__VLS_ctx.selectedEventForItems)),
         }));
-        const __VLS_82 = __VLS_81({
+        const __VLS_86 = __VLS_85({
             ...{ class: "btn btn-outline-secondary btn-sm" },
             to: (__VLS_ctx.adminEventRoute(__VLS_ctx.selectedEventForItems)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_81));
-        __VLS_83.slots.default;
-        var __VLS_83;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'qrSheet'))
-                        return;
-                    if (!(__VLS_ctx.selectedEventForItems))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems));
-                } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
-        });
+        }, ...__VLS_functionalComponentArgsRest(__VLS_85));
+        __VLS_87.slots.default;
+        var __VLS_87;
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "table-wrap qr-sheet-table" },
+            ...{ class: "qr-sheet-grid" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.table, __VLS_intrinsicElements.table)({
-            ...{ class: "table table-sm align-middle" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.thead, __VLS_intrinsicElements.thead)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.th, __VLS_intrinsicElements.th)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
         for (const [target] of __VLS_getVForSourceType((__VLS_ctx.eventQrTargets(__VLS_ctx.selectedEventForItems)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
+            /** @type {[typeof QrTargetPreview, ]} */ ;
+            // @ts-ignore
+            const __VLS_88 = __VLS_asFunctionalComponent(QrTargetPreview, new QrTargetPreview({
                 key: (target.key),
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-            (target.label);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "muted" },
-            });
-            (target.context);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            (target.type);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-                href: (__VLS_ctx.buildAbsolute(target.path)),
-                target: "_blank",
-                rel: "noreferrer",
-            });
-            (target.path);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "muted" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-            (__VLS_ctx.eventTimerLabel(__VLS_ctx.selectedEventForItems));
+                label: (target.label),
+                type: (target.type),
+                path: (target.path),
+            }));
+            const __VLS_89 = __VLS_88({
+                key: (target.key),
+                label: (target.label),
+                type: (target.type),
+                path: (target.path),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_88));
         }
         if (!__VLS_ctx.eventQrTargets(__VLS_ctx.selectedEventForItems).length) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({});
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({
-                colspan: "5",
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
                 ...{ class: "muted" },
             });
         }
@@ -3256,19 +3942,19 @@ if (__VLS_ctx.activeSection === 'qrSheet') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "hint" },
         });
-        const __VLS_84 = {}.RouterLink;
+        const __VLS_91 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.RouterLink, ]} */ ;
         // @ts-ignore
-        const __VLS_85 = __VLS_asFunctionalComponent(__VLS_84, new __VLS_84({
+        const __VLS_92 = __VLS_asFunctionalComponent(__VLS_91, new __VLS_91({
             ...{ class: "btn btn-primary" },
             to: "/dashboard/events",
         }));
-        const __VLS_86 = __VLS_85({
+        const __VLS_93 = __VLS_92({
             ...{ class: "btn btn-primary" },
             to: "/dashboard/events",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_85));
-        __VLS_87.slots.default;
-        var __VLS_87;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_92));
+        __VLS_94.slots.default;
+        var __VLS_94;
     }
 }
 if (__VLS_ctx.activeSection === 'items') {
@@ -3798,24 +4484,6 @@ if (__VLS_ctx.activeSection === 'qr') {
         ...{ class: "panel" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-    if (__VLS_ctx.selectedEventForItems) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "reference-strip" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-        (__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.activeSection === 'qr'))
-                        return;
-                    if (!(__VLS_ctx.selectedEventForItems))
-                        return;
-                    __VLS_ctx.copyRoute(__VLS_ctx.adminQrSheetRoute(__VLS_ctx.selectedEventForItems));
-                } },
-            ...{ class: "btn btn-outline-secondary btn-sm" },
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-wrap" },
     });
@@ -3832,36 +4500,178 @@ if (__VLS_ctx.activeSection === 'qr') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.tbody, __VLS_intrinsicElements.tbody)({});
     for (const [mapping] of __VLS_getVForSourceType((__VLS_ctx.qrMappings))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.tr, __VLS_intrinsicElements.tr)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.activeSection === 'qr'))
+                        return;
+                    __VLS_ctx.openQrEditor(mapping);
+                } },
             key: (mapping.id),
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
         (mapping.qrHash);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
+        (__VLS_ctx.qrTargetLabel(mapping));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.br)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "muted" },
+        });
         (mapping.url);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        (mapping.isActive ? 'Yes' : 'No');
+        (mapping.usageCount || 0);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-            href: (mapping.shortQrUrl),
-            target: "_blank",
-            rel: "noreferrer",
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
-            href: (mapping.finalPublicUrl),
-            target: "_blank",
-            rel: "noreferrer",
-        });
+        (__VLS_ctx.formatDate(mapping.updatedAt || mapping.createdAt));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.activeSection === 'qr'))
                         return;
-                    __VLS_ctx.editQr(mapping);
+                    __VLS_ctx.openQrEditor(mapping);
                 } },
-            ...{ class: "btn btn-outline-primary btn-sm" },
+            ...{ class: "icon-button outlined small" },
+            title: "Manage QR",
+            'aria-label': "Manage QR",
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-sliders" },
+        });
+    }
+    if (__VLS_ctx.showQrEditor) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ onClick: (__VLS_ctx.closeQrEditor) },
+            ...{ class: "modal-backdrop-custom" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
+            ...{ onSubmit: (__VLS_ctx.saveQr) },
+            ...{ class: "vendor-modal" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-title-row" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+        (__VLS_ctx.selectedQrMapping ? __VLS_ctx.selectedQrMapping.qrHash : 'New QR Asset');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "hint" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.closeQrEditor) },
+            ...{ class: "icon-button" },
+            type: "button",
+            'aria-label': "Close",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-x-lg" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "vendor-modal-grid" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-pane" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-grid" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+        });
+        (__VLS_ctx.qrForm.qrHash);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+            value: (__VLS_ctx.qrTargetType),
+            ...{ class: "form-select" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: "vendor",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: "menu",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: "item",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: "custom",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+            ...{ class: "wide" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ class: "form-control" },
+        });
+        (__VLS_ctx.qrForm.url);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+            ...{ class: "check" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            type: "checkbox",
+        });
+        (__VLS_ctx.qrForm.isActive);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "actions" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.buildQrDestination) },
+            ...{ class: "btn btn-outline-secondary" },
+            type: "button",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-magic" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ class: "btn btn-primary" },
+            type: "submit",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+            ...{ class: "bi bi-check2-circle" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "modal-pane qr-pane" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h4, __VLS_intrinsicElements.h4)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "qr-detail-list" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.selectedQrMapping ? __VLS_ctx.qrTargetLabel(__VLS_ctx.selectedQrMapping) : 'Draft');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.selectedQrMapping?.usageCount || 0);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.selectedQrMapping ? __VLS_ctx.qrVendorLabel(__VLS_ctx.selectedQrMapping) : __VLS_ctx.selectedVendor?.displayName || 'Not selected');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.selectedQrMapping ? __VLS_ctx.qrEventLabels(__VLS_ctx.selectedQrMapping) : 'No event linked');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.formatDate(__VLS_ctx.selectedQrMapping?.createdAt));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.formatDate(__VLS_ctx.selectedQrMapping?.updatedAt));
+        if (__VLS_ctx.qrCodeDataUrl) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.img)({
+                ...{ class: "qr-image" },
+                src: (__VLS_ctx.qrCodeDataUrl),
+                alt: "QR code",
+            });
+        }
+        if (__VLS_ctx.qrPreview.shortQrUrl) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+                href: (__VLS_ctx.qrPreview.shortQrUrl),
+                target: "_blank",
+                rel: "noreferrer",
+            });
+            (__VLS_ctx.qrPreview.shortQrUrl);
+        }
     }
 }
 /** @type {__VLS_StyleScopedClasses['admin-shell']} */ ;
@@ -3872,6 +4682,10 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['admin-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['workspace-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['header-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-arrow-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
@@ -3883,38 +4697,50 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['alert']} */ ;
 /** @type {__VLS_StyleScopedClasses['alert-danger']} */ ;
 /** @type {__VLS_StyleScopedClasses['py-2']} */ ;
-/** @type {__VLS_StyleScopedClasses['command-center']} */ ;
-/** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-workspace']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-intro']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['hero-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-calendar-event']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-box-seam']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['analytics-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
-/** @type {__VLS_StyleScopedClasses['readiness-meter']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['home-summary']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-shop']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-calendar2-week']} */ ;
+/** @type {__VLS_StyleScopedClasses['work-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-qr-code']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-arrow-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-table']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['muted']} */ ;
-/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['soft-pill']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-box-arrow-up-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
@@ -3924,8 +4750,6 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -3953,39 +4777,64 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['wide']} */ ;
-/** @type {__VLS_StyleScopedClasses['wide']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['wide']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['wide']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['check']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['wide']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-person-vcard']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-check2-circle']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-x-lg']} */ ;
 /** @type {__VLS_StyleScopedClasses['modal-pane']} */ ;
 /** @type {__VLS_StyleScopedClasses['qr-pane']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['qr-preview-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['qr-image']} */ ;
 /** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-qr-code']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['inline-editor']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['wide']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
@@ -3993,9 +4842,18 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['action-table']} */ ;
 /** @type {__VLS_StyleScopedClasses['badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-bg-light']} */ ;
+/** @type {__VLS_StyleScopedClasses['row-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-send-check']} */ ;
 /** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['event-workspace']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-panel']} */ ;
@@ -4005,6 +4863,8 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['hero-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-send-check']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
@@ -4014,8 +4874,8 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['checklist']} */ ;
 /** @type {__VLS_StyleScopedClasses['premium-checklist']} */ ;
 /** @type {__VLS_StyleScopedClasses['done']} */ ;
-/** @type {__VLS_StyleScopedClasses['bar-track']} */ ;
-/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['payment-gate']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-gate']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['wide-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
@@ -4037,18 +4897,43 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['qr-sheet-table']} */ ;
-/** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
-/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-bag-check']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['wide-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-preview-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['drawer-backdrop']} */ ;
+/** @type {__VLS_StyleScopedClasses['side-drawer']} */ ;
+/** @type {__VLS_StyleScopedClasses['publish-drawer']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-title-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-x-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['checklist']} */ ;
+/** @type {__VLS_StyleScopedClasses['done']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-cart']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['drawer-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-send-check']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['empty-state']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -4116,6 +5001,7 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['link-button']} */ ;
@@ -4148,16 +5034,16 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-select']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
-/** @type {__VLS_StyleScopedClasses['check']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-check']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-plus-lg']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-bag-plus']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-heading']} */ ;
@@ -4175,18 +5061,56 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['menu-render']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel-heading']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['slim-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-plus-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-diagram-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
 /** @type {__VLS_StyleScopedClasses['disabled']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-phone']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-check2-circle']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-add-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['studio-live-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['phone-shell']} */ ;
+/** @type {__VLS_StyleScopedClasses['studio-phone']} */ ;
+/** @type {__VLS_StyleScopedClasses['dirty']} */ ;
+/** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['drawer-backdrop']} */ ;
+/** @type {__VLS_StyleScopedClasses['side-drawer']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-title-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-x-lg']} */ ;
 /** @type {__VLS_StyleScopedClasses['admin-tree']} */ ;
 /** @type {__VLS_StyleScopedClasses['tree-root']} */ ;
 /** @type {__VLS_StyleScopedClasses['admin-tree-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi-grip-vertical']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['small']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-arrow-up-square']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['admin-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['tree-children-admin']} */ ;
@@ -4194,10 +5118,19 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['child']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi']} */ ;
 /** @type {__VLS_StyleScopedClasses['bi-grip-vertical']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['small']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-arrow-return-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['drawer-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-check2-circle']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
@@ -4221,9 +5154,6 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
@@ -4239,6 +5169,12 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['checklist']} */ ;
 /** @type {__VLS_StyleScopedClasses['done']} */ ;
+/** @type {__VLS_StyleScopedClasses['product-cart']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-bag-check']} */ ;
+/** @type {__VLS_StyleScopedClasses['cart-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
 /** @type {__VLS_StyleScopedClasses['payment-gate']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
@@ -4270,16 +5206,7 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['qr-sheet-table']} */ ;
-/** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
-/** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
-/** @type {__VLS_StyleScopedClasses['muted']} */ ;
-/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-sheet-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['muted']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['empty-state']} */ ;
@@ -4363,23 +5290,50 @@ if (__VLS_ctx.activeSection === 'qr') {
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['reference-strip']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['align-middle']} */ ;
+/** @type {__VLS_StyleScopedClasses['muted']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['outlined']} */ ;
+/** @type {__VLS_StyleScopedClasses['small']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-sliders']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-backdrop-custom']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-modal']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-title-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-x-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['vendor-modal-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-select']} */ ;
+/** @type {__VLS_StyleScopedClasses['wide']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-control']} */ ;
+/** @type {__VLS_StyleScopedClasses['check']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-outline-primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-outline-secondary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-magic']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi']} */ ;
+/** @type {__VLS_StyleScopedClasses['bi-check2-circle']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-pane']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-detail-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['qr-image']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             RouterLink: RouterLink,
-            ReferenceRoutes: ReferenceRoutes,
+            QrTargetPreview: QrTargetPreview,
             WorkspaceSwitcher: WorkspaceSwitcher,
             MenuTree: MenuTree,
             sections: sections,
@@ -4393,8 +5347,12 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedEventIdForItems: selectedEventIdForItems,
             showItemContextPicker: showItemContextPicker,
             showVendorEditor: showVendorEditor,
+            showEventEditor: showEventEditor,
+            showQuickMenuItem: showQuickMenuItem,
+            showArrangeDrawer: showArrangeDrawer,
+            showQrEditor: showQrEditor,
+            showPublishDrawer: showPublishDrawer,
             designerMenuName: designerMenuName,
-            designerFullMenuQr: designerFullMenuQr,
             designerNotes: designerNotes,
             designerSearch: designerSearch,
             itemSearch: itemSearch,
@@ -4403,7 +5361,13 @@ const __VLS_self = (await import('vue')).defineComponent({
             vendors: vendors,
             menus: menus,
             qrMappings: qrMappings,
-            vendorContactText: vendorContactText,
+            selectedQrMapping: selectedQrMapping,
+            vendorPhone: vendorPhone,
+            vendorEmail: vendorEmail,
+            vendorWebsite: vendorWebsite,
+            vendorMapUrl: vendorMapUrl,
+            vendorBusinessDays: vendorBusinessDays,
+            vendorBusinessHours: vendorBusinessHours,
             qrTargetType: qrTargetType,
             qrPreview: qrPreview,
             qrCodeDataUrl: qrCodeDataUrl,
@@ -4415,14 +5379,18 @@ const __VLS_self = (await import('vue')).defineComponent({
             linkForm: linkForm,
             qrForm: qrForm,
             vendorQrDraft: vendorQrDraft,
+            productSelections: productSelections,
             adhocForm: adhocForm,
             importForm: importForm,
+            quickItem: quickItem,
             selectedVendor: selectedVendor,
             vendorEvents: vendorEvents,
             vendorMenus: vendorMenus,
-            selectedMenuItems: selectedMenuItems,
             selectedMenuForItems: selectedMenuForItems,
             selectedEventForItems: selectedEventForItems,
+            selectedDesignerItems: selectedDesignerItems,
+            selectedDesignerTree: selectedDesignerTree,
+            designerDirty: designerDirty,
             dirtyItemRows: dirtyItemRows,
             miscMenuItems: miscMenuItems,
             importMenuItems: importMenuItems,
@@ -4438,32 +5406,29 @@ const __VLS_self = (await import('vue')).defineComponent({
             publishChecklist: publishChecklist,
             canPublish: canPublish,
             originUrl: originUrl,
-            completedChecklistCount: completedChecklistCount,
-            publishReadiness: publishReadiness,
-            dashboardMetrics: dashboardMetrics,
-            dashboardReferenceRoutes: dashboardReferenceRoutes,
+            vendorQrIsActive: vendorQrIsActive,
+            publishProducts: publishProducts,
+            eventProducts: eventProducts,
             activeTitle: activeTitle,
             activeSubtitle: activeSubtitle,
             selectedEventMenuLinks: selectedEventMenuLinks,
             menusForQrEvent: menusForQrEvent,
             itemsForQrEvent: itemsForQrEvent,
+            slugify: slugify,
             loadAll: loadAll,
             formatDate: formatDate,
             eventWindow: eventWindow,
             vendorEventCount: vendorEventCount,
             clearItemFilters: clearItemFilters,
             isNavActive: isNavActive,
-            adminVendorRoute: adminVendorRoute,
+            goBack: goBack,
             adminEventRoute: adminEventRoute,
-            adminPublishRoute: adminPublishRoute,
             adminQrSheetRoute: adminQrSheetRoute,
             adminMenuStudioRoute: adminMenuStudioRoute,
             adminMenuPreviewRoute: adminMenuPreviewRoute,
-            copyRoute: copyRoute,
             menuItems: menuItems,
+            defaultItemMenuId: defaultItemMenuId,
             eventChecklist: eventChecklist,
-            eventReadiness: eventReadiness,
-            eventReferenceRoutes: eventReferenceRoutes,
             eventQrTargets: eventQrTargets,
             fillVendorSlug: fillVendorSlug,
             fillEventSlug: fillEventSlug,
@@ -4478,6 +5443,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             saveVendor: saveVendor,
             saveVendorQr: saveVendorQr,
             startNewEvent: startNewEvent,
+            editEventInline: editEventInline,
+            openPublishDrawer: openPublishDrawer,
+            closeEventEditor: closeEventEditor,
             saveEvent: saveEvent,
             resetMenu: resetMenu,
             editMenu: editMenu,
@@ -4491,6 +5459,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             saveItemRow: saveItemRow,
             saveDirtyItemRows: saveDirtyItemRows,
             saveAdhocItem: saveAdhocItem,
+            createQuickMenuItem: createQuickMenuItem,
+            saveDesignerChanges: saveDesignerChanges,
             saveImportedItem: saveImportedItem,
             eventMenus: eventMenus,
             parentName: parentName,
@@ -4516,7 +5486,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             menuPreviews: menuPreviews,
             buildAbsolute: buildAbsolute,
             buildQrDestination: buildQrDestination,
-            editQr: editQr,
+            openQrEditor: openQrEditor,
+            closeQrEditor: closeQrEditor,
+            qrTargetLabel: qrTargetLabel,
+            qrVendorLabel: qrVendorLabel,
+            qrEventLabels: qrEventLabels,
             saveQr: saveQr,
         };
     },

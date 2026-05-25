@@ -53,6 +53,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
+    path: '/dashboard/events/publish',
+    name: 'DashboardEventPublish',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
     path: '/dashboard/events/:eventId',
     name: 'DashboardEventWorkspace',
     component: () => import('./pages/AdminDashboard.vue'),
@@ -99,11 +104,6 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/dashboard/menus/preview',
     name: 'DashboardMenuPreview',
-    component: () => import('./pages/AdminDashboard.vue'),
-  },
-  {
-    path: '/dashboard/events/publish',
-    name: 'DashboardEventPublish',
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
