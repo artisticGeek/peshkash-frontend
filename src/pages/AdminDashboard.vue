@@ -315,6 +315,7 @@
                     Save Vendor
                   </button>
                   <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor" aria-label="Cancel"><i class="bi bi-x-lg"></i></button>
+                  <button v-if="vendorForm.id" class="btn btn-outline-danger" type="button" title="Delete this vendor" @click="deleteVendorConfirmed"><i class="bi bi-trash"></i> Delete</button>
                 </div>
               </div>
 
@@ -405,6 +406,7 @@
                     <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink>
                     <button class="btn btn-outline-secondary btn-sm" @click="editEventInline(event)">Edit</button>
                     <RouterLink v-if="event.status !== 'active'" class="btn btn-outline-primary btn-sm" :to="adminPublishRoute(event)"><i class="bi bi-send-check"></i> Publish</RouterLink>
+                    <button v-if="event.status !== 'active'" class="btn btn-outline-danger btn-sm" title="Delete event" @click.stop="deleteEvent(event)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
                 <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events for this vendor yet.</td></tr>
@@ -445,7 +447,7 @@
             <button
               v-else
               class="btn btn-outline-danger"
-              @click="setEventStatusTo('inactive')"
+              @click="confirmDeactivate"
             ><i class="bi bi-stop-circle"></i> Deactivate</button>
             <RouterLink class="btn btn-outline-primary" :to="adminQrSheetRoute(selectedEventForItems)">QR Sheet</RouterLink>
             <RouterLink class="btn btn-outline-secondary" to="/dashboard/menus/studio">Menu Designer</RouterLink>
@@ -632,7 +634,10 @@
                   <td><span class="soft-pill" :class="menu.type === 'personalized' ? 'pill-accent' : ''">{{ menu.type || 'generic' }}</span></td>
                   <td>{{ menu.isActive ? 'Yes' : 'No' }}</td>
                   <td><a v-for="preview in menuPreviews(menu.id)" :key="preview.publicUrl" :href="preview.publicUrl" target="_blank" rel="noreferrer">{{ preview.eventName }}</a></td>
-                  <td><button class="btn btn-outline-primary btn-sm" @click="editMenu(menu)">Edit</button></td>
+                  <td class="row-actions">
+                    <button class="btn btn-outline-primary btn-sm" @click="editMenu(menu)">Edit</button>
+                    <button class="icon-button outlined small" title="Delete menu" @click="deleteMenu(menu)"><i class="bi bi-trash"></i></button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -690,9 +695,10 @@
                   </button>
                 </td>
                 <td><span class="muted">No scan data</span></td>
-                <td>
+                <td class="row-actions">
                   <button v-if="row.isDirty || row.isNew" class="btn btn-primary btn-sm" @click="saveItemRow(row)">Save</button>
                   <span v-else class="saved-state">Saved</span>
+                  <button class="icon-button outlined small" title="Delete item" @click="deleteItemRow(row)"><i class="bi bi-trash"></i></button>
                 </td>
               </tr>
               <tr v-if="!inventoryRows.length">
@@ -1003,9 +1009,10 @@
                 <td><input v-model.trim="row.type" class="form-control" placeholder="item" @input="markItemDirty(row)" /></td>
                 <td><input v-model.trim="row.enumType" class="form-control" placeholder="veg" @input="markItemDirty(row)" /></td>
                 <td><input v-model="row.isActive" type="checkbox" @change="markItemDirty(row)" /></td>
-                <td>
+                <td class="row-actions">
                   <button v-if="row.isDirty || row.isNew" class="btn btn-primary btn-sm" @click="saveItemRow(row)">Save</button>
                   <span v-else class="saved-state">Saved</span>
+                  <button class="icon-button outlined small" title="Delete item" @click="deleteItemRow(row)"><i class="bi bi-trash"></i></button>
                 </td>
               </tr>
             </tbody>
@@ -1113,6 +1120,7 @@
                 <div class="actions">
                   <button class="btn btn-outline-secondary" type="button" @click="buildQrDestination"><i class="bi bi-magic"></i> Generate</button>
                   <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Save QR</button>
+                  <button v-if="selectedQrMapping" class="btn btn-outline-danger" type="button" @click="deleteQrMappingConfirmed(selectedQrMapping!)"><i class="bi bi-trash"></i></button>
                 </div>
               </div>
               <div class="modal-pane qr-pane">
@@ -1282,7 +1290,7 @@ type Vendor = { id: number; name: string; displayName: string; description?: str
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
-type QrMapping = { id: number; qrHash: string; url: string; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; createdAt?: string; updatedAt?: string; expiresAt?: string };
+type QrMapping = { id: number; qrHash: string; url: string; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
 
@@ -1601,10 +1609,13 @@ const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', d
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
 const vendorMenus = computed(() => menus.value.filter((menu) => menu.vendorId === selectedVendorId.value));
-// QR mappings scoped to the selected vendor by inferring ownership from the URL pattern
+// QR mappings scoped to the selected vendor
 const vendorQrMappings = computed(() => {
   if (!selectedVendorId.value) return qrMappings.value;
   return qrMappings.value.filter((mapping) => {
+    // Prefer the explicit vendorId field the backend now returns
+    if (mapping.vendorId != null) return mapping.vendorId === selectedVendorId.value;
+    // Fallback: infer from URL pattern (for legacy rows with no vendorId stored)
     if (mapping.url?.startsWith('/vendor/')) {
       const slug = mapping.url.split('/').pop();
       return vendors.value.find((v) => v.name === slug)?.id === selectedVendorId.value;
@@ -2933,7 +2944,7 @@ async function saveQr() {
   try {
     requireSlug(qrForm.qrHash, 'QR hash');
     if (!qrForm.url) await buildQrDestination();
-    const payload = { qrHash: qrForm.qrHash, url: qrForm.url, isActive: qrForm.isActive };
+    const payload = { qrHash: qrForm.qrHash, url: qrForm.url, isActive: qrForm.isActive, vendorId: selectedVendorId.value || null };
     const existingId = selectedQrMapping.value?.id;
     const { data } = existingId
       ? await axios.put<QrMapping>(adminUrl(`/qr-mappings/${existingId}`), payload)
@@ -3002,6 +3013,77 @@ onMounted(async () => {
   hydrateRouteContext(); // must run last so URL params always win
   syncItemRows();
 });
+
+// ── Delete operations ─────────────────────────────────────────────────────────
+
+async function deleteEvent(event: EventRow) {
+  if (!window.confirm(`Delete "${event.displayName}"? This removes all linked menus and QR mappings for this event. This cannot be undone.`)) return;
+  try {
+    await axios.delete(adminUrl(`/events/${event.id}`));
+    await loadAll();
+    setNotice('Event deleted');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function deleteMenu(menu: MenuRow) {
+  if (!window.confirm(`Delete menu "${menu.displayName}" and all its items? This cannot be undone.`)) return;
+  try {
+    await axios.delete(adminUrl(`/menus/${menu.id}`));
+    await loadAll();
+    setNotice('Menu deleted');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function deleteItemRow(row: DraftItem) {
+  if (row.isNew) {
+    // Unsaved row — just remove from local list
+    itemRows.value = itemRows.value.filter((r) => r.clientId !== row.clientId);
+    return;
+  }
+  if (!window.confirm(`Delete item "${row.displayName}"? This cannot be undone.`)) return;
+  try {
+    await axios.delete(adminUrl(`/items/${row.id}`));
+    await loadAll();
+    setNotice('Item deleted');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function deleteQrMappingConfirmed(mapping: QrMapping) {
+  if (!window.confirm(`Delete QR mapping "${mapping.qrHash}"? The physical QR code will stop working.`)) return;
+  try {
+    await axios.delete(adminUrl(`/qr-mappings/${mapping.id}`));
+    closeQrEditor();
+    await loadAll();
+    setNotice('QR mapping deleted');
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function deleteVendorConfirmed() {
+  if (!vendorForm.id) return;
+  const name = vendorForm.displayName;
+  if (!window.confirm(`Permanently delete vendor "${name}"? All events and menus must be removed first.`)) return;
+  try {
+    await axios.delete(adminUrl(`/vendors/${vendorForm.id}`));
+    closeVendorEditor();
+    await loadAll();
+    setNotice(`Vendor "${name}" deleted`);
+  } catch (err) {
+    setError(err);
+  }
+}
+
+function confirmDeactivate() {
+  if (!window.confirm('Deactivate this event? All associated QRs will stop working immediately.')) return;
+  setEventStatusTo('inactive');
+}
 </script>
 
 <style scoped>
