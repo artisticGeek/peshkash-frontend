@@ -300,7 +300,7 @@ const socialActions = computed((): SocialAction[] => {
 
   // Directions — always last if a location is available
   if (mapQuery.value && mapsUrl.value !== '#') {
-    actions.push({ key: 'directions', icon: 'bi-compass', label: 'Directions', href: mapsUrl.value })
+    actions.push({ key: 'directions', icon: 'bi-sign-turn-right-fill', label: 'Directions', href: mapsUrl.value })
   }
 
   return actions
