@@ -19,8 +19,8 @@
       </nav>
     </aside>
 
-    <main class="admin-main">
-      <header class="workspace-header">
+    <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
+      <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
         <div>
           <h2>{{ activeTitle }}</h2>
           <p>{{ activeSubtitle }}</p>
@@ -58,6 +58,9 @@
             </RouterLink>
             <RouterLink class="icon-action" to="/dashboard/qr" title="Open QR Bank">
               <i class="bi bi-qr-code"></i><span>QR Bank</span>
+            </RouterLink>
+            <RouterLink class="icon-action" to="/dashboard/qr-templates" title="QR Print Templates">
+              <i class="bi bi-layout-wtf"></i><span>Print Templates</span>
             </RouterLink>
           </div>
         </div>
@@ -306,7 +309,7 @@
               <!-- RIGHT PANE: static QR -->
               <div class="modal-pane qr-pane">
                 <h4>Contact Card QR</h4>
-                <p class="hint">Preview stays inactive until the vendor is saved. Saving a contact-card product activates this mapping.</p>
+                <p class="hint">Saving the vendor with the contact card enabled automatically activates this mapping. Only use "Apply hash change" if you've edited the hash after printing physical QR codes.</p>
                 <div class="preview-box">
                   <div><span>Destination</span><code>{{ vendorQrDraft.url || 'Save a vendor to generate destination' }}</code></div>
                   <label>
@@ -340,12 +343,12 @@
 
                   <button
                     v-if="showActivateQr && !qrHashConfirmPending"
-                    class="btn btn-primary btn-sm"
+                    class="btn btn-outline-secondary btn-sm"
                     type="button"
                     @click="handleActivateQr"
                   >
-                    <i class="bi bi-qr-code"></i>
-                    Activate QR
+                    <i class="bi bi-arrow-repeat"></i>
+                    Apply hash change
                   </button>
                 </div>
               </div>
@@ -515,9 +518,11 @@
             <div class="panel-heading">
               <div>
                 <h3>QR Sheet Preview</h3>
-                <p class="hint">Printable/event-check view with scannable QR previews.</p>
+                <p class="hint">Quick-scan check. Hit "Print QRs" to generate print-ready PNGs with your template.</p>
               </div>
-              <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminQrSheetRoute(selectedEventForItems)">Open QR Sheet</RouterLink>
+              <RouterLink class="btn btn-primary btn-sm" :to="adminQrSheetRoute(selectedEventForItems)">
+                <i class="bi bi-printer"></i> Print QRs
+              </RouterLink>
             </div>
             <div class="qr-preview-list">
               <QrTargetPreview
@@ -901,34 +906,12 @@
       </section>
 
 
-      <section v-if="activeSection === 'qrSheet'" class="stack-layout">
-        <div v-if="selectedEventForItems" class="panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">QR Sheet</p>
-              <h3>{{ selectedEventForItems?.displayName }}</h3>
-              <p class="hint">Reference sheet for printing, click-testing, and event readiness checks.</p>
-            </div>
-            <div class="actions">
-              <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(selectedEventForItems)">Event Workspace</RouterLink>
-            </div>
-          </div>
-          <div class="qr-sheet-grid">
-            <QrTargetPreview
-              v-for="target in eventQrTargets(selectedEventForItems)"
-              :key="target.key"
-              :label="target.label"
-              :type="target.type"
-              :path="target.path"
-            />
-            <p v-if="!eventQrTargets(selectedEventForItems).length" class="muted">No menu or item targets yet.</p>
-          </div>
-        </div>
-        <div v-else class="panel empty-state">
-          <h3>QR sheet unavailable</h3>
-          <p class="hint">Open a specific event first.</p>
-          <RouterLink class="btn btn-primary" to="/dashboard/events">Back to Events</RouterLink>
-        </div>
+      <section v-if="activeSection === 'qrSheet'" class="ps-workspace">
+        <PrintStudio
+          :event="selectedEventForItems ?? null"
+          :targets="selectedEventForItems ? eventQrTargets(selectedEventForItems) : []"
+          :qr-mappings="qrMappings"
+        />
       </section>
 
       <section v-if="activeSection === 'items'" class="panel">
@@ -1113,6 +1096,10 @@
           </form>
         </div>
       </section>
+
+      <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
+        <QrTemplatePage :embedded="true" />
+      </section>
     </main>
   </div>
 
@@ -1223,9 +1210,11 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import WorkspaceSwitcher from '../components/admin/WorkspaceSwitcher.vue';
 import MenuTree from '../components/MenuTree.vue';
+import QrTemplatePage from './QrTemplatePage.vue';
+import PrintStudio from '../components/admin/PrintStudio.vue';
 import { API_BASE_URL } from '../config';
 
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'menus' | 'items';
+type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
@@ -1235,11 +1224,12 @@ type Preview = { eventId: number; menuId: number; itemId?: number; eventName: st
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
 
 const sections = [
-  { key: 'home',     label: 'Dashboard',      icon: 'bi bi-grid-1x2' },
-  { key: 'vendors',  label: 'Vendors',         icon: 'bi bi-building' },
-  { key: 'events',   label: 'Event Creator',   icon: 'bi bi-calendar-event' },
-  { key: 'designer', label: 'Menu Designer',   icon: 'bi bi-layout-three-columns' },
-  { key: 'qr',       label: 'QR Bank',         icon: 'bi bi-qr-code' },
+  { key: 'home',          label: 'Dashboard',        icon: 'bi bi-grid-1x2' },
+  { key: 'vendors',       label: 'Vendors',           icon: 'bi bi-building' },
+  { key: 'events',        label: 'Event Creator',     icon: 'bi bi-calendar-event' },
+  { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
+  { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
+  { key: 'qr-templates',  label: 'Print Templates',   icon: 'bi bi-layout-wtf' },
 ] as const;
 
 const route = useRoute();
@@ -1258,6 +1248,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   preview:        '/dashboard/menus/preview',
   publish:        '/dashboard/events',
   qr:             '/dashboard/qr',
+  'qr-templates': '/dashboard/qr-templates',
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
 };
@@ -1274,6 +1265,7 @@ function sectionFromPath(path: string): SectionKey {
   if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
+  if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
   if (path.startsWith('/dashboard/qr')) return 'qr';
   return 'home';
 }
@@ -1581,7 +1573,7 @@ const qrHashChanged = computed(() =>
   Boolean(vendorForm.id && savedQrHash.value && vendorQrDraft.qrHash && vendorQrDraft.qrHash !== savedQrHash.value)
 );
 const showActivateQr = computed(() =>
-  Boolean(vendorForm.id && vendorForm.hasContactPage && vendorQrDraft.qrHash && !vendorQrIsActive.value)
+  Boolean(vendorForm.id && vendorForm.hasContactPage && vendorQrDraft.qrHash && !vendorQrIsActive.value && qrHashChanged.value)
 );
 const publishProducts = computed(() => [
   {
@@ -1618,7 +1610,7 @@ const activeTitle = computed(() => {
   const contextual: Partial<Record<SectionKey, string>> = {
     vendorWorkspace: selectedVendor.value?.displayName || 'Vendor Workspace',
     eventWorkspace: selectedEventForItems.value?.displayName || 'Event Workspace',
-    qrSheet: 'Event QR Sheet',
+    qrSheet: selectedEventForItems.value ? `Print Studio — ${selectedEventForItems.value.displayName}` : 'Print Studio',
     analytics: selectedAnalyticsItem.value ? itemLabel(selectedAnalyticsItem.value) : 'Item Analytics',
     preview: selectedMenuForItems.value ? `${selectedMenuForItems.value.displayName} Preview` : 'Menu Preview',
   };
@@ -1636,10 +1628,11 @@ const activeSubtitle = computed(() => {
     publish:        'Review event setup and activate when ready.',
     events:         'Create and manage events. Select one to manage menus, QR targets, and publish.',
     eventWorkspace: 'Manage this event: link menus, preview, and publish.',
-    qrSheet:        'Printable QR sheet for this event.',
+    qrSheet:        'Pick a print template, preview every QR at 300 DPI, and download all as print-ready PNGs.',
     menus:          'Vendor menus — generic templates and personalized event copies.',
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
+    'qr-templates': 'Design print-ready layouts once — reuse them for every event or vendor.',
   };
   return copy[activeSection.value];
 });
@@ -2935,6 +2928,25 @@ onMounted(async () => {
 .admin-main {
   padding: 24px;
   overflow: auto;
+}
+
+.admin-main--canvas {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.qrt-embedded-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ps-workspace {
+  max-width: 1100px;
 }
 
 .workspace-header,

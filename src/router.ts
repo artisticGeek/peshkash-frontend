@@ -111,6 +111,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
+    path: '/dashboard/qr-templates',
+    name: 'DashboardQrTemplates',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
     path: '/admin',
     redirect: '/dashboard/home',
   },
