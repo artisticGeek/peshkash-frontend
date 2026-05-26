@@ -1632,6 +1632,7 @@ const activeSubtitle = computed(() => {
     menus:          'Vendor menus — generic templates and personalized event copies.',
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
+    'qr-templates': 'Design print-ready layouts once — reuse them for every event or vendor.',
   };
   return copy[activeSection.value];
 });
