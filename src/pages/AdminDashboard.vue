@@ -4,6 +4,9 @@
       <div class="sidebar-brand">
         <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
         <span class="sidebar-brand-name">Peshkash</span>
+        <button class="sidebar-brand-toggle" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
+          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
+        </button>
       </div>
       <nav>
         <RouterLink
@@ -30,9 +33,6 @@
     <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
       <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
         <div class="workspace-header-left">
-          <button class="hamburger-btn icon-button" type="button" title="Toggle navigation" aria-label="Toggle navigation" @click="toggleSidebar">
-            <i class="bi bi-list"></i>
-          </button>
           <button v-if="activeSection !== 'home'" class="icon-button outlined back-btn" title="Back" aria-label="Back" @click="goBack">
             <i class="bi bi-arrow-left"></i>
             <span v-if="activeSection === 'eventWorkspace' || activeSection === 'qrSheet'">Events</span>
@@ -744,13 +744,22 @@
           <div class="designer-ribbon">
             <label class="ribbon-group">
               Working Menu
-              <select v-model.number="selectedMenuIdForItems" class="form-select">
-                <option :value="0">Select menu</option>
-                <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                  {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
-                </option>
-              </select>
+              <div class="ribbon-menu-row">
+                <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
+                  <option :value="0">Select menu</option>
+                  <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
+                    {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                  </option>
+                </select>
+                <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
+              </div>
             </label>
+            <!-- Inline rename form -->
+            <div v-if="showMenuRenameInline" class="ribbon-rename-row">
+              <input v-model.trim="menuRenameValue" class="form-control" placeholder="New display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
+              <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i></button>
+              <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+            </div>
             <div class="ribbon-divider"></div>
             <label class="ribbon-group">
               New Menu
@@ -1133,6 +1142,13 @@
     </div>
   </teleport>
 
+  <!-- Mobile hamburger (fixed, outside any sticky container) -->
+  <teleport to="body">
+    <button v-if="!sidebarOverlayOpen" class="mobile-hamburger" type="button" aria-label="Open navigation" @click="sidebarOverlayOpen = true">
+      <i class="bi bi-list"></i>
+    </button>
+  </teleport>
+
   <!-- Mobile sidebar overlay backdrop -->
   <teleport to="body">
     <div v-if="sidebarOverlayOpen" class="sidebar-mobile-backdrop" @click="sidebarOverlayOpen = false"></div>
@@ -1351,6 +1367,8 @@ const draggedLibraryItemId = ref<number | null>(null);
 const draggedDesignedItemId = ref<number | null>(null);
 const showItemDrawer = ref(false);
 const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
+const showMenuRenameInline = ref(false);
+const menuRenameValue = ref('');
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -2277,6 +2295,23 @@ async function saveMenu() {
   }
 }
 
+function openMenuRename() {
+  if (!selectedMenuForItems.value) return;
+  menuRenameValue.value = selectedMenuForItems.value.displayName;
+  showMenuRenameInline.value = true;
+}
+
+async function saveMenuRename() {
+  if (!selectedMenuForItems.value || !menuRenameValue.value.trim()) return;
+  try {
+    const menu = selectedMenuForItems.value;
+    await axios.put(adminUrl(`/menus/${menu.id}`), { ...menu, displayName: menuRenameValue.value.trim(), vendorId: selectedVendorId.value });
+    showMenuRenameInline.value = false;
+    await loadAll();
+    setNotice('Menu renamed');
+  } catch (err) { setError(err); }
+}
+
 async function ensureMiscMenu() {
   if (!selectedVendor.value) throw new Error('Select a vendor first');
   const existing = miscMenu.value;
@@ -2668,15 +2703,8 @@ async function linkSelectedMenuToEvent() {
     await axios.post(adminUrl(`/events/${selectedEventIdForItems.value}/menus/${selectedMenuIdForItems.value}`), {
       displayName: selectedMenuForItems.value?.displayName,
     });
-    if (designerFullMenuQr.value) {
-      qrForm.qrHash = `${selectedEventForItems.value?.name}-${selectedMenuForItems.value?.name}`.toLowerCase();
-      qrTargetType.value = 'menu';
-      qrForm.eventId = selectedEventIdForItems.value;
-      qrForm.menuId = selectedMenuIdForItems.value;
-      await buildQrDestination();
-    }
     await loadAll();
-    setNotice('Menu linked to event');
+    setNotice('Menu linked to event — assign a QR hash in QR Bank if needed');
   } catch (err) {
     setError(err);
   }
@@ -2947,42 +2975,65 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0;
+  height: 100vh;
   overflow: hidden;
-  position: relative;
+  position: sticky;
+  top: 0;
   transition: width 0.22s ease;
   width: 260px;
+  flex-shrink: 0;
 }
 
 /* Brand row */
 .sidebar-brand {
   align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
   display: flex;
-  gap: 10px;
-  padding: 20px 16px 12px;
-  min-height: 64px;
   flex-shrink: 0;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 12px;
 }
 .sidebar-logo {
   color: #BD945A;
-  font-size: 1.3rem;
   flex-shrink: 0;
+  font-size: 1.15rem;
 }
 .sidebar-brand-name {
   color: rgba(255,255,255,0.9);
-  font-size: 0.9rem;
+  flex: 1;
+  font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  white-space: nowrap;
   transition: opacity 0.15s;
+  white-space: nowrap;
 }
+.sidebar-brand-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.95rem;
+  height: 30px;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0 6px;
+  transition: color 0.12s;
+  flex-shrink: 0;
+}
+.sidebar-brand-toggle:hover { color: rgba(255,255,255,0.8); }
 
 /* Nav */
 .admin-sidebar nav {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  padding: 4px 8px;
+  gap: 2px;
   overflow-y: auto;
+  padding: 4px 8px;
 }
 
 .nav-button {
@@ -3023,15 +3074,23 @@ onMounted(async () => {
 .sidebar-cycle-btn:hover { color: rgba(255,255,255,0.7); }
 
 /* Icons-only state */
-.admin-shell[data-sidebar="icons"] .admin-sidebar { width: 64px; }
+.admin-shell[data-sidebar="icons"] .admin-sidebar { width: 56px; }
 .admin-shell[data-sidebar="icons"] .nav-label,
 .admin-shell[data-sidebar="icons"] .sidebar-brand-name { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
-.admin-shell[data-sidebar="icons"] .nav-button { justify-content: center; padding: 12px 0; }
-.admin-shell[data-sidebar="icons"] .sidebar-brand { justify-content: center; }
+.admin-shell[data-sidebar="icons"] .nav-button { justify-content: center; padding: 10px 0; }
+.admin-shell[data-sidebar="icons"] .sidebar-brand { justify-content: center; gap: 0; }
+.admin-shell[data-sidebar="icons"] .sidebar-brand-toggle { display: none; }
 .admin-shell[data-sidebar="icons"] .sidebar-cycle-btn { justify-content: center; }
 
 /* Hidden state (desktop) */
-.admin-shell[data-sidebar="hidden"] .admin-sidebar { width: 0; padding: 0; }
+.admin-shell[data-sidebar="hidden"] .admin-sidebar { width: 0; }
+
+/* Overlay open: always show labels regardless of sidebar state */
+.admin-sidebar.sidebar--overlay-open .nav-label,
+.admin-sidebar.sidebar--overlay-open .sidebar-brand-name { opacity: 1; width: auto; overflow: visible; pointer-events: auto; }
+.admin-sidebar.sidebar--overlay-open .nav-button { justify-content: flex-start; padding: 10px; }
+.admin-sidebar.sidebar--overlay-open .sidebar-brand { justify-content: flex-start; gap: 10px; }
+.admin-sidebar.sidebar--overlay-open .sidebar-cycle-btn { justify-content: flex-start; }
 
 /* ── Workspace header ─────────────────────────────────────────────────────── */
 .workspace-header {
@@ -3080,10 +3139,23 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.hamburger-btn {
-  color: #5a4a32;
-  flex-shrink: 0;
-  font-size: 1.1rem;
+/* Mobile-only fixed hamburger (teleported to body, outside any sticky container) */
+.mobile-hamburger {
+  align-items: center;
+  background: #171512;
+  border: 0;
+  border-radius: 0 0 8px 0;
+  color: #BD945A;
+  cursor: pointer;
+  display: none;
+  font-size: 1.3rem;
+  height: 44px;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 44px;
+  z-index: 150;
 }
 
 /* ── Mobile sidebar overlay ─────────────────────────────────────────────── */
@@ -3109,6 +3181,12 @@ onMounted(async () => {
     grid-template-columns: 1fr !important;
   }
   .admin-main { padding: 12px 14px; }
+  .mobile-hamburger { display: flex; }
+  .workspace-header { padding: 8px 12px 8px 52px; } /* indent past fixed hamburger */
+  .workspace-title h2 { font-size: 1rem; }
+  .workspace-subtitle { display: none; }
+
+  /* Sidebar: fixed overlay on mobile */
   .admin-sidebar {
     height: 100vh;
     left: 0;
@@ -3120,12 +3198,10 @@ onMounted(async () => {
     z-index: 200;
   }
   .admin-sidebar.sidebar--overlay-open {
-    transform: translateX(0);
     box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+    transform: translateX(0);
   }
-  .workspace-header { padding: 8px 12px; }
-  .workspace-title h2 { font-size: 1rem; }
-  .workspace-subtitle { display: none; }
+  .sidebar-brand-toggle { display: none; }
 }
 
 /* Tablet */
@@ -4124,8 +4200,19 @@ td a {
 }
 
 .modal-pane-scroll {
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  padding: 16px 20px 24px;
+  padding: 16px 20px 0;
+}
+
+.modal-pane-scroll .actions:last-child {
+  background: #fffcf7;
+  border-top: 1px solid #ede8df;
+  margin-top: auto;
+  padding: 12px 0 16px;
+  position: sticky;
+  bottom: 0;
 }
 
 .qr-pane {
@@ -4287,9 +4374,26 @@ td a {
 
 .ribbon-divider {
   align-self: stretch;
-  width: 1px;
   background: #e5e7eb;
   margin: 0 4px;
+  width: 1px;
+}
+
+.ribbon-menu-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+.ribbon-menu-row .form-select { flex: 1; }
+
+.ribbon-rename-row {
+  align-items: center;
+  background: #f5f0e8;
+  border: 1px solid #e0d5c3;
+  border-radius: 6px;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
 }
 
 .pill-accent {
