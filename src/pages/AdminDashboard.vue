@@ -113,8 +113,8 @@
         <div v-if="activeSection === 'vendorWorkspace' && selectedVendor" class="hero-panel">
           <div>
             <p class="eyebrow">Vendor Workspace</p>
-            <h3>{{ selectedVendor.displayName }}</h3>
-            <p class="hint">{{ selectedVendor.description || 'Reusable owner context for events, menus, items, and QR cards.' }}</p>
+            <h3>{{ selectedVendor?.displayName }}</h3>
+            <p class="hint">{{ selectedVendor?.description || 'Reusable owner context for events, menus, items, and QR cards.' }}</p>
           </div>
           <div class="hero-actions">
             <button class="btn btn-primary" @click="openVendorEditor(selectedVendor)">Manage Vendor</button>
@@ -364,8 +364,8 @@
         <div v-if="selectedEventForItems" class="hero-panel event-hero">
           <div>
             <p class="eyebrow">Event Workspace</p>
-            <h3>{{ selectedEventForItems.displayName }}</h3>
-            <p class="hint">{{ eventWindow(selectedEventForItems) }}</p>
+            <h3>{{ selectedEventForItems?.displayName }}</h3>
+            <p class="hint">{{ eventWindow(selectedEventForItems!) }}</p>
             <div class="event-steps">
               <span class="step done"><i class="bi bi-check-circle-fill"></i> Details</span>
               <span class="step-arrow">→</span>
@@ -373,17 +373,17 @@
                 <i :class="selectedEventMenus.length > 0 ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i> Menu
               </span>
               <span class="step-arrow">→</span>
-              <span class="step" :class="{ done: selectedEventForItems.status === 'active' }">
-                <i :class="selectedEventForItems.status === 'active' ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i>
-                <span class="soft-pill" :class="selectedEventForItems.status === 'active' ? 'pill-live' : selectedEventForItems.status === 'inactive' ? 'pill-off' : ''">
-                  {{ selectedEventForItems.status }}
+              <span class="step" :class="{ done: selectedEventForItems?.status === 'active' }">
+                <i :class="selectedEventForItems?.status === 'active' ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i>
+                <span class="soft-pill" :class="selectedEventForItems?.status === 'active' ? 'pill-live' : selectedEventForItems?.status === 'inactive' ? 'pill-off' : ''">
+                  {{ selectedEventForItems?.status }}
                 </span>
               </span>
             </div>
           </div>
           <div class="hero-actions">
             <button
-              v-if="selectedEventForItems.status !== 'active'"
+              v-if="selectedEventForItems?.status !== 'active'"
               class="btn btn-primary"
               :disabled="!selectedEventMenus.length"
               @click="openPublishDrawer(selectedEventForItems)"
@@ -498,7 +498,7 @@
             <div class="modal-title-row">
               <div>
                 <p class="eyebrow">Publish</p>
-                <h3>{{ selectedEventForItems.displayName }}</h3>
+                <h3>{{ selectedEventForItems?.displayName }}</h3>
                 <p class="hint">Final review before activation.</p>
               </div>
               <button class="icon-button" type="button" aria-label="Close" @click="showPublishDrawer = false"><i class="bi bi-x-lg"></i></button>
@@ -867,7 +867,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">QR Sheet</p>
-              <h3>{{ selectedEventForItems.displayName }}</h3>
+              <h3>{{ selectedEventForItems?.displayName }}</h3>
               <p class="hint">Reference sheet for printing, click-testing, and event readiness checks.</p>
             </div>
             <div class="actions">
