@@ -23,9 +23,9 @@
         </RouterLink>
       </nav>
       <div class="sidebar-footer">
-        <button class="nav-button sidebar-cycle-btn" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : sidebarState === 'icons' ? 'Collapse sidebar' : 'Expand sidebar'" @click="cycleSidebar">
-          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : sidebarState === 'icons' ? 'bi bi-layout-sidebar-reverse' : 'bi bi-layout-sidebar'"></i>
-          <span class="nav-label">{{ sidebarState === 'full' ? 'Compact' : sidebarState === 'icons' ? 'Collapse' : 'Expand' }}</span>
+        <button class="nav-button sidebar-cycle-btn" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
+          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
+          <span class="nav-label">{{ sidebarState === 'full' ? 'Compact' : 'Expand' }}</span>
         </button>
       </div>
     </aside>
@@ -145,12 +145,12 @@
             <button class="btn btn-primary" @click="openVendorEditor()">New Vendor</button>
           </div>
           <div class="table-wrap">
-            <table class="table table-sm align-middle action-table">
+            <table class="table table-sm align-middle action-table vendors-table">
               <thead><tr><th>Vendor</th><th>Description</th><th>Created</th><th>Events</th><th>Contact Card</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)">
+                <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)" :title="`Set working vendor to ${vendor.displayName}`">
                   <td><strong>{{ vendor.displayName }}</strong><br /><code>{{ vendor.name }}</code></td>
-                  <td>{{ vendor.description || 'No description' }}</td>
+                  <td class="vendor-desc">{{ vendor.description || '—' }}</td>
                   <td>{{ formatDate(vendor.createdAt) }}</td>
                   <td>{{ vendorEventCount(vendor.id) }}</td>
                   <td>{{ vendor.hasContactPage ? 'Active' : 'Inactive' }}</td>
@@ -467,7 +467,7 @@
             </div>
           </div>
 
-          <div class="panel wide-panel">
+          <div class="panel">
             <div class="panel-heading">
               <div>
                 <h3>Linked Menus</h3>
@@ -1063,7 +1063,7 @@
             <label class="wide">Destination URL<input v-model.trim="qrForm.url" class="form-control" placeholder="/vendor/radisson-gurgaon" /></label>
             <label class="check"><input v-model="qrForm.isActive" type="checkbox" /> Active</label>
           </div>
-          <div class="preview-box" v-if="qrPreview.shortQrUrl || qrPreview.finalPublicUrl">
+          <div class="preview-box" v-if="(qrPreview.shortQrUrl || qrPreview.finalPublicUrl) && !showQrEditor">
             <div><span>Short QR URL</span><a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer">{{ qrPreview.shortQrUrl }}</a></div>
             <div><span>Final URL</span><a :href="qrPreview.finalPublicUrl" target="_blank" rel="noreferrer">{{ qrPreview.finalPublicUrl }}</a></div>
             <img v-if="qrCodeDataUrl" class="qr-image" :src="qrCodeDataUrl" alt="QR code" />
@@ -1080,13 +1080,14 @@
             <table class="table table-sm align-middle">
               <thead><tr><th>QR</th><th>Target</th><th>Scans</th><th>Updated</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="mapping in qrMappings" :key="mapping.id" @click="openQrEditor(mapping)">
+                <tr v-for="mapping in vendorQrMappings" :key="mapping.id" @click="openQrEditor(mapping)">
                   <td><code>{{ mapping.qrHash }}</code></td>
                   <td>{{ qrTargetLabel(mapping) }}<br /><span class="muted">{{ mapping.url }}</span></td>
                   <td>{{ mapping.usageCount || 0 }}</td>
                   <td>{{ formatDate(mapping.updatedAt || mapping.createdAt) }}</td>
                   <td><button class="icon-button outlined small" title="Manage QR" aria-label="Manage QR" @click.stop="openQrEditor(mapping)"><i class="bi bi-sliders"></i></button></td>
                 </tr>
+                <tr v-if="!vendorQrMappings.length"><td colspan="5" class="muted">No QR mappings for this vendor yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1211,7 +1212,7 @@
         <!-- Fields -->
         <div class="item-drawer-fields">
           <label>
-            Name <span class="required">*</span>
+            <span>Name <span class="required">*</span></span>
             <input
               v-model.trim="itemDraft.displayName"
               class="form-control"
@@ -1339,7 +1340,11 @@ const activeSection = computed<SectionKey>({
 type SidebarState = 'full' | 'icons' | 'hidden';
 function defaultSidebarState(): SidebarState {
   const saved = localStorage.getItem('peshkash-admin-sidebar') as SidebarState | null;
-  if (saved && ['full', 'icons', 'hidden'].includes(saved)) return saved;
+  if (saved && ['full', 'icons', 'hidden'].includes(saved)) {
+    // Never restore 'hidden' on desktop — user would be stuck with no nav
+    if (saved === 'hidden' && window.innerWidth >= 768) return 'icons';
+    return saved;
+  }
   return window.innerWidth < 1024 ? 'icons' : 'full';
 }
 const sidebarState = ref<SidebarState>(defaultSidebarState());
@@ -1347,8 +1352,13 @@ const sidebarOverlayOpen = ref(false);
 watch(sidebarState, (v) => localStorage.setItem('peshkash-admin-sidebar', v));
 
 function cycleSidebar() {
-  const states: SidebarState[] = ['full', 'icons', 'hidden'];
-  sidebarState.value = states[(states.indexOf(sidebarState.value) + 1) % states.length];
+  if (window.innerWidth >= 768) {
+    // Desktop: only toggle full ↔ icons — 'hidden' traps the user with no nav
+    sidebarState.value = sidebarState.value === 'full' ? 'icons' : 'full';
+  } else {
+    const states: SidebarState[] = ['full', 'icons', 'hidden'];
+    sidebarState.value = states[(states.indexOf(sidebarState.value) + 1) % states.length];
+  }
 }
 
 function toggleSidebar() {
@@ -1591,6 +1601,22 @@ const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', d
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
 const vendorMenus = computed(() => menus.value.filter((menu) => menu.vendorId === selectedVendorId.value));
+// QR mappings scoped to the selected vendor by inferring ownership from the URL pattern
+const vendorQrMappings = computed(() => {
+  if (!selectedVendorId.value) return qrMappings.value;
+  return qrMappings.value.filter((mapping) => {
+    if (mapping.url?.startsWith('/vendor/')) {
+      const slug = mapping.url.split('/').pop();
+      return vendors.value.find((v) => v.name === slug)?.id === selectedVendorId.value;
+    }
+    const eventSlug = mapping.url?.split('/event/')[1]?.split('/')[0];
+    if (eventSlug) {
+      const event = events.value.find((e) => e.name === eventSlug);
+      return event?.vendorId === selectedVendorId.value;
+    }
+    return true; // custom paths shown in all vendor contexts
+  });
+});
 const vendorMenuIds = computed(() => vendorMenus.value.map((menu) => menu.id));
 const vendorItems = computed(() => items.value.filter((item) => vendorMenuIds.value.includes(item.menuId)));
 const selectedMenuItems = computed(() => items.value.filter((item) => item.menuId === selectedMenuIdForItems.value));
@@ -2851,7 +2877,16 @@ function editQr(mapping: QrMapping) {
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
   QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
-  qrTargetType.value = 'custom';
+  // Infer target type from the URL so the Target dropdown reflects reality
+  if (mapping.url?.startsWith('/vendor/')) {
+    qrTargetType.value = 'vendor';
+  } else if (mapping.url?.includes('/item/')) {
+    qrTargetType.value = 'item';
+  } else if (mapping.url?.startsWith('/event/')) {
+    qrTargetType.value = 'menu';
+  } else {
+    qrTargetType.value = 'custom';
+  }
 }
 
 function openQrEditor(mapping?: QrMapping) {
@@ -2950,6 +2985,15 @@ watch(() => qrForm.qrHash, () => {
 });
 
 watch(() => route.fullPath, hydrateRouteContext);
+
+// Reset the inline event editor whenever we navigate back to the events list
+// so it never shows pre-populated with a previously-edited event's data
+watch(activeSection, (section) => {
+  if (section === 'events') {
+    showEventEditor.value = false;
+    resetEvent();
+  }
+});
 
 onMounted(async () => {
   await loadAll();
@@ -3642,6 +3686,22 @@ label {
 
 .action-table tbody tr {
   cursor: default;
+}
+
+/* Vendor rows are clickable (set working vendor) — show it */
+.vendors-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.vendors-table tbody tr:hover {
+  background: rgba(189, 148, 90, 0.06);
+}
+/* Cap vendor description so long text doesn't wreck the table */
+.vendors-table .vendor-desc {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .analytics-panel {
