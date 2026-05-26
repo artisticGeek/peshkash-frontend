@@ -1,5 +1,5 @@
 <template>
-  <div class="workspace-switcher" @keydown.escape="open = false">
+  <div ref="rootEl" class="workspace-switcher">
     <button class="workspace-trigger" type="button" @click="open = !open">
       <span>Workspace</span>
       <strong>{{ selectedVendor?.displayName || 'Select vendor' }}</strong>
@@ -16,6 +16,11 @@
         <span>{{ vendor.displayName }}</span>
         <i v-if="vendor.id === modelValue" class="bi bi-check2"></i>
       </button>
+      <div class="workspace-menu-divider"></div>
+      <RouterLink to="/dashboard/vendors" class="new-vendor-btn" @click="open = false">
+        <i class="bi bi-plus-circle"></i>
+        <span>New Vendor</span>
+      </RouterLink>
     </div>
     <a v-if="selectedVendor?.hasContactPage" class="card-link" :href="vendorUrl" target="_blank" rel="noreferrer" title="Open vendor card" aria-label="Open vendor card">
       <i class="bi bi-box-arrow-up-right"></i>
@@ -24,7 +29,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
+import { RouterLink } from 'vue-router';
 
 type VendorOption = { id: number; name: string; displayName: string; hasContactPage: boolean };
 
@@ -40,11 +46,37 @@ const emit = defineEmits<{
 
 const vendorUrl = computed(() => props.selectedVendor ? `${window.location.origin}/vendor/${props.selectedVendor.name}` : '');
 const open = ref(false);
+const rootEl = ref<HTMLElement | null>(null);
 
 function selectVendor(id: number) {
   emit('update:modelValue', id);
   open.value = false;
 }
+
+function onDocumentMousedown(e: MouseEvent) {
+  if (rootEl.value && !rootEl.value.contains(e.target as Node)) {
+    open.value = false;
+  }
+}
+
+function onDocumentKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') open.value = false;
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('mousedown', onDocumentMousedown);
+    document.addEventListener('keydown', onDocumentKeydown);
+  } else {
+    document.removeEventListener('mousedown', onDocumentMousedown);
+    document.removeEventListener('keydown', onDocumentKeydown);
+  }
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', onDocumentMousedown);
+  document.removeEventListener('keydown', onDocumentKeydown);
+});
 </script>
 
 <style scoped>
@@ -122,6 +154,28 @@ function selectVendor(id: number) {
 .workspace-menu button:hover,
 .workspace-menu button.active {
   background: #f7efe3;
+}
+
+.workspace-menu-divider {
+  border-top: 1px solid #e8dccb;
+  margin: 4px 6px;
+}
+
+.new-vendor-btn {
+  align-items: center;
+  border-radius: 4px;
+  color: #7a542a;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 500;
+  gap: 8px;
+  padding: 9px 10px;
+  text-decoration: none;
+}
+
+.new-vendor-btn:hover {
+  background: #f7efe3;
+  color: #15191e;
 }
 
 .card-link {

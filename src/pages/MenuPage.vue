@@ -30,7 +30,16 @@
     <div class="text-center mb-4 pk-reveal" data-anim="animate__fadeInUp">
       <h1 class="fw-bold mb-1">{{ menuData?.menu?.displayName }}</h1>
       <small class="d-block">
-        <span class="vendor-name">{{ menuData?.vendor?.displayName }}</span> @ <span class="event-name">{{ menuData?.event?.displayName }}</span>
+        <RouterLink
+          v-if="menuData?.vendor?.hasContactPage"
+          :to="`/vendor/${menuData.vendor.name}`"
+          class="vendor-name vendor-link"
+        >{{ menuData.vendor.displayName }}</RouterLink>
+        <span v-else class="vendor-name">{{ menuData?.vendor?.displayName }}</span>
+        <template v-if="menuData?.menu?.type === 'personalized'">
+          <span class="mx-1 text-muted">@</span>
+          <span class="event-name">{{ menuData?.event?.displayName }}</span>
+        </template>
       </small>
       <p v-if="menuData?.menu?.description" class="menu-item-description">
         {{ menuData.menu.description }}
@@ -249,6 +258,17 @@ h1,
 .vendor-name, .event-name {
   color: #bd945a;
   font-weight: 500;
+}
+
+.vendor-link {
+  text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(189, 148, 90, 0.5);
+  transition: border-color 0.15s ease;
+}
+
+.vendor-link:hover {
+  border-bottom-color: #bd945a;
 }
 
 .menu-item-description {

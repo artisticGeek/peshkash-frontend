@@ -28,12 +28,23 @@
         <span class="badge bg-primary ms-auto">
           {{ leafItemCount }}
         </span>
+
+        <!-- Studio add button -->
+        <button
+          v-if="editMode"
+          class="canvas-add-btn"
+          type="button"
+          title="Add item or subcategory here"
+          @click.stop="onAddChild?.(item.id)"
+        >
+          <i class="bi bi-plus"></i>
+        </button>
       </div>
       
       <!-- Recursive Children (when expanded) -->
       <div v-if="isExpanded" class="tree-children">
-        <MenuTree 
-          v-for="child in item.subCategoryLineItems" 
+        <MenuTree
+          v-for="child in item.subCategoryLineItems"
           :key="child.id"
           :item="child"
           :level="level + 1"
@@ -41,6 +52,8 @@
           :menu-name="menuName"
           :search-query="searchQuery"
           :selected-filter="selectedFilter"
+          :edit-mode="editMode"
+          :on-add-child="onAddChild"
         />
       </div>
     </template>
@@ -78,21 +91,32 @@
         <div class="menu-item-content">
           <!-- Dish Name (Black color) -->
           <div class="menu-item-name">{{ item.displayName || item.name }}</div>
-          <div 
-            v-if="item.description" 
-            class="menu-item-description" 
+          <div
+            v-if="item.description"
+            class="menu-item-description"
             :class="{ expanded: descriptionExpanded }"
           >
             {{ descriptionExpanded ? item.description : truncatedDescription }}
           </div>
-          <span 
-            v-if="item.description && isDescriptionTruncated" 
+          <span
+            v-if="item.description && isDescriptionTruncated"
             class="read-more-link"
             @click="toggleDescription"
           >
             {{ descriptionExpanded ? 'Read less' : 'Read more' }}
           </span>
         </div>
+
+        <!-- Studio add-child button on leaf items -->
+        <button
+          v-if="editMode"
+          class="canvas-add-btn"
+          type="button"
+          title="Add item under this"
+          @click.stop="onAddChild?.(item.id)"
+        >
+          <i class="bi bi-plus"></i>
+        </button>
       </div>
     </template>
   </div>
@@ -123,12 +147,15 @@ interface Props {
   menuName: string;
   searchQuery?: string;
   selectedFilter?: string;
+  editMode?: boolean;
+  onAddChild?: (parentId: number) => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   level: 0,
   searchQuery: '',
-  selectedFilter: 'All'
+  selectedFilter: 'All',
+  editMode: false,
 });
 
 const isExpanded = ref(false);
@@ -582,5 +609,31 @@ const getEnumClass = (enumType: string): string => {
     width: 13px;
     height: 13px;
   }
+}
+
+/* Studio edit-mode add button */
+.canvas-add-btn {
+  background: transparent;
+  border: 1.5px solid #bd945a;
+  border-radius: 4px;
+  color: #bd945a;
+  cursor: pointer;
+  font-size: 0.75rem;
+  height: 22px;
+  line-height: 1;
+  opacity: 0;
+  padding: 0 5px;
+  flex-shrink: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.tree-category:hover .canvas-add-btn,
+.menu-item:hover .canvas-add-btn {
+  opacity: 1;
+}
+
+.canvas-add-btn:hover {
+  background: #bd945a;
+  color: #fff;
 }
 </style>
