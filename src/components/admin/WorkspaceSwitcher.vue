@@ -1,11 +1,18 @@
 <template>
-  <div ref="rootEl" class="workspace-switcher">
-    <button class="workspace-trigger" type="button" @click="open = !open">
+  <div ref="rootEl" class="workspace-switcher" :class="{ 'workspace-switcher--compact': compact }">
+    <!-- Compact (gear icon) trigger -->
+    <button v-if="compact" class="workspace-trigger-compact" type="button" :title="selectedVendor?.displayName || 'Select vendor'" @click="open = !open">
+      <i class="bi bi-gear-fill"></i>
+      <span v-if="selectedVendor" class="compact-vendor-name">{{ selectedVendor.displayName }}</span>
+      <span v-else class="compact-vendor-name muted-text">No vendor</span>
+    </button>
+    <!-- Full trigger -->
+    <button v-else class="workspace-trigger" type="button" @click="open = !open">
       <span>Workspace</span>
       <strong>{{ selectedVendor?.displayName || 'Select vendor' }}</strong>
       <i class="bi bi-chevron-down"></i>
     </button>
-    <div v-if="open" class="workspace-menu">
+    <div v-if="open" class="workspace-menu" :class="{ 'workspace-menu--right': compact }">
       <button
         v-for="vendor in vendors"
         :key="vendor.id"
@@ -38,6 +45,7 @@ const props = defineProps<{
   modelValue: number;
   vendors: VendorOption[];
   selectedVendor?: VendorOption;
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -195,11 +203,49 @@ onUnmounted(() => {
   color: #15191e;
 }
 
+/* Compact (gear icon) mode */
+.workspace-switcher--compact {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.workspace-trigger-compact {
+  align-items: center;
+  background: #fffcf7;
+  border: 1px solid #e8dccb;
+  border-radius: 6px;
+  color: #5a4a32;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 6px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.workspace-trigger-compact i { color: #9f743d; }
+.workspace-trigger-compact:hover { background: #f7efe3; }
+
+.compact-vendor-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.muted-text { color: #9a8870; }
+
+.workspace-menu--right {
+  left: auto;
+  right: 0;
+}
+
 @media (max-width: 900px) {
-  .workspace-switcher {
+  .workspace-switcher:not(.workspace-switcher--compact) {
     align-items: stretch;
     border-radius: 8px;
     flex-direction: column;
   }
+  .compact-vendor-name { max-width: 100px; }
 }
 </style>

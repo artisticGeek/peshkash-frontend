@@ -174,6 +174,8 @@ function adminUrl(path: string) { return `${API_BASE_URL}/admin${path}`; }
 const view = ref<'list' | 'editor'>('list');
 const templates = ref<QrTemplate[]>([]);
 const saving = ref(false);
+const leftPanelOpen = ref(true);
+const rightPanelOpen = ref(true);
 const saveStatus = ref<'' | 'saved' | 'error'>('');
 const zoom = ref(1.0);
 const unit = ref<Unit>('mm');
@@ -747,12 +749,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
       <button class="qrt-back-btn" @click="backToList"><i class="bi bi-arrow-left"></i></button>
       <input v-model="tpl.name" class="qrt-name-input" placeholder="Template name" spellcheck="false" />
       <div class="qrt-header-actions">
+        <!-- Panel toggles (visible on tablet/mobile only) -->
+        <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: leftPanelOpen }" title="Toggle layers panel" @click="leftPanelOpen = !leftPanelOpen"><i class="bi bi-layout-sidebar"></i></button>
+        <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: rightPanelOpen }" title="Toggle properties panel" @click="rightPanelOpen = !rightPanelOpen"><i class="bi bi-layout-sidebar-reverse"></i></button>
         <span v-if="saveStatus === 'saved'" class="qrt-save-status saved"><i class="bi bi-check2"></i> Saved</span>
         <span v-if="saveStatus === 'error'" class="qrt-save-status error"><i class="bi bi-exclamation-triangle"></i> Error</span>
         <button class="qrt-icon-btn" title="Undo (Ctrl+Z)" :disabled="historyIndex <= 0" @click="undo"><i class="bi bi-arrow-counterclockwise"></i></button>
         <button class="qrt-icon-btn" title="Redo (Ctrl+Y)" :disabled="historyIndex >= history.length - 1" @click="redo"><i class="bi bi-arrow-clockwise"></i></button>
         <button class="btn btn-outline-secondary btn-sm" @click="openPreview"><i class="bi bi-eye"></i> Preview</button>
-        <button class="btn btn-outline-secondary btn-sm" @click="() => exportPng()"><i class="bi bi-download"></i> Export PNG</button>
+        <button class="btn btn-outline-secondary btn-sm qrt-desktop-btn" @click="() => exportPng()"><i class="bi bi-download"></i> Export PNG</button>
         <button class="btn btn-primary btn-sm" :disabled="saving" @click="saveTemplate">
           <i class="bi bi-floppy2"></i> {{ saving ? 'Saving…' : 'Save' }}
         </button>
@@ -762,7 +767,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     <div class="qrt-body">
 
       <!-- Left Sidebar: elements + layers -->
-      <aside class="qrt-sidebar-left">
+      <aside class="qrt-sidebar-left" :class="{ 'panel-hidden': !leftPanelOpen }">
         <p class="qrt-sidebar-section-label">Add Element</p>
         <div class="qrt-add-grid">
           <button class="qrt-add-btn" @click="addElement('qr')"><i class="bi bi-qr-code"></i><span>QR Code</span></button>
@@ -847,7 +852,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
       </div>
 
       <!-- Right Sidebar: Properties -->
-      <aside class="qrt-sidebar-right">
+      <aside class="qrt-sidebar-right" :class="{ 'panel-hidden': !rightPanelOpen }">
 
         <!-- Canvas settings (always visible at top) -->
         <div class="qrt-props-group">
@@ -1985,5 +1990,60 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-preview-footer-actions {
   display: flex;
   gap: 8px;
+}
+
+/* ─── Panel toggle buttons (hidden on desktop, shown on tablet) ───────────── */
+.qrt-panel-btn { display: none; }
+
+/* ─── Tablet layout (< 1100px) ─────────────────────────────────────────────── */
+@media (max-width: 1099px) {
+  .qrt-panel-btn { display: inline-flex; }
+  .qrt-panel-btn.active { background: #f0ece6; color: #BD945A; }
+
+  .qrt-body {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  .qrt-sidebar-left,
+  .qrt-sidebar-right {
+    bottom: 0;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    transition: transform 0.22s ease;
+    width: 220px;
+    z-index: 50;
+    box-shadow: 0 0 20px rgba(0,0,0,0.12);
+  }
+  .qrt-sidebar-left {
+    left: 0;
+    transform: translateX(0);
+    border-right: 1px solid #e6dfd4;
+  }
+  .qrt-sidebar-right {
+    right: 0;
+    transform: translateX(0);
+    border-left: 1px solid #e6dfd4;
+  }
+  .qrt-sidebar-left.panel-hidden { transform: translateX(-100%); }
+  .qrt-sidebar-right.panel-hidden { transform: translateX(100%); }
+
+  .qrt-canvas-area { padding: 24px; }
+  .qrt-header-actions { gap: 5px; }
+}
+
+/* ─── Mobile (< 768px) ───────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .qrt-header { flex-wrap: wrap; gap: 6px; }
+  .qrt-name-input { max-width: 160px; }
+  .qrt-desktop-btn { display: none; }
+  .qrt-canvas-area { padding: 16px; }
+
+  .qrt-sidebar-left,
+  .qrt-sidebar-right { width: 200px; }
+
+  .qrt-list-page { padding: 12px 14px; }
+  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 </style>

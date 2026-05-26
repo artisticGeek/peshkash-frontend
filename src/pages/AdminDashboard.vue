@@ -1,9 +1,9 @@
 <template>
-  <div class="admin-shell">
-    <aside class="admin-sidebar">
-      <div>
-        <p class="eyebrow">Peshkash Admin</p>
-        <h1>{{ activeTitle }}</h1>
+  <div class="admin-shell" :data-sidebar="sidebarState">
+    <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
+      <div class="sidebar-brand">
+        <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
+        <span class="sidebar-brand-name">Peshkash</span>
       </div>
       <nav>
         <RouterLink
@@ -12,30 +12,42 @@
           :to="dashboardRouteBySection[section.key]"
           class="nav-button"
           :class="{ active: isNavActive(section.key) }"
+          :title="section.label"
+          @click="sidebarOverlayOpen = false"
         >
           <i :class="section.icon"></i>
-          <span>{{ section.label }}</span>
+          <span class="nav-label">{{ section.label }}</span>
         </RouterLink>
       </nav>
+      <div class="sidebar-footer">
+        <button class="nav-button sidebar-cycle-btn" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : sidebarState === 'icons' ? 'Collapse sidebar' : 'Expand sidebar'" @click="cycleSidebar">
+          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : sidebarState === 'icons' ? 'bi bi-layout-sidebar-reverse' : 'bi bi-layout-sidebar'"></i>
+          <span class="nav-label">{{ sidebarState === 'full' ? 'Compact' : sidebarState === 'icons' ? 'Collapse' : 'Expand' }}</span>
+        </button>
+      </div>
     </aside>
 
     <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
       <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
-        <div>
-          <h2>{{ activeTitle }}</h2>
-          <p>{{ activeSubtitle }}</p>
-        </div>
-        <div class="header-actions">
+        <div class="workspace-header-left">
+          <button class="hamburger-btn icon-button" type="button" title="Toggle navigation" aria-label="Toggle navigation" @click="toggleSidebar">
+            <i class="bi bi-list"></i>
+          </button>
           <button v-if="activeSection !== 'home'" class="icon-button outlined back-btn" title="Back" aria-label="Back" @click="goBack">
             <i class="bi bi-arrow-left"></i>
             <span v-if="activeSection === 'eventWorkspace' || activeSection === 'qrSheet'">Events</span>
             <span v-else-if="activeSection === 'vendorWorkspace'">Vendors</span>
             <span v-else-if="activeSection === 'preview' || activeSection === 'analytics' || activeSection === 'inventory'">Designer</span>
           </button>
-          <WorkspaceSwitcher v-model="selectedVendorId" :vendors="vendors" :selected-vendor="selectedVendor" />
-          <button class="btn btn-outline-secondary btn-sm" :disabled="loading" @click="loadAll">
+          <div class="workspace-title">
+            <h2>{{ activeTitle }}</h2>
+            <p class="workspace-subtitle">{{ activeSubtitle }}</p>
+          </div>
+        </div>
+        <div class="workspace-header-right">
+          <WorkspaceSwitcher v-model="selectedVendorId" :vendors="vendors" :selected-vendor="selectedVendor" :compact="true" />
+          <button class="icon-button outlined" :disabled="loading" title="Refresh" aria-label="Refresh" @click="loadAll">
             <i class="bi bi-arrow-clockwise"></i>
-            Refresh
           </button>
         </div>
       </header>
@@ -1121,6 +1133,11 @@
     </div>
   </teleport>
 
+  <!-- Mobile sidebar overlay backdrop -->
+  <teleport to="body">
+    <div v-if="sidebarOverlayOpen" class="sidebar-mobile-backdrop" @click="sidebarOverlayOpen = false"></div>
+  </teleport>
+
   <!-- Item / Category add drawer (studio) -->
   <teleport to="body">
     <div v-if="showItemDrawer" class="drawer-backdrop" @click.self="showItemDrawer = false">
@@ -1179,12 +1196,20 @@
               <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
             </label>
             <label>
-              Dietary tag
-              <div class="dietary-toggle">
-                <button type="button" :class="{ active: !itemDraft.enumType }" @click="itemDraft.enumType = ''">None</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'veg' }" @click="itemDraft.enumType = 'veg'" class="veg">Veg</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'non-veg' }" @click="itemDraft.enumType = 'non-veg'" class="nonveg">Non-Veg</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'egg' }" @click="itemDraft.enumType = 'egg'" class="egg">Egg</button>
+              Tag <small class="muted">(free text — or pick from existing)</small>
+              <div class="tag-combobox">
+                <input
+                  v-model.trim="itemDraft.enumType"
+                  class="form-control"
+                  list="item-enum-type-list"
+                  placeholder="e.g. veg, spicy, sale, new…"
+                />
+                <datalist id="item-enum-type-list">
+                  <option v-for="tag in vendorEnumTypes" :key="tag" :value="tag" />
+                </datalist>
+                <button v-if="itemDraft.enumType" type="button" class="tag-clear-btn" title="Clear tag" @click="itemDraft.enumType = ''">
+                  <i class="bi bi-x"></i>
+                </button>
               </div>
             </label>
           </template>
@@ -1274,6 +1299,29 @@ const activeSection = computed<SectionKey>({
   get: () => sectionFromPath(route.path),
   set: (section) => router.push(dashboardRouteBySection[section]),
 });
+type SidebarState = 'full' | 'icons' | 'hidden';
+function defaultSidebarState(): SidebarState {
+  const saved = localStorage.getItem('peshkash-admin-sidebar') as SidebarState | null;
+  if (saved && ['full', 'icons', 'hidden'].includes(saved)) return saved;
+  return window.innerWidth < 1024 ? 'icons' : 'full';
+}
+const sidebarState = ref<SidebarState>(defaultSidebarState());
+const sidebarOverlayOpen = ref(false);
+watch(sidebarState, (v) => localStorage.setItem('peshkash-admin-sidebar', v));
+
+function cycleSidebar() {
+  const states: SidebarState[] = ['full', 'icons', 'hidden'];
+  sidebarState.value = states[(states.indexOf(sidebarState.value) + 1) % states.length];
+}
+
+function toggleSidebar() {
+  if (window.innerWidth < 768) {
+    sidebarOverlayOpen.value = !sidebarOverlayOpen.value;
+  } else {
+    sidebarState.value = sidebarState.value === 'full' ? 'icons' : 'full';
+  }
+}
+
 const loading = ref(false);
 type Toast = { id: number; type: 'success' | 'error'; text: string };
 const toasts = ref<Toast[]>([]);
@@ -1524,6 +1572,7 @@ const miscMenuSlug = computed(() => selectedVendor.value ? `${selectedVendor.val
 const miscMenuItems = computed(() => miscMenu.value ? items.value.filter((item) => item.menuId === miscMenu.value!.id) : []);
 const importMenuItems = computed(() => items.value.filter((item) => item.menuId === importForm.menuId));
 const itemTypeOptions = computed(() => Array.from(new Set(vendorItems.value.map((item) => item.type || 'item'))).sort());
+const vendorEnumTypes = computed(() => [...new Set(vendorItems.value.map(i => i.enumType).filter(Boolean))].sort() as string[]);
 const inventoryRows = computed(() => itemRows.value.filter((row) => {
   const query = itemSearch.value.toLowerCase();
   const matchesSearch = !query || [row.displayName, row.name, row.type, row.enumType].some((value) => value?.toLowerCase().includes(query));
@@ -2862,34 +2911,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  background: #f7f2ea;
-  color: #2f2a24;
-  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.admin-sidebar {
-  background: #171512;
-  color: #fff;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
+/* ── Global typography ──────────────────────────────────────────────────────── */
 .eyebrow {
-  margin: 0 0 6px;
   color: #bd945a;
-  text-transform: uppercase;
   font-size: 0.72rem;
-  letter-spacing: 0.08em;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
 }
 
-.admin-sidebar h1,
 .workspace-header h2,
 .panel h3,
 .adhoc-box h4 {
@@ -2897,27 +2928,80 @@ onMounted(async () => {
   margin: 0;
 }
 
-.admin-sidebar h1 {
-  font-size: 1.5rem;
+/* ── Shell & sidebar layout ─────────────────────────────────────────────────── */
+.admin-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  background: #f7f2ea;
+  color: #2f2a24;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: grid-template-columns 0.22s ease;
+}
+.admin-shell[data-sidebar="icons"] { grid-template-columns: 64px 1fr; }
+.admin-shell[data-sidebar="hidden"] { grid-template-columns: 0px 1fr; }
+
+.admin-sidebar {
+  background: #171512;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  position: relative;
+  transition: width 0.22s ease;
+  width: 260px;
 }
 
+/* Brand row */
+.sidebar-brand {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  padding: 20px 16px 12px;
+  min-height: 64px;
+  flex-shrink: 0;
+}
+.sidebar-logo {
+  color: #BD945A;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.sidebar-brand-name {
+  color: rgba(255,255,255,0.9);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+/* Nav */
 .admin-sidebar nav {
   display: grid;
-  gap: 8px;
+  gap: 2px;
+  flex: 1;
+  padding: 4px 8px;
+  overflow-y: auto;
 }
 
 .nav-button {
-  border: 0;
-  background: transparent;
-  color: rgba(255,255,255,0.74);
-  display: flex;
   align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.72);
+  cursor: pointer;
+  display: flex;
   gap: 10px;
+  padding: 10px 10px;
   text-align: left;
   text-decoration: none;
-  padding: 10px 12px;
-  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
 }
+.nav-button i { font-size: 1rem; flex-shrink: 0; }
+.nav-label { font-size: 0.88rem; }
 
 .nav-button.active,
 .nav-button:hover {
@@ -2925,9 +3009,129 @@ onMounted(async () => {
   color: #fff;
 }
 
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 8px 8px 16px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.sidebar-cycle-btn {
+  width: 100%;
+  color: rgba(255,255,255,0.44);
+  font-size: 0.8rem;
+}
+.sidebar-cycle-btn:hover { color: rgba(255,255,255,0.7); }
+
+/* Icons-only state */
+.admin-shell[data-sidebar="icons"] .admin-sidebar { width: 64px; }
+.admin-shell[data-sidebar="icons"] .nav-label,
+.admin-shell[data-sidebar="icons"] .sidebar-brand-name { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
+.admin-shell[data-sidebar="icons"] .nav-button { justify-content: center; padding: 12px 0; }
+.admin-shell[data-sidebar="icons"] .sidebar-brand { justify-content: center; }
+.admin-shell[data-sidebar="icons"] .sidebar-cycle-btn { justify-content: center; }
+
+/* Hidden state (desktop) */
+.admin-shell[data-sidebar="hidden"] .admin-sidebar { width: 0; padding: 0; }
+
+/* ── Workspace header ─────────────────────────────────────────────────────── */
+.workspace-header {
+  align-items: center;
+  background: #fffcf7;
+  border-bottom: 1px solid #ede8df;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.workspace-header-left {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.workspace-title {
+  min-width: 0;
+}
+.workspace-title h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-subtitle {
+  color: #6f665c;
+  font-size: 0.8rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-header-right {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hamburger-btn {
+  color: #5a4a32;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+}
+
+/* ── Mobile sidebar overlay ─────────────────────────────────────────────── */
+.sidebar-mobile-backdrop {
+  background: rgba(0,0,0,0.48);
+  bottom: 0;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 199;
+}
+
 .admin-main {
-  padding: 24px;
+  min-width: 0;
   overflow: auto;
+  padding: 16px 20px;
+}
+
+/* Mobile layout */
+@media (max-width: 767px) {
+  .admin-shell {
+    grid-template-columns: 1fr !important;
+  }
+  .admin-main { padding: 12px 14px; }
+  .admin-sidebar {
+    height: 100vh;
+    left: 0;
+    position: fixed;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    width: 260px !important;
+    z-index: 200;
+  }
+  .admin-sidebar.sidebar--overlay-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .workspace-header { padding: 8px 12px; }
+  .workspace-title h2 { font-size: 1rem; }
+  .workspace-subtitle { display: none; }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .admin-shell:not([data-sidebar="full"]) { grid-template-columns: 64px 1fr; }
+  .admin-main { padding: 14px 16px; }
 }
 
 .admin-main--canvas {
@@ -2949,20 +3153,18 @@ onMounted(async () => {
   max-width: 1100px;
 }
 
-.workspace-header,
 .panel-heading {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  display: flex;
   gap: 16px;
+  justify-content: space-between;
   margin-bottom: 16px;
 }
 
-.workspace-header p,
 .hint {
-  margin: 4px 0 0;
   color: #6f665c;
   font-size: 0.88rem;
+  margin: 4px 0 0;
 }
 
 .metric-card,
@@ -3015,35 +3217,6 @@ onMounted(async () => {
   color: #fff;
 }
 
-.header-actions {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-}
-
-.workspace-switcher {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #e6dfd4;
-  border-radius: 999px;
-  display: flex;
-  gap: 10px;
-  padding: 6px 8px 6px 12px;
-}
-
-.workspace-switcher span {
-  color: #6b7280;
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.workspace-switcher select {
-  border: 0;
-  min-width: 190px;
-}
-
-.workspace-switcher a,
 .admin-main a.btn,
 .nav-button {
   text-decoration: none;
@@ -4613,25 +4786,28 @@ td a {
 .item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
 .item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
 
-.dietary-toggle {
+.tag-combobox {
+  position: relative;
   display: flex;
-  gap: 6px;
+  align-items: center;
 }
-.dietary-toggle button {
-  background: #f4ede3;
-  border: 1.5px solid #ddd1bc;
-  border-radius: 20px;
-  color: #6b5a43;
+.tag-combobox input {
+  padding-right: 28px;
+  text-transform: none;
+  font-weight: 400;
+}
+.tag-clear-btn {
+  background: transparent;
+  border: 0;
+  color: #9a8870;
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 4px 12px;
-  transition: all 0.15s;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 6px;
+  position: absolute;
+  right: 2px;
 }
-.dietary-toggle button.active,
-.dietary-toggle button.veg.active { background: #e6f5e9; border-color: #5a9068; color: #2d5a3d; }
-.dietary-toggle button.nonveg.active { background: #fde8e8; border-color: #c96060; color: #7a2020; }
-.dietary-toggle button.egg.active { background: #fef3d9; border-color: #c99a40; color: #6e4e10; }
+.tag-clear-btn:hover { color: #c84b4b; }
 
 /* Root-level canvas add button */
 .canvas-root-add {
