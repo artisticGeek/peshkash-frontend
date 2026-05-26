@@ -735,8 +735,22 @@
         </div>
       </section>
 
-      <section v-if="activeSection === 'designer'" class="designer-grid">
-        <div class="panel designer-controls">
+      <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
+
+        <!-- Mobile tab bar (hidden on desktop via CSS) -->
+        <div class="designer-mobile-tabs">
+          <button :class="{ active: designerMobileTab === 'settings' }" @click="designerMobileTab = 'settings'">
+            <i class="bi bi-sliders"></i> Settings
+          </button>
+          <button :class="{ active: designerMobileTab === 'items' }" @click="designerMobileTab = 'items'">
+            <i class="bi bi-list-ul"></i> Items
+          </button>
+          <button :class="{ active: designerMobileTab === 'canvas' }" @click="designerMobileTab = 'canvas'">
+            <i class="bi bi-phone"></i> Canvas
+          </button>
+        </div>
+
+        <div class="panel designer-controls designer-panel-settings">
           <div>
             <h3>Menu Designer</h3>
             <p class="hint">Build and manage vendor menus. Select a menu to edit its items on the canvas.</p>
@@ -790,7 +804,7 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel designer-panel-items">
           <div class="panel-heading compact-heading">
             <div>
               <h3>Item Pool</h3>
@@ -813,7 +827,7 @@
           </div>
         </div>
 
-        <div class="panel menu-render" @dragover.prevent @drop="dropOnMenuRoot">
+        <div class="panel menu-render designer-panel-canvas" @dragover.prevent @drop="dropOnMenuRoot">
           <div class="panel-heading">
             <div>
               <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
@@ -1212,21 +1226,28 @@
               <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
             </label>
             <label>
-              Tag <small class="muted">(free text — or pick from existing)</small>
+              Tag <small class="muted">(type freely, or tap a suggestion)</small>
               <div class="tag-combobox">
                 <input
                   v-model.trim="itemDraft.enumType"
                   class="form-control"
-                  list="item-enum-type-list"
                   placeholder="e.g. veg, spicy, sale, new…"
                 />
-                <datalist id="item-enum-type-list">
-                  <option v-for="tag in vendorEnumTypes" :key="tag" :value="tag" />
-                </datalist>
                 <button v-if="itemDraft.enumType" type="button" class="tag-clear-btn" title="Clear tag" @click="itemDraft.enumType = ''">
                   <i class="bi bi-x"></i>
                 </button>
               </div>
+              <div v-if="vendorEnumTypes.length > 0" class="tag-suggestions">
+                <button
+                  v-for="tag in vendorEnumTypes"
+                  :key="tag"
+                  type="button"
+                  class="tag-chip"
+                  :class="{ active: itemDraft.enumType === tag }"
+                  @click="itemDraft.enumType = itemDraft.enumType === tag ? '' : tag"
+                >{{ tag }}</button>
+              </div>
+              <p v-else class="tag-no-hints">No tags used by this vendor yet — type any label above.</p>
             </label>
           </template>
         </div>
@@ -1369,6 +1390,7 @@ const showItemDrawer = ref(false);
 const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
+const designerMobileTab = ref<'settings' | 'items' | 'canvas'>('canvas');
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -3186,6 +3208,46 @@ onMounted(async () => {
   .workspace-title h2 { font-size: 1rem; }
   .workspace-subtitle { display: none; }
 
+  /* Designer mobile tab layout */
+  .designer-mobile-tabs {
+    align-items: stretch;
+    background: #fffcf7;
+    border: 1px solid #e8dccb;
+    border-radius: 8px;
+    display: flex;
+    gap: 0;
+    grid-column: 1 / -1;
+    overflow: hidden;
+  }
+  .designer-mobile-tabs button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: #7a6a52;
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    gap: 5px;
+    justify-content: center;
+    padding: 10px 4px;
+    transition: background 0.12s;
+  }
+  .designer-mobile-tabs button.active {
+    background: #b98f56;
+    color: #fff;
+  }
+  .designer-mobile-tabs button:not(.active):hover { background: #f5f0e8; }
+
+  /* Hide panels that aren't the active tab on mobile */
+  .designer-grid[data-tab="settings"] .designer-panel-items,
+  .designer-grid[data-tab="settings"] .designer-panel-canvas { display: none; }
+  .designer-grid[data-tab="items"] .designer-panel-settings,
+  .designer-grid[data-tab="items"] .designer-panel-canvas { display: none; }
+  .designer-grid[data-tab="canvas"] .designer-panel-settings,
+  .designer-grid[data-tab="canvas"] .designer-panel-items { display: none; }
+
   /* Sidebar: fixed overlay on mobile */
   .admin-sidebar {
     height: 100vh;
@@ -4343,6 +4405,11 @@ td a {
   grid-column: 1 / -1;
 }
 
+/* Mobile tab bar — hidden on desktop */
+.designer-mobile-tabs {
+  display: none;
+}
+
 .designer-ribbon {
   align-items: end;
   display: flex;
@@ -4762,9 +4829,6 @@ td a {
   .admin-shell {
     grid-template-columns: 1fr;
   }
-  .admin-sidebar nav {
-    grid-template-columns: repeat(2, 1fr);
-  }
   .two-column,
   .designer-grid,
   .preview-layout,
@@ -4912,6 +4976,34 @@ td a {
   right: 2px;
 }
 .tag-clear-btn:hover { color: #c84b4b; }
+
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.tag-chip {
+  background: #f0ece6;
+  border: 1.5px solid #ddd1bc;
+  border-radius: 20px;
+  color: #6b5a43;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  transition: all 0.12s;
+}
+.tag-chip:hover { background: #e8e0d4; border-color: #c9a96e; }
+.tag-chip.active { background: #fef3d9; border-color: #c9a96e; color: #6e4e10; }
+
+.tag-no-hints {
+  color: #aaa;
+  font-size: 0.72rem;
+  font-weight: 400;
+  margin: 5px 0 0;
+  text-transform: none;
+}
 
 /* Root-level canvas add button */
 .canvas-root-add {
