@@ -54,8 +54,7 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/dashboard/events/publish',
-    name: 'DashboardEventPublish',
-    component: () => import('./pages/AdminDashboard.vue'),
+    redirect: '/dashboard/events',
   },
   {
     path: '/dashboard/events/:eventId',

@@ -3,7 +3,7 @@
     <aside class="admin-sidebar">
       <div>
         <p class="eyebrow">Peshkash Admin</p>
-        <h1>Vendor Workspace</h1>
+        <h1>{{ activeTitle }}</h1>
       </div>
       <nav>
         <RouterLink
@@ -26,7 +26,12 @@
           <p>{{ activeSubtitle }}</p>
         </div>
         <div class="header-actions">
-          <button v-if="activeSection !== 'home'" class="icon-button outlined" title="Back" aria-label="Back" @click="goBack"><i class="bi bi-arrow-left"></i></button>
+          <button v-if="activeSection !== 'home'" class="icon-button outlined back-btn" title="Back" aria-label="Back" @click="goBack">
+            <i class="bi bi-arrow-left"></i>
+            <span v-if="activeSection === 'eventWorkspace' || activeSection === 'qrSheet'">Events</span>
+            <span v-else-if="activeSection === 'vendorWorkspace'">Vendors</span>
+            <span v-else-if="activeSection === 'preview' || activeSection === 'analytics' || activeSection === 'inventory'">Designer</span>
+          </button>
           <WorkspaceSwitcher v-model="selectedVendorId" :vendors="vendors" :selected-vendor="selectedVendor" />
           <button class="btn btn-outline-secondary btn-sm" :disabled="loading" @click="loadAll">
             <i class="bi bi-arrow-clockwise"></i>
@@ -35,8 +40,7 @@
         </div>
       </header>
 
-      <div v-if="message" class="alert alert-success py-2">{{ message }}</div>
-      <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
+      <!-- Toasts are rendered via Teleport below -->
 
       <section v-if="activeSection === 'home'" class="home-workspace">
         <div class="panel home-intro">
@@ -46,11 +50,14 @@
             <p class="hint">Recent operational surfaces only. Detailed setup happens inside Vendors, Events, Menu Studio, and QR Bank.</p>
           </div>
           <div class="home-actions">
-            <RouterLink class="icon-action primary" to="/dashboard/events" title="Open events">
+            <RouterLink class="icon-action primary" to="/dashboard/events" title="Open Event Creator">
               <i class="bi bi-calendar-event"></i><span>Events</span>
             </RouterLink>
-            <RouterLink class="icon-action" to="/dashboard/items" title="Open item library">
-              <i class="bi bi-box-seam"></i><span>Items</span>
+            <RouterLink class="icon-action" to="/dashboard/menus/studio" title="Open Menu Designer">
+              <i class="bi bi-layout-three-columns"></i><span>Menus</span>
+            </RouterLink>
+            <RouterLink class="icon-action" to="/dashboard/qr" title="Open QR Bank">
+              <i class="bi bi-qr-code"></i><span>QR Bank</span>
             </RouterLink>
           </div>
         </div>
@@ -106,8 +113,8 @@
         <div v-if="activeSection === 'vendorWorkspace' && selectedVendor" class="hero-panel">
           <div>
             <p class="eyebrow">Vendor Workspace</p>
-            <h3>{{ selectedVendor.displayName }}</h3>
-            <p class="hint">{{ selectedVendor.description || 'Reusable owner context for events, menus, items, and QR cards.' }}</p>
+            <h3>{{ selectedVendor?.displayName }}</h3>
+            <p class="hint">{{ selectedVendor?.description || 'Reusable owner context for events, menus, items, and QR cards.' }}</p>
           </div>
           <div class="hero-actions">
             <button class="btn btn-primary" @click="openVendorEditor(selectedVendor)">Manage Vendor</button>
@@ -156,11 +163,113 @@
                   <p class="hint wide">If this vendor already exists, use a clearer identifier such as city, branch, year, or a short suffix like <code>radisson-gurgaon-02</code>.</p>
                   <label>Phone<input v-model.trim="vendorPhone" class="form-control" placeholder="+91 90000 00000" /></label>
                   <label>Email<input v-model.trim="vendorEmail" class="form-control" placeholder="events@example.com" /></label>
-                  <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="https://example.com" /></label>
-                  <label>Google Maps<input v-model.trim="vendorMapUrl" class="form-control" placeholder="https://maps.google.com/..." /></label>
-                  <label>Business Days<input v-model.trim="vendorBusinessDays" class="form-control" placeholder="Mon-Sun" /></label>
-                  <label>Business Hours<input v-model.trim="vendorBusinessHours" class="form-control" placeholder="10:00 AM - 8:00 PM" /></label>
+                  <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="example.com" /></label>
+
+                  <!-- Location picker -->
+                  <div class="wide location-block">
+                    <p class="form-label-sm">Location <span class="form-label-hint">· shown as map on contact card</span></p>
+                    <div class="location-search-row">
+                      <div class="location-input-wrap" style="flex:1; position:relative">
+                        <input
+                          v-model="locationSearchQuery"
+                          class="form-control"
+                          placeholder="Search a place…"
+                          autocomplete="off"
+                          @input="onLocationSearch"
+                          @focus="showLocationDropdown = locationSuggestions.length > 0"
+                          @blur="closeLocationDropdown"
+                        />
+                        <div v-if="showLocationDropdown && locationSuggestions.length" class="location-dropdown">
+                          <button
+                            v-for="s in locationSuggestions"
+                            :key="s.place_id"
+                            type="button"
+                            class="location-option"
+                            @mousedown.prevent="selectLocation(s)"
+                          >
+                            <i class="bi bi-geo-alt"></i>
+                            <span>{{ s.display_name }}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="location-gps-btn"
+                        :class="{ locating }"
+                        :title="locating ? 'Getting location…' : 'Use current location'"
+                        @click="useCurrentLocation"
+                      >
+                        <i :class="locating ? 'bi bi-hourglass-split' : 'bi bi-crosshair'"></i>
+                      </button>
+                    </div>
+                    <div v-if="locationDisplay" class="location-confirmed">
+                      <i class="bi bi-check-circle-fill"></i>
+                      <span>{{ locationDisplay }}</span>
+                      <button type="button" class="location-clear" @click="clearLocation"><i class="bi bi-x"></i></button>
+                    </div>
+                  </div>
+
+                  <p class="hint wide contact-section-label"><i class="bi bi-share"></i> Social &amp; Messaging</p>
+                  <label>
+                    WhatsApp
+                    <input v-model.trim="vendorWhatsApp" class="form-control" placeholder="+91 90000 00000" />
+                    <span class="input-hint">Leave empty to auto-derive from phone number</span>
+                  </label>
+                  <label>
+                    Instagram
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">@</span>
+                      <input v-model.trim="vendorInstagram" class="form-control handle-input" placeholder="handle  or  instagram.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    Facebook
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">fb</span>
+                      <input v-model.trim="vendorFacebook" class="form-control handle-input" placeholder="page-name  or  facebook.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    LinkedIn
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">in/</span>
+                      <input v-model.trim="vendorLinkedIn" class="form-control handle-input" placeholder="profile  or  linkedin.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    Twitter / X
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">@</span>
+                      <input v-model.trim="vendorTwitter" class="form-control handle-input" placeholder="handle  or  x.com/…" />
+                    </div>
+                  </label>
+                  <label>YouTube<input v-model.trim="vendorYouTube" class="form-control" placeholder="@channel  or  youtube.com/…" /></label>
+                  <p class="hint wide contact-section-label"><i class="bi bi-clock"></i> Business Hours</p>
+                  <div class="wide biz-hours-block">
+                    <p class="form-label-sm">Days open</p>
+                    <div class="day-chips">
+                      <button
+                        v-for="d in WEEK_DAYS"
+                        :key="d"
+                        type="button"
+                        class="day-chip"
+                        :class="{ active: vendorDaySelection.includes(d) }"
+                        @click="toggleDay(d)"
+                      >{{ d }}</button>
+                    </div>
+                    <p class="form-label-sm" style="margin-top:10px">Hours</p>
+                    <div class="time-range-row">
+                      <input type="time" v-model="vendorHoursFrom" class="form-control time-input" />
+                      <span class="time-sep">to</span>
+                      <input type="time" v-model="vendorHoursTo" class="form-control time-input" />
+                    </div>
+                    <p v-if="vendorBusinessDays || vendorBusinessHours" class="biz-hours-preview">
+                      <i class="bi bi-eye"></i>
+                      {{ [vendorBusinessDays, vendorBusinessHours].filter(Boolean).join('  ·  ') }}
+                    </p>
+                  </div>
                   <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
+                  <label class="wide">Logo URL <small class="muted">(direct image URL, optional)</small><input v-model.trim="vendorForm.logoUrl" class="form-control" placeholder="https://..." /></label>
                   <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="3"></textarea></label>
                   <label class="product-toggle wide" :class="{ selected: vendorForm.hasContactPage }">
                     <input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" />
@@ -216,6 +325,7 @@
             <button class="btn btn-primary" @click="startNewEvent">New Event</button>
           </div>
           <form v-if="showEventEditor" class="inline-editor" @submit.prevent="saveEvent">
+            <p class="eyebrow">{{ eventForm.id ? `Editing: ${eventForm.displayName}` : 'New Event' }}</p>
             <div class="form-grid">
               <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
               <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
@@ -224,7 +334,7 @@
               <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
             </div>
             <div class="actions">
-              <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">Save Event</button>
+              <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">{{ eventForm.id ? 'Update Event' : 'Create Event' }}</button>
               <button class="btn btn-outline-secondary" type="button" @click="closeEventEditor">Cancel</button>
             </div>
           </form>
@@ -235,12 +345,12 @@
                 <tr v-for="event in vendorEvents" :key="event.id">
                   <td><strong>{{ event.displayName }}</strong><br /><code>{{ event.name }}</code></td>
                   <td>{{ eventWindow(event) }}</td>
-                  <td><span class="badge text-bg-light">{{ event.status }}</span></td>
+                  <td><span class="status-pill" :class="`status-${event.status}`">{{ event.status }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
                   <td class="row-actions">
                     <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink>
                     <button class="btn btn-outline-secondary btn-sm" @click="editEventInline(event)">Edit</button>
-                    <button class="btn btn-outline-primary btn-sm" @click="openPublishDrawer(event)"><i class="bi bi-send-check"></i> Publish</button>
+                    <RouterLink v-if="event.status !== 'active'" class="btn btn-outline-primary btn-sm" :to="adminPublishRoute(event)"><i class="bi bi-send-check"></i> Publish</RouterLink>
                   </td>
                 </tr>
                 <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events for this vendor yet.</td></tr>
@@ -254,13 +364,37 @@
         <div v-if="selectedEventForItems" class="hero-panel event-hero">
           <div>
             <p class="eyebrow">Event Workspace</p>
-            <h3>{{ selectedEventForItems.displayName }}</h3>
-            <p class="hint">{{ eventWindow(selectedEventForItems) }} · {{ selectedEventForItems.status }}</p>
+            <h3>{{ selectedEventForItems?.displayName }}</h3>
+            <p class="hint">{{ eventWindow(selectedEventForItems!) }}</p>
+            <div class="event-steps">
+              <span class="step done"><i class="bi bi-check-circle-fill"></i> Details</span>
+              <span class="step-arrow">→</span>
+              <span class="step" :class="{ done: selectedEventMenus.length > 0 }">
+                <i :class="selectedEventMenus.length > 0 ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i> Menu
+              </span>
+              <span class="step-arrow">→</span>
+              <span class="step" :class="{ done: selectedEventForItems?.status === 'active' }">
+                <i :class="selectedEventForItems?.status === 'active' ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i>
+                <span class="soft-pill" :class="selectedEventForItems?.status === 'active' ? 'pill-live' : selectedEventForItems?.status === 'inactive' ? 'pill-off' : ''">
+                  {{ selectedEventForItems?.status }}
+                </span>
+              </span>
+            </div>
           </div>
           <div class="hero-actions">
-            <button class="btn btn-primary" @click="openPublishDrawer(selectedEventForItems)"><i class="bi bi-send-check"></i> Review & Publish</button>
+            <button
+              v-if="selectedEventForItems?.status !== 'active'"
+              class="btn btn-primary"
+              :disabled="!selectedEventMenus.length"
+              @click="openPublishDrawer(selectedEventForItems)"
+            ><i class="bi bi-send-check"></i> Activate Event</button>
+            <button
+              v-else
+              class="btn btn-outline-danger"
+              @click="setEventStatusTo('inactive')"
+            ><i class="bi bi-stop-circle"></i> Deactivate</button>
             <RouterLink class="btn btn-outline-primary" :to="adminQrSheetRoute(selectedEventForItems)">QR Sheet</RouterLink>
-            <RouterLink class="btn btn-outline-secondary" to="/dashboard/menus/studio">Menu Studio</RouterLink>
+            <RouterLink class="btn btn-outline-secondary" to="/dashboard/menus/studio">Menu Designer</RouterLink>
           </div>
         </div>
 
@@ -283,21 +417,33 @@
             <div class="panel-heading">
               <div>
                 <h3>Linked Menus</h3>
-                <p class="hint">Menus attached to this event. Open the studio for visual edits or preview the guest-facing menu.</p>
+                <p class="hint">Menus attached to this event. Attach from the vendor's menus or open Studio to edit content.</p>
               </div>
-              <RouterLink class="btn btn-outline-primary btn-sm" to="/dashboard/menus/studio">Attach / Design Menu</RouterLink>
+            </div>
+            <div v-if="attachableMenus.length" class="attach-menu-row">
+              <select v-model.number="attachMenuId" class="form-select form-select-sm">
+                <option :value="0">Attach a menu…</option>
+                <option v-for="m in attachableMenus" :key="m.id" :value="m.id">{{ m.displayName }}<template v-if="m.type === 'personalized'"> (personalized)</template></option>
+              </select>
+              <button class="btn btn-primary btn-sm" :disabled="!attachMenuId || loading" @click="attachMenuToEvent(attachMenuId)">
+                <i class="bi bi-link-45deg"></i> Attach
+              </button>
             </div>
             <div class="table-wrap">
               <table class="table table-sm align-middle action-table">
-                <thead><tr><th>Menu</th><th>Items</th><th>Public URL</th><th></th></tr></thead>
+                <thead><tr><th>Menu</th><th>Type</th><th>Items</th><th>Public URL</th><th></th></tr></thead>
                 <tbody>
                   <tr v-for="menu in selectedEventMenus" :key="menu.id">
                     <td><strong>{{ menu.displayName }}</strong><br /><code>{{ menu.name }}</code></td>
+                    <td><span class="type-pill" :class="menu.type">{{ menu.type }}</span></td>
                     <td>{{ menuItems(menu.id).length }}</td>
                     <td><a :href="buildAbsolute(menuPathFor(selectedEventForItems, menu))" target="_blank" rel="noreferrer">Open public menu</a></td>
-                    <td><RouterLink class="btn btn-outline-secondary btn-sm" :to="adminMenuStudioRoute(menu)">Studio</RouterLink></td>
+                    <td class="row-actions">
+                      <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminMenuStudioRoute(menu)">Studio</RouterLink>
+                      <button class="btn btn-outline-danger btn-sm" :disabled="loading" @click="detachMenuFromEvent(menu.id)"><i class="bi bi-unlink"></i></button>
+                    </td>
                   </tr>
-                  <tr v-if="!selectedEventMenus.length"><td colspan="4" class="muted">No menus linked yet.</td></tr>
+                  <tr v-if="!selectedEventMenus.length"><td colspan="5" class="muted">No menus linked yet. Attach one above.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -347,12 +493,12 @@
           </div>
         </div>
 
-        <div v-if="showPublishDrawer && selectedEventForItems" class="drawer-backdrop" @click.self="showPublishDrawer = false">
+        <div v-if="showPublishDrawer" class="drawer-backdrop" @click.self="showPublishDrawer = false">
           <aside class="side-drawer publish-drawer">
             <div class="modal-title-row">
               <div>
                 <p class="eyebrow">Publish</p>
-                <h3>{{ selectedEventForItems.displayName }}</h3>
+                <h3>{{ selectedEventForItems?.displayName }}</h3>
                 <p class="hint">Final review before activation.</p>
               </div>
               <button class="icon-button" type="button" aria-label="Close" @click="showPublishDrawer = false"><i class="bi bi-x-lg"></i></button>
@@ -380,7 +526,7 @@
           </aside>
         </div>
 
-        <div v-else class="panel empty-state">
+        <div v-if="!selectedEventForItems" class="panel empty-state">
           <h3>Event not found</h3>
           <p class="hint">Choose an event from the event list, or create a new draft.</p>
           <RouterLink class="btn btn-primary" to="/dashboard/events">Back to Events</RouterLink>
@@ -423,10 +569,11 @@
           <h3>Menus For {{ selectedVendor?.displayName || 'Vendor' }}</h3>
           <div class="table-wrap">
             <table class="table table-sm align-middle">
-              <thead><tr><th>Menu</th><th>Active</th><th>Preview</th><th></th></tr></thead>
+              <thead><tr><th>Menu</th><th>Type</th><th>Active</th><th>Preview</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="menu in vendorMenus" :key="menu.id">
                   <td><strong>{{ menu.displayName }}</strong><br /><code>{{ menu.name }}</code></td>
+                  <td><span class="soft-pill" :class="menu.type === 'personalized' ? 'pill-accent' : ''">{{ menu.type || 'generic' }}</span></td>
                   <td>{{ menu.isActive ? 'Yes' : 'No' }}</td>
                   <td><a v-for="preview in menuPreviews(menu.id)" :key="preview.publicUrl" :href="preview.publicUrl" target="_blank" rel="noreferrer">{{ preview.eventName }}</a></td>
                   <td><button class="btn btn-outline-primary btn-sm" @click="editMenu(menu)">Edit</button></td>
@@ -535,17 +682,42 @@
       <section v-if="activeSection === 'designer'" class="designer-grid">
         <div class="panel designer-controls">
           <div>
-            <h3>Menu Studio</h3>
-            <p class="hint">Choose context once, shape the menu visually, then save the canvas when it feels right.</p>
+            <h3>Menu Designer</h3>
+            <p class="hint">Build and manage vendor menus. Select a menu to edit its items on the canvas.</p>
           </div>
           <div class="designer-ribbon">
-            <label>Event<select v-model.number="selectedEventIdForItems" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
-            <label>Working Menu<select v-model.number="selectedMenuIdForItems" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
-            <label>Custom Menu<input v-model.trim="designerMenuName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
+            <label class="ribbon-group">
+              Working Menu
+              <select v-model.number="selectedMenuIdForItems" class="form-select">
+                <option :value="0">Select menu</option>
+                <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
+                  {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                </option>
+              </select>
+            </label>
+            <div class="ribbon-divider"></div>
+            <label class="ribbon-group">
+              New Menu
+              <div class="ribbon-input-row">
+                <input v-model.trim="designerMenuName" class="form-control" placeholder="Display name" />
+                <select v-model="designerMenuType" class="form-select form-select-sm type-select">
+                  <option value="generic">Generic</option>
+                  <option value="personalized">Personalized</option>
+                </select>
+              </div>
+            </label>
             <button class="btn btn-primary icon-label" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">
               <i class="bi bi-plus-lg"></i>
               Create
             </button>
+            <div class="ribbon-divider"></div>
+            <label class="ribbon-group">
+              Link to Event
+              <select v-model.number="selectedEventIdForItems" class="form-select">
+                <option :value="0">Select event</option>
+                <option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option>
+              </select>
+            </label>
             <button class="btn btn-outline-primary icon-label" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">
               <i class="bi bi-bag-plus"></i>
               Add To Event
@@ -556,8 +728,8 @@
         <div class="panel">
           <div class="panel-heading compact-heading">
             <div>
-              <h3>Item Library</h3>
-              <p class="hint">Click or drag an item into the menu canvas.</p>
+              <h3>Item Pool</h3>
+              <p class="hint">Items from vendor's other menus. Click or drag to copy into the working menu.</p>
             </div>
           </div>
           <div class="sheet-search studio-search"><i class="bi bi-search"></i><input v-model.trim="designerSearch" class="form-control" placeholder="Search items to add" /></div>
@@ -583,25 +755,15 @@
               <p class="hint">Public-like preview canvas. Drag from the library or add items, then save all changes together.</p>
             </div>
             <div class="actions slim-actions">
-              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Add item" aria-label="Add item" @click="showQuickMenuItem = !showQuickMenuItem"><i class="bi bi-plus-lg"></i></button>
+              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Add item or category" aria-label="Add item" @click="openItemDrawer(null)"><i class="bi bi-plus-lg"></i></button>
               <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Arrange" aria-label="Arrange" @click="showArrangeDrawer = true"><i class="bi bi-diagram-3"></i></button>
               <RouterLink class="icon-button outlined" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'" title="Open preview" aria-label="Open preview"><i class="bi bi-phone"></i></RouterLink>
               <button class="btn btn-primary btn-sm" :disabled="!designerDirty" @click="saveDesignerChanges"><i class="bi bi-check2-circle"></i> Save</button>
             </div>
           </div>
-          <form v-if="showQuickMenuItem && selectedMenuForItems" class="quick-add-row" @submit.prevent="createQuickMenuItem">
-            <input v-model.trim="quickItem.displayName" class="form-control" placeholder="Item or category name" @blur="quickItem.name = quickItem.name || slugify(quickItem.displayName)" />
-            <select v-model.number="quickItem.parentId" class="form-select">
-              <option :value="0">No parent</option>
-              <option v-for="item in selectedDesignerItems" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option>
-            </select>
-            <input v-model.trim="quickItem.type" class="form-control" placeholder="type" />
-            <input v-model.trim="quickItem.enumType" class="form-control" placeholder="tag" />
-            <button class="btn btn-primary" type="submit">Save</button>
-          </form>
           <div class="studio-live-preview">
             <div class="phone-shell studio-phone" :class="{ dirty: designerDirty }" @dragover.prevent @drop="dropOnMenuRoot">
-              <p class="eyebrow">{{ selectedEventForItems?.displayName || 'Event Preview' }}</p>
+              <p class="eyebrow">{{ linkedEventsForMenu(selectedMenuIdForItems) || 'Not linked to any event' }}</p>
               <h3>{{ selectedMenuForItems?.displayName || 'Menu Preview' }}</h3>
               <MenuTree
                 v-for="item in selectedDesignerTree"
@@ -610,8 +772,20 @@
                 :level="0"
                 :event-name="selectedEventForItems?.name || ''"
                 :menu-name="selectedMenuForItems?.name || ''"
+                :edit-mode="true"
+                :on-add-child="openItemDrawer"
               />
               <p v-if="!selectedDesignerItems.length" class="muted">Drop library items here or add a new item.</p>
+              <!-- Root-level add button -->
+              <button
+                v-if="selectedMenuForItems"
+                class="canvas-root-add"
+                type="button"
+                @click="openItemDrawer(null)"
+              >
+                <i class="bi bi-plus-lg"></i>
+                Add item or category
+              </button>
             </div>
 
             <div v-if="showArrangeDrawer" class="drawer-backdrop" @click.self="showArrangeDrawer = false">
@@ -687,98 +861,13 @@
         </div>
       </section>
 
-      <section v-if="activeSection === 'publish'" class="publish-grid">
-        <div v-if="selectedEventForItems" class="panel wide-panel publish-context">
-          <div>
-            <p class="eyebrow">Publish</p>
-            <h3>{{ selectedEventForItems.displayName }}</h3>
-            <p class="hint">Final event review before activation.</p>
-          </div>
-            <div class="actions">
-              <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(selectedEventForItems)">Event Workspace</RouterLink>
-            </div>
-        </div>
-        <form class="panel" @submit.prevent="saveEvent">
-          <h3>Event Design</h3>
-          <p class="hint">Create a new event, repeat an existing setup later, then attach menus and publish after validation.</p>
-          <div class="form-grid">
-            <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
-            <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
-            <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
-            <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
-            <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">Save Event Draft</button>
-          </div>
-        </form>
-
-        <div class="panel">
-          <h3>Publish Checklist</h3>
-          <ul class="checklist">
-            <li v-for="item in publishChecklist" :key="item.label" :class="{ done: item.done }">
-              <i :class="item.done ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i>
-              {{ item.label }}
-            </li>
-          </ul>
-          <div class="product-cart">
-            <div class="cart-title">
-              <i class="bi bi-bag-check"></i>
-              <strong>Event Add-ons</strong>
-            </div>
-            <label v-for="product in publishProducts" :key="product.key" class="cart-line" :class="{ selected: product.selected }">
-              <input v-model="productSelections[product.key]" type="checkbox" />
-              <i :class="product.icon"></i>
-              <span>
-                <strong>{{ product.label }}</strong>
-                <small>{{ product.description }}</small>
-              </span>
-            </label>
-          </div>
-          <div class="payment-gate">
-            <strong>Ready to publish</strong>
-            <p>Review the event setup, selected add-ons, and QR targets before activation.</p>
-          </div>
-          <div class="actions">
-            <button class="btn btn-outline-secondary" :disabled="!selectedEventForItems" @click="loadEventIntoForm(selectedEventForItems!)">Edit Selected Event</button>
-            <button class="btn btn-primary" :disabled="!canPublish" @click="publishSelectedEvent">Publish Event</button>
-          </div>
-        </div>
-
-        <div class="panel wide-panel">
-          <h3>QR Sheet</h3>
-          <p class="hint">Printable and clickable menu/item QR targets for the selected event.</p>
-          <div class="table-wrap qr-sheet-table">
-            <table class="table table-sm align-middle">
-              <thead><tr><th>Target</th><th>Type</th><th>Public Path</th><th>Status</th><th>QR / Analytics</th></tr></thead>
-              <tbody>
-                <tr v-for="menu in selectedEventMenus" :key="`menu-${menu.id}`">
-                  <td><strong>{{ menu.displayName }}</strong></td>
-                  <td>Menu</td>
-                  <td><code>{{ menuPathFor(selectedEventForItems, menu) }}</code></td>
-                  <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
-                  <td><button class="btn btn-outline-secondary btn-sm" :title="`Menu QR target for ${menu.displayName}`">Preview</button></td>
-                </tr>
-                <tr v-for="item in selectedEventItems" :key="`item-${item.id}`">
-                  <td><strong>{{ itemLabel(item) }}</strong><br /><span class="muted">{{ menuName(item.menuId) }}</span></td>
-                  <td>{{ item.type || 'Item' }}</td>
-                  <td><code>{{ itemPathFor(selectedEventForItems, item) }}</code></td>
-                  <td>{{ eventTimerLabel(selectedEventForItems) }}</td>
-                  <td><button class="btn btn-outline-secondary btn-sm" :title="itemUsageTitle(item.id)">Preview</button></td>
-                </tr>
-                <tr v-if="!selectedEventMenus.length && !selectedEventItems.length"><td colspan="5" class="muted">Select an event with linked menus to preview the QR sheet.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
 
       <section v-if="activeSection === 'qrSheet'" class="stack-layout">
         <div v-if="selectedEventForItems" class="panel">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">QR Sheet</p>
-              <h3>{{ selectedEventForItems.displayName }}</h3>
+              <h3>{{ selectedEventForItems?.displayName }}</h3>
               <p class="hint">Reference sheet for printing, click-testing, and event readiness checks.</p>
             </div>
             <div class="actions">
@@ -987,6 +1076,104 @@
       </section>
     </main>
   </div>
+
+  <!-- Toast notifications -->
+  <teleport to="body">
+    <div class="toast-stack">
+      <transition-group name="toast">
+        <div
+          v-for="toast in toasts"
+          :key="toast.id"
+          class="toast-chip"
+          :class="`toast-${toast.type}`"
+        >
+          <i :class="toast.type === 'success' ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill'"></i>
+          <span>{{ toast.text }}</span>
+          <button class="toast-close" type="button" @click="removeToast(toast.id)"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </transition-group>
+    </div>
+  </teleport>
+
+  <!-- Item / Category add drawer (studio) -->
+  <teleport to="body">
+    <div v-if="showItemDrawer" class="drawer-backdrop" @click.self="showItemDrawer = false">
+      <aside class="side-drawer item-add-drawer">
+        <div class="modal-title-row">
+          <div>
+            <h3>Add to Menu</h3>
+            <p class="hint">
+              {{ itemDraft.parentId != null
+                ? `Under: ${designerDraftItems.find(i => i.id === itemDraft.parentId)?.displayName || '#' + itemDraft.parentId}`
+                : 'Root level — no parent category' }}
+            </p>
+          </div>
+          <button class="icon-button" type="button" aria-label="Close" @click="showItemDrawer = false">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+
+        <!-- Type selector -->
+        <div class="item-type-toggle">
+          <button
+            type="button"
+            :class="{ active: itemDraft.type === 'category' }"
+            @click="itemDraft.type = 'category'"
+          >
+            <i class="bi bi-folder2-open"></i>
+            <span>Category</span>
+            <small>Groups items (e.g. Starters, Mains)</small>
+          </button>
+          <button
+            type="button"
+            :class="{ active: itemDraft.type === 'item' }"
+            @click="itemDraft.type = 'item'"
+          >
+            <i class="bi bi-card-text"></i>
+            <span>Item</span>
+            <small>A dish, drink, or add-on</small>
+          </button>
+        </div>
+
+        <!-- Fields -->
+        <div class="item-drawer-fields">
+          <label>
+            Name <span class="required">*</span>
+            <input
+              v-model.trim="itemDraft.displayName"
+              class="form-control"
+              :placeholder="itemDraft.type === 'category' ? 'e.g. Starters, Beverages' : 'e.g. Paneer Butter Masala'"
+              autofocus
+              @keydown.enter.prevent="saveItemFromDrawer"
+            />
+          </label>
+          <template v-if="itemDraft.type === 'item'">
+            <label>
+              Description
+              <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
+            </label>
+            <label>
+              Dietary tag
+              <div class="dietary-toggle">
+                <button type="button" :class="{ active: !itemDraft.enumType }" @click="itemDraft.enumType = ''">None</button>
+                <button type="button" :class="{ active: itemDraft.enumType === 'veg' }" @click="itemDraft.enumType = 'veg'" class="veg">Veg</button>
+                <button type="button" :class="{ active: itemDraft.enumType === 'non-veg' }" @click="itemDraft.enumType = 'non-veg'" class="nonveg">Non-Veg</button>
+                <button type="button" :class="{ active: itemDraft.enumType === 'egg' }" @click="itemDraft.enumType = 'egg'" class="egg">Egg</button>
+              </div>
+            </label>
+          </template>
+        </div>
+
+        <div class="drawer-actions">
+          <button class="btn btn-outline-secondary" @click="showItemDrawer = false">Cancel</button>
+          <button class="btn btn-primary" :disabled="!itemDraft.displayName" @click="saveItemFromDrawer">
+            <i class="bi bi-plus-lg"></i>
+            Add {{ itemDraft.type === 'category' ? 'Category' : 'Item' }}
+          </button>
+        </div>
+      </aside>
+    </div>
+  </teleport>
 </template>
 
 <script setup lang="ts">
@@ -1000,41 +1187,40 @@ import MenuTree from '../components/MenuTree.vue';
 import { API_BASE_URL } from '../config';
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'menus' | 'items';
-type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; createdAt?: string };
+type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
-type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; vendor?: Vendor };
+type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
 type QrMapping = { id: number; qrHash: string; url: string; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; createdAt?: string; updatedAt?: string; expiresAt?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
 
 const sections = [
-  { key: 'home', label: 'Dashboard Home', icon: 'bi bi-grid-1x2' },
-  { key: 'vendors', label: 'Vendors', icon: 'bi bi-shop' },
-  { key: 'events', label: 'Events', icon: 'bi bi-calendar-event' },
-  { key: 'inventory', label: 'Item Library', icon: 'bi bi-box-seam' },
-  { key: 'designer', label: 'Menu Studio', icon: 'bi bi-layout-three-columns' },
-  { key: 'qr', label: 'QR Bank', icon: 'bi bi-qr-code' },
+  { key: 'home',     label: 'Dashboard',      icon: 'bi bi-grid-1x2' },
+  { key: 'vendors',  label: 'Vendors',         icon: 'bi bi-building' },
+  { key: 'events',   label: 'Event Creator',   icon: 'bi bi-calendar-event' },
+  { key: 'designer', label: 'Menu Designer',   icon: 'bi bi-layout-three-columns' },
+  { key: 'qr',       label: 'QR Bank',         icon: 'bi bi-qr-code' },
 ] as const;
 
 const route = useRoute();
 const router = useRouter();
 
 const dashboardRouteBySection: Record<SectionKey, string> = {
-  home: '/dashboard/home',
-  vendors: '/dashboard/vendors',
-  vendorWorkspace: '/dashboard/vendors',
-  events: '/dashboard/events',
+  home:           '/dashboard/home',
+  vendors:        '/dashboard/vendors',
+  vendorWorkspace:'/dashboard/vendors',
+  events:         '/dashboard/events',
   eventWorkspace: '/dashboard/events',
-  qrSheet: '/dashboard/events',
-  inventory: '/dashboard/items',
-  analytics: '/dashboard/items',
-  designer: '/dashboard/menus/studio',
-  preview: '/dashboard/menus/preview',
-  publish: '/dashboard/events/publish',
-  qr: '/dashboard/qr',
-  menus: '/dashboard/menus/studio',
-  items: '/dashboard/items',
+  qrSheet:        '/dashboard/events',
+  inventory:      '/dashboard/menus/studio',
+  analytics:      '/dashboard/menus/studio',
+  designer:       '/dashboard/menus/studio',
+  preview:        '/dashboard/menus/preview',
+  publish:        '/dashboard/events',
+  qr:             '/dashboard/qr',
+  menus:          '/dashboard/menus/studio',
+  items:          '/dashboard/menus/studio',
 };
 
 function sectionFromPath(path: string): SectionKey {
@@ -1044,12 +1230,11 @@ function sectionFromPath(path: string): SectionKey {
   if (/^\/dashboard\/events\/\d+\/publish/.test(path)) return 'eventWorkspace';
   if (/^\/dashboard\/events\/\d+/.test(path)) return 'eventWorkspace';
   if (path === '/dashboard/events') return 'events';
-  if (path.startsWith('/dashboard/items/')) return 'analytics';
-  if (path.startsWith('/dashboard/items')) return 'inventory';
+  // items routes merged into designer
+  if (path.startsWith('/dashboard/items')) return 'designer';
   if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
-  if (path.startsWith('/dashboard/events/publish')) return 'publish';
   if (path.startsWith('/dashboard/qr')) return 'qr';
   return 'home';
 }
@@ -1059,19 +1244,20 @@ const activeSection = computed<SectionKey>({
   set: (section) => router.push(dashboardRouteBySection[section]),
 });
 const loading = ref(false);
-const error = ref('');
-const message = ref('');
+type Toast = { id: number; type: 'success' | 'error'; text: string };
+const toasts = ref<Toast[]>([]);
+let toastCounter = 0;
 const selectedVendorId = ref(Number(localStorage.getItem('peshkash-admin-vendor-id') || 0));
 const selectedMenuIdForItems = ref(0);
 const selectedEventIdForItems = ref(0);
 const showItemContextPicker = ref(false);
 const showVendorEditor = ref(false);
 const showEventEditor = ref(false);
-const showQuickMenuItem = ref(false);
 const showArrangeDrawer = ref(false);
 const showQrEditor = ref(false);
 const showPublishDrawer = ref(false);
 const designerMenuName = ref('');
+const designerMenuType = ref<'generic' | 'personalized'>('generic');
 const designerFullMenuQr = ref(false);
 const designerNotes = reactive<Record<number, string>>({});
 const designerSearch = ref('');
@@ -1084,7 +1270,8 @@ const itemTypeFilter = ref('');
 const selectedAnalyticsItemId = ref<number | null>(null);
 const draggedLibraryItemId = ref<number | null>(null);
 const draggedDesignedItemId = ref<number | null>(null);
-let alertTimer: number | undefined;
+const showItemDrawer = ref(false);
+const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -1100,15 +1287,154 @@ const vendorPhone = ref('');
 const vendorEmail = ref('');
 const vendorWebsite = ref('');
 const vendorMapUrl = ref('');
+const vendorInstagram = ref('');
+const vendorFacebook = ref('');
+const vendorLinkedIn = ref('');
+const vendorTwitter = ref('');
+const vendorWhatsApp = ref('');
+const vendorYouTube = ref('');
 const vendorBusinessDays = ref('');
 const vendorBusinessHours = ref('');
+
+// ── Location picker ───────────────────────────────────────────────────────────
+const locationSearchQuery   = ref('');
+const locationSuggestions   = ref<{ place_id: string; display_name: string; lat: string; lon: string }[]>([]);
+const locationDisplay       = ref('');
+const showLocationDropdown  = ref(false);
+const locating              = ref(false);
+let   locationSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onLocationSearch() {
+  if (locationSearchTimer) clearTimeout(locationSearchTimer);
+  locationDisplay.value = '';
+  vendorMapUrl.value    = '';
+  if (!locationSearchQuery.value.trim()) { locationSuggestions.value = []; return; }
+  locationSearchTimer = setTimeout(async () => {
+    try {
+      const q = encodeURIComponent(locationSearchQuery.value);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=6&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'Peshkash-Admin/1.0' } }
+      );
+      locationSuggestions.value = await res.json();
+      showLocationDropdown.value = true;
+    } catch { /* network error – silently ignore */ }
+  }, 380);
+}
+
+function selectLocation(s: { place_id: string; display_name: string; lat: string; lon: string }) {
+  vendorMapUrl.value       = `https://maps.google.com/maps?q=${s.lat},${s.lon}`;
+  locationDisplay.value    = s.display_name.split(',').slice(0, 3).join(', ');
+  locationSearchQuery.value = locationDisplay.value;
+  locationSuggestions.value = [];
+  showLocationDropdown.value = false;
+}
+
+function clearLocation() {
+  vendorMapUrl.value        = '';
+  locationDisplay.value     = '';
+  locationSearchQuery.value = '';
+  locationSuggestions.value = [];
+}
+
+function closeLocationDropdown() {
+  // Small delay so a click on a suggestion registers before the list hides
+  setTimeout(() => { showLocationDropdown.value = false; }, 180);
+}
+
+async function useCurrentLocation() {
+  if (!navigator.geolocation) { setError(new Error('Geolocation not supported in this browser')); return; }
+  locating.value = true;
+  navigator.geolocation.getCurrentPosition(
+    async ({ coords: { latitude, longitude } }) => {
+      vendorMapUrl.value = `https://maps.google.com/maps?q=${latitude},${longitude}`;
+      try {
+        const res  = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          { headers: { 'Accept-Language': 'en', 'User-Agent': 'Peshkash-Admin/1.0' } }
+        );
+        const data = await res.json();
+        locationDisplay.value     = data.display_name?.split(',').slice(0, 3).join(', ') || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        locationSearchQuery.value = locationDisplay.value;
+      } catch {
+        locationDisplay.value     = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        locationSearchQuery.value = locationDisplay.value;
+      }
+      locating.value = false;
+    },
+    () => { setError(new Error('Location access denied or unavailable')); locating.value = false; },
+    { timeout: 8000 }
+  );
+}
+
+// ── Structured business hours inputs ─────────────────────────────────────────
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const vendorDaySelection = ref<string[]>([]);
+const vendorHoursFrom    = ref('');
+const vendorHoursTo      = ref('');
+
+function toggleDay(day: string) {
+  const idx = vendorDaySelection.value.indexOf(day);
+  if (idx >= 0) vendorDaySelection.value.splice(idx, 1);
+  else vendorDaySelection.value.push(day);
+}
+
+function formatDaySelection(days: string[]): string {
+  if (!days.length) return '';
+  const ordered = WEEK_DAYS.filter(d => days.includes(d));
+  if (ordered.length <= 1) return ordered.join('');
+  const startIdx = WEEK_DAYS.indexOf(ordered[0] as any);
+  const endIdx   = WEEK_DAYS.indexOf(ordered[ordered.length - 1] as any);
+  const isRange  = endIdx - startIdx + 1 === ordered.length;
+  return isRange ? `${ordered[0]}–${ordered[ordered.length - 1]}` : ordered.join(', ');
+}
+
+function parseDaySelection(str: string): string[] {
+  if (!str) return [];
+  const range = str.match(/^([A-Z][a-z]+)\s*[-–]\s*([A-Z][a-z]+)$/);
+  if (range) {
+    const s = WEEK_DAYS.indexOf(range[1] as any);
+    const e = WEEK_DAYS.indexOf(range[2] as any);
+    if (s >= 0 && e >= 0) return [...WEEK_DAYS.slice(s, e + 1)];
+  }
+  return str.split(/[,\s]+/).filter(d => (WEEK_DAYS as readonly string[]).includes(d));
+}
+
+function fmt24to12(t: string): string {
+  if (!t) return '';
+  const [hh, mm] = t.split(':').map(Number);
+  const period = hh >= 12 ? 'PM' : 'AM';
+  const h = hh % 12 || 12;
+  return mm ? `${h}:${String(mm).padStart(2, '0')} ${period}` : `${h}:00 ${period}`;
+}
+
+function fmt12to24(str: string): string {
+  const m = str.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (!m) return '';
+  let h = parseInt(m[1]);
+  const min = parseInt(m[2] ?? '0');
+  if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+  if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+// Sync structured day chips → vendorBusinessDays string
+watch(vendorDaySelection, (days) => {
+  vendorBusinessDays.value = formatDaySelection(days);
+}, { deep: true });
+
+// Sync structured time pickers → vendorBusinessHours string
+watch([vendorHoursFrom, vendorHoursTo], ([from, to]) => {
+  const parts = [from ? fmt24to12(from) : '', to ? fmt24to12(to) : ''].filter(Boolean);
+  vendorBusinessHours.value = parts.length === 2 ? `${parts[0]} – ${parts[1]}` : parts[0] ?? '';
+});
 const qrTargetType = ref<'vendor' | 'menu' | 'item' | 'custom'>('vendor');
 const qrPreview = reactive({ shortQrUrl: '', finalPublicUrl: '' });
 const qrCodeDataUrl = ref('');
 const vendorQrCodeDataUrl = ref('');
 const itemRows = ref<DraftItem[]>([]);
 
-const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false });
+const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
 const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
@@ -1122,7 +1448,6 @@ const productSelections = reactive<Record<string, boolean>>({
 });
 const adhocForm = reactive({ parentId: 0, name: '', displayName: '', customMenuDisplayName: '', addToSourceMenu: false });
 const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', destination: 'source' as 'source' | 'adhoc' | 'both' });
-const quickItem = reactive({ parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
 
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
@@ -1131,7 +1456,10 @@ const vendorMenuIds = computed(() => vendorMenus.value.map((menu) => menu.id));
 const vendorItems = computed(() => items.value.filter((item) => vendorMenuIds.value.includes(item.menuId)));
 const selectedMenuItems = computed(() => items.value.filter((item) => item.menuId === selectedMenuIdForItems.value));
 const selectedMenuForItems = computed(() => vendorMenus.value.find((menu) => menu.id === selectedMenuIdForItems.value));
-const selectedEventForItems = computed(() => vendorEvents.value.find((event) => event.id === selectedEventIdForItems.value));
+const selectedEventForItems = computed(() => {
+  const id = selectedEventIdForItems.value || Number(route.params.eventId || 0);
+  return events.value.find((event) => event.id === id);
+});
 const selectedDesignerItems = computed(() => designerDraftItems.value);
 const selectedDesignerTree = computed(() => buildItemTree(selectedDesignerItems.value));
 const designerDirty = computed(() => {
@@ -1169,8 +1497,11 @@ const selectedAnalyticsUsage = computed(() => {
 const menuPreviewUrl = computed(() => selectedEventForItems.value && selectedMenuForItems.value
   ? `${window.location.origin}/event/${selectedEventForItems.value.name}/menu/${selectedMenuForItems.value.name}`
   : '');
-const selectedEventMenus = computed(() => selectedEventIdForItems.value ? eventMenus(selectedEventIdForItems.value) : []);
+const activeEventId = computed(() => selectedEventIdForItems.value || Number(route.params.eventId || 0));
+const selectedEventMenus = computed(() => activeEventId.value ? eventMenus(activeEventId.value) : []);
 const selectedEventMenuIds = computed(() => selectedEventMenus.value.map((menu) => menu.id));
+const attachMenuId = ref(0);
+const attachableMenus = computed(() => vendorMenus.value.filter((m) => !selectedEventMenuIds.value.includes(m.id)));
 const selectedEventItems = computed(() => items.value.filter((item) => selectedEventMenuIds.value.includes(item.menuId)));
 const publishChecklist = computed(() => [
   { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
@@ -1230,20 +1561,20 @@ const activeTitle = computed(() => {
 });
 const activeSubtitle = computed(() => {
   const copy: Record<SectionKey, string> = {
-    home: 'Work from a selected vendor and move through setup without losing context.',
-    vendors: 'Create vendors, activate contact cards, and generate vendor QR mappings.',
-    vendorWorkspace: 'Manage vendor details, contact-card product, and reusable ownership context.',
-    inventory: 'Manage reusable vendor items before they are assembled into menus.',
-    analytics: 'Inspect where an item is used and leave space for scans, ratings, and first-added history.',
-    designer: 'Assemble event-ready menus from existing items, adhoc items, and custom menu copies.',
-    preview: 'Review the menu as guests will see it before QR mapping or publish.',
-    publish: 'Review event setup and activate when the menu and QR targets are ready.',
-    events: 'Create events under the selected vendor. Events do not need standalone QR codes.',
-    eventWorkspace: 'Operate one event: menus, assets, QR readiness, previews, and publish state.',
-    qrSheet: 'Printable and testable menu/item QR target sheet for one event.',
-    menus: 'Create source menus independently, then map them to events when needed.',
-    items: 'Add source or adhoc items quickly in a table-first workflow.',
-    qr: 'Browse reusable QR assets, inspect current mappings, and remap when needed.',
+    home:           'Select a vendor and jump into your workspaces.',
+    vendors:        'Create vendors, activate contact cards, and generate vendor QR mappings.',
+    vendorWorkspace:'Manage vendor details, contact-card product, and reusable ownership context.',
+    inventory:      'Items for the selected vendor across all menus.',
+    analytics:      'Inspect where an item is used across events and menus.',
+    designer:       'Build and manage vendor menus. Items live here — not as a separate section.',
+    preview:        'Review the menu as guests will see it before activating the event.',
+    publish:        'Review event setup and activate when ready.',
+    events:         'Create and manage events. Select one to manage menus, QR targets, and publish.',
+    eventWorkspace: 'Manage this event: link menus, preview, and publish.',
+    qrSheet:        'Printable QR sheet for this event.',
+    menus:          'Vendor menus — generic templates and personalized event copies.',
+    items:          'Items for the selected menu.',
+    qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
   };
   return copy[activeSection.value];
 });
@@ -1267,21 +1598,26 @@ function slugify(value: string) {
     .replace(/-{2,}/g, '-');
 }
 
+function addToast(type: 'success' | 'error', text: string) {
+  const id = ++toastCounter;
+  toasts.value.push({ id, type, text });
+  window.setTimeout(() => removeToast(id), type === 'error' ? 6000 : 3500);
+}
+
+function removeToast(id: number) {
+  toasts.value = toasts.value.filter((t) => t.id !== id);
+}
+
 function setNotice(text: string) {
-  message.value = text;
-  error.value = '';
-  window.clearTimeout(alertTimer);
-  alertTimer = window.setTimeout(() => { message.value = ''; }, 4000);
+  addToast('success', text);
 }
 
 function setError(err: any) {
   const raw = err.response?.data?.message ?? err.message ?? 'Something went wrong';
-  error.value = raw.includes('already exists')
+  const text = raw.includes('already exists')
     ? `${raw} Try a more specific slug or add a short suffix.`
     : raw;
-  message.value = '';
-  window.clearTimeout(alertTimer);
-  alertTimer = window.setTimeout(() => { error.value = ''; }, 7000);
+  addToast('error', text);
 }
 
 function requireSlug(value: string, label: string) {
@@ -1429,15 +1765,17 @@ function clearItemFilters() {
 
 function isNavActive(section: SectionKey) {
   if (activeSection.value === section) return true;
-  if (activeSection.value === 'analytics' && section === 'inventory') return true;
+  // sub-sections roll up to their parent nav item
+  if ((activeSection.value === 'analytics' || activeSection.value === 'inventory') && section === 'designer') return true;
   if ((activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet') && section === 'events') return true;
   if (activeSection.value === 'vendorWorkspace' && section === 'vendors') return true;
+  if (activeSection.value === 'preview' && section === 'designer') return true;
   return false;
 }
 
 function goBack() {
-  if (activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet' || activeSection.value === 'publish') router.push('/dashboard/events');
-  else if (activeSection.value === 'analytics') router.push('/dashboard/items');
+  if (activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet') router.push('/dashboard/events');
+  else if (activeSection.value === 'analytics' || activeSection.value === 'inventory') router.push('/dashboard/menus/studio');
   else if (activeSection.value === 'vendorWorkspace') router.push('/dashboard/vendors');
   else router.push('/dashboard/home');
 }
@@ -1581,14 +1919,27 @@ function closeVendorEditor() {
 }
 
 function resetVendor() {
-  Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false });
+  Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
   vendorContactText.value = '';
   vendorPhone.value = '';
   vendorEmail.value = '';
   vendorWebsite.value = '';
   vendorMapUrl.value = '';
-  vendorBusinessDays.value = '';
+  vendorInstagram.value = '';
+  vendorFacebook.value = '';
+  vendorLinkedIn.value = '';
+  vendorTwitter.value = '';
+  vendorWhatsApp.value = '';
+  vendorYouTube.value = '';
+  locationSearchQuery.value  = '';
+  locationDisplay.value      = '';
+  locationSuggestions.value  = [];
+  showLocationDropdown.value = false;
+  vendorBusinessDays.value  = '';
   vendorBusinessHours.value = '';
+  vendorDaySelection.value  = [];
+  vendorHoursFrom.value     = '';
+  vendorHoursTo.value       = '';
   vendorQrDraft.qrHash = '';
   vendorQrDraft.url = '';
   vendorQrCodeDataUrl.value = '';
@@ -1607,22 +1958,60 @@ function editVendor(vendor: Vendor) {
 
 function hydrateVendorContactFields(contact: string[]) {
   const find = (label: string) => contact.find((line) => line.toLowerCase().startsWith(`${label.toLowerCase()}:`))?.split(':').slice(1).join(':').trim() || '';
-  vendorPhone.value = find('Phone');
-  vendorEmail.value = find('Email');
-  vendorWebsite.value = find('Website');
-  vendorMapUrl.value = find('Google Maps');
-  vendorBusinessDays.value = find('Business Days');
-  vendorBusinessHours.value = find('Business Hours');
+  vendorPhone.value        = find('Phone');
+  vendorEmail.value        = find('Email');
+  vendorWebsite.value      = find('Website');
+  const savedMapUrl = find('Google Maps');
+  vendorMapUrl.value = savedMapUrl;
+  if (savedMapUrl) {
+    try {
+      const u = new URL(savedMapUrl);
+      const q = u.searchParams.get('q');
+      locationSearchQuery.value = q ?? savedMapUrl;
+      locationDisplay.value     = q ?? '';
+    } catch { locationSearchQuery.value = savedMapUrl; }
+  } else {
+    locationSearchQuery.value = '';
+    locationDisplay.value     = '';
+  }
+  vendorInstagram.value    = find('Instagram');
+  vendorFacebook.value     = find('Facebook');
+  vendorLinkedIn.value     = find('LinkedIn');
+  vendorTwitter.value      = find('Twitter');
+  vendorWhatsApp.value     = find('WhatsApp');
+  vendorYouTube.value      = find('YouTube');
+
+  const days  = find('Business Days');
+  const hours = find('Business Hours');
+
+  // Set string refs directly (watchers won't fire since we're also setting structured refs)
+  vendorBusinessDays.value  = days;
+  vendorBusinessHours.value = hours;
+
+  // Populate structured day chips from stored string
+  vendorDaySelection.value = parseDaySelection(days);
+
+  // Populate structured time inputs — parse "9:00 AM – 6:00 PM" back to "09:00" / "18:00"
+  const timeParts = hours.split(/\s*[-–]\s*/);
+  vendorHoursFrom.value = fmt12to24(timeParts[0] ?? '');
+  vendorHoursTo.value   = fmt12to24(timeParts[1] ?? '');
+
   if (!vendorPhone.value && !vendorEmail.value && contact.length) vendorPhone.value = contact[0] || '';
 }
 
 function vendorContactPayload() {
   return [
-    ['Phone', vendorPhone.value],
-    ['Email', vendorEmail.value],
-    ['Website', vendorWebsite.value],
-    ['Google Maps', vendorMapUrl.value],
-    ['Business Days', vendorBusinessDays.value],
+    ['Phone',          vendorPhone.value],
+    ['WhatsApp',       vendorWhatsApp.value],
+    ['Email',          vendorEmail.value],
+    ['Website',        vendorWebsite.value],
+    ['Google Maps',    vendorMapUrl.value],
+    ['Instagram',      vendorInstagram.value],
+    ['Facebook',       vendorFacebook.value],
+    ['LinkedIn',       vendorLinkedIn.value],
+    ['Twitter',        vendorTwitter.value],
+    ['YouTube',        vendorYouTube.value],
+    ['Business Days',  vendorBusinessDays.value],
     ['Business Hours', vendorBusinessHours.value],
   ].filter(([, value]) => String(value).trim()).map(([label, value]) => `${label}: ${String(value).trim()}`);
 }
@@ -1694,7 +2083,11 @@ async function saveVendorQrMapping() {
   if (!vendorForm.hasContactPage) throw new Error('Add the contact card product before activating this QR');
   await syncVendorQrDraft();
   requireSlug(vendorQrDraft.qrHash, 'QR hash');
-  await axios.post(adminUrl('/qr-mappings'), { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true });
+  const payload = { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true };
+  const existing = qrMappings.value.find((m) => m.qrHash === vendorQrDraft.qrHash);
+  existing
+    ? await axios.put(adminUrl(`/qr-mappings/${existing.id}`), payload)
+    : await axios.post(adminUrl('/qr-mappings'), payload);
 }
 
 function resetEvent() {
@@ -1930,24 +2323,29 @@ function uniqueDraftSlug(base: string) {
   return `${clean}-${index}`;
 }
 
-async function createQuickMenuItem() {
+function openItemDrawer(parentId: number | null) {
+  if (!selectedMenuForItems.value) { setError(new Error('Select a working menu first')); return; }
+  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', parentId: parentId ?? null });
+  showItemDrawer.value = true;
+}
+
+function saveItemFromDrawer() {
   try {
     if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
-    if (!quickItem.displayName.trim()) throw new Error('Add an item name first');
-    quickItem.name = uniqueDraftSlug(quickItem.name || quickItem.displayName);
-    requireSlug(quickItem.name, 'Item slug');
+    if (!itemDraft.displayName.trim()) throw new Error('Add a name first');
+    const name = uniqueDraftSlug(itemDraft.displayName);
     designerDraftItems.value.push({
       id: designerTempId.value--,
       menuId: selectedMenuIdForItems.value,
-      name: quickItem.name,
-      displayName: quickItem.displayName,
-      type: quickItem.type || 'item',
-      enumType: quickItem.enumType,
-      parentId: quickItem.parentId || undefined,
+      name,
+      displayName: itemDraft.displayName,
+      type: itemDraft.type,
+      enumType: itemDraft.type === 'item' ? itemDraft.enumType : '',
+      description: itemDraft.type === 'item' ? itemDraft.description : '',
+      parentId: itemDraft.parentId ?? undefined,
       isActive: true,
     });
-    Object.assign(quickItem, { parentId: 0, name: '', displayName: '', type: 'item', enumType: '' });
-    showQuickMenuItem.value = false;
+    showItemDrawer.value = false;
   } catch (err) {
     setError(err);
   }
@@ -2025,6 +2423,14 @@ async function saveImportedItem() {
 
 function eventMenus(eventId: number) {
   return eventMenuMap.value[eventId] ?? [];
+}
+
+function linkedEventsForMenu(menuId: number): string {
+  if (!menuId) return '';
+  const names = events.value
+    .filter((ev) => eventMenus(ev.id).some((m) => m.id === menuId))
+    .map((ev) => ev.displayName);
+  return names.join(' · ');
 }
 
 function parentName(parentId?: number) {
@@ -2132,13 +2538,14 @@ async function createDesignerMenu() {
       vendorId: selectedVendorId.value,
       name,
       displayName: designerMenuName.value.trim(),
-      description: 'Custom menu designed in admin.',
       isActive: true,
+      type: designerMenuType.value,
     });
     await loadAll();
     selectedMenuIdForItems.value = Number(data.id);
     designerMenuName.value = '';
-    setNotice('Custom menu created. Add items from the library next.');
+    designerMenuType.value = 'generic';
+    setNotice(`${data.type === 'personalized' ? 'Personalized' : 'Generic'} menu created. Add items from the library next.`);
   } catch (err) {
     setError(err);
   }
@@ -2164,6 +2571,32 @@ async function linkSelectedMenuToEvent() {
   }
 }
 
+async function attachMenuToEvent(menuId: number) {
+  const eventId = selectedEventIdForItems.value || Number(route.params.eventId || 0);
+  if (!eventId || !menuId) return;
+  try {
+    loading.value = true;
+    const menu = vendorMenus.value.find((m) => m.id === menuId);
+    await axios.post(adminUrl(`/events/${eventId}/menus/${menuId}`), { displayName: menu?.displayName });
+    await loadEventMenuLinks();
+    attachMenuId.value = 0;
+    setNotice('Menu linked to event');
+  } catch (err) { setError(err); }
+  finally { loading.value = false; }
+}
+
+async function detachMenuFromEvent(menuId: number) {
+  const eventId = selectedEventIdForItems.value || Number(route.params.eventId || 0);
+  if (!eventId) return;
+  try {
+    loading.value = true;
+    await axios.delete(adminUrl(`/events/${eventId}/menus/${menuId}`));
+    await loadEventMenuLinks();
+    setNotice('Menu unlinked from event');
+  } catch (err) { setError(err); }
+  finally { loading.value = false; }
+}
+
 async function copyItemToDesignedMenu(item: ItemRow, parentId: number | null = null) {
   if (!selectedMenuIdForItems.value) return setError(new Error('Select a working menu first'));
   const baseSlug = slugify(item.name || itemLabel(item));
@@ -2182,17 +2615,22 @@ function loadEventIntoForm(event: EventRow) {
   editEvent(event);
 }
 
-async function publishSelectedEvent() {
+async function setEventStatusTo(status: 'draft' | 'active' | 'inactive') {
   try {
     const event = selectedEventForItems.value;
-    if (!event) throw new Error('Select an event to publish');
-    await axios.put(adminUrl(`/events/${event.id}`), { ...event, status: 'active' });
+    if (!event) throw new Error('No event selected');
+    await axios.patch(adminUrl(`/events/${event.id}/status`), { status });
     await loadAll();
     showPublishDrawer.value = false;
-    setNotice('Event published');
+    const label = status === 'active' ? 'activated — QRs are live' : status === 'inactive' ? 'deactivated — QRs are off' : 'set to draft';
+    setNotice(`Event ${label}.`);
   } catch (err) {
     setError(err);
   }
+}
+
+async function publishSelectedEvent() {
+  await setEventStatusTo('active');
 }
 
 function menuPathFor(event?: EventRow, menu?: MenuRow) {
@@ -2299,7 +2737,11 @@ async function saveQr() {
   try {
     requireSlug(qrForm.qrHash, 'QR hash');
     if (!qrForm.url) await buildQrDestination();
-    const { data } = await axios.post<QrMapping>(adminUrl('/qr-mappings'), { qrHash: qrForm.qrHash, url: qrForm.url, isActive: qrForm.isActive });
+    const payload = { qrHash: qrForm.qrHash, url: qrForm.url, isActive: qrForm.isActive };
+    const existingId = selectedQrMapping.value?.id;
+    const { data } = existingId
+      ? await axios.put<QrMapping>(adminUrl(`/qr-mappings/${existingId}`), payload)
+      : await axios.post<QrMapping>(adminUrl('/qr-mappings'), payload);
     qrPreview.shortQrUrl = data.shortQrUrl;
     qrPreview.finalPublicUrl = data.finalPublicUrl;
     qrCodeDataUrl.value = await QRCode.toDataURL(data.shortQrUrl, { margin: 1, width: 180 });
@@ -2350,10 +2792,9 @@ watch(() => route.fullPath, hydrateRouteContext);
 
 onMounted(async () => {
   await loadAll();
-  hydrateRouteContext();
   selectedMenuIdForItems.value = vendorMenus.value[0]?.id ?? 0;
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
-  hydrateRouteContext();
+  hydrateRouteContext(); // must run last so URL params always win
   syncItemRows();
 });
 </script>
@@ -2674,6 +3115,104 @@ label {
   grid-column: 1 / -1;
 }
 
+.event-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.event-steps .step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.event-steps .step.done {
+  color: #16a34a;
+}
+
+.event-steps .step-arrow {
+  color: #d1d5db;
+  font-size: 0.75rem;
+}
+
+.pill-live {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.pill-off {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Event list status pills */
+.status-pill {
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+.status-pill.status-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+.status-pill.status-draft {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status-pill.status-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Back button with label */
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+}
+
+/* Inline menu attach row */
+.attach-menu-row {
+  align-items: center;
+  border-bottom: 1px solid #f0ebe3;
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 14px;
+  margin-bottom: 6px;
+}
+.attach-menu-row .form-select {
+  flex: 1;
+}
+
+/* Menu type pill in linked menus table */
+.type-pill {
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  text-transform: uppercase;
+}
+.type-pill.generic {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.type-pill.personalized {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .hero-panel {
   align-items: center;
   background:
@@ -2782,6 +3321,231 @@ label {
 
 .wide {
   grid-column: 1 / -1;
+}
+
+.contact-section-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 6px 0 4px;
+  border-bottom: 1px solid #e8dfd0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #a07c4a;
+  text-transform: uppercase;
+}
+
+/* ── Business hours structured input ───────────────────────────── */
+.biz-hours-block {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label-sm {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5c6472;
+  margin: 0;
+}
+
+.day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.day-chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid #d5cdc3;
+  background: #f8f6f3;
+  color: #6b6460;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+.day-chip.active {
+  border-color: #BD945A;
+  background: #fdf6ec;
+  color: #a07c4a;
+}
+.day-chip:hover:not(.active) { border-color: #BD945A; color: #BD945A; }
+
+.time-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-input {
+  flex: 1;
+  max-width: 140px;
+  font-size: 0.85rem;
+}
+
+.time-sep {
+  font-size: 0.8rem;
+  color: #8a8480;
+  flex-shrink: 0;
+}
+
+.biz-hours-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: #a07c4a;
+  font-style: italic;
+}
+.biz-hours-preview i { font-size: 0.72rem; opacity: 0.7; }
+
+/* ── Location picker ────────────────────────────────────────────── */
+.location-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label-hint {
+  font-weight: 400;
+  color: #9a9490;
+  font-size: 0.75rem;
+}
+
+.location-search-row {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.location-input-wrap { position: relative; flex: 1; }
+
+.location-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0d8ce;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.location-option {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f2ede7;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #3a3228;
+  transition: background 0.12s;
+  line-height: 1.35;
+}
+.location-option:last-child { border-bottom: none; }
+.location-option:hover { background: #fdf6ec; }
+.location-option i { color: #BD945A; flex-shrink: 0; margin-top: 2px; }
+.location-option span { flex: 1; }
+
+.location-gps-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid #d5cdc3;
+  background: #f8f6f3;
+  color: #6b6460;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.location-gps-btn:hover { border-color: #BD945A; color: #BD945A; background: #fdf6ec; }
+.location-gps-btn.locating { color: #BD945A; border-color: #BD945A; animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.location-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f2fbf4;
+  border: 1px solid #b8dfc0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #2d6a40;
+}
+.location-confirmed i { color: #4a9e62; flex-shrink: 0; }
+.location-confirmed span { flex: 1; line-height: 1.3; }
+.location-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #7a9e84;
+  font-size: 1rem;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.location-clear:hover { color: #c0392b; }
+
+/* ── Social handle inputs ────────────────────────────────────────── */
+.handle-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.handle-input-wrap:focus-within {
+  border-color: #BD945A;
+  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.12);
+}
+.handle-prefix {
+  padding: 0.375rem 0.6rem 0.375rem 0.75rem;
+  background: #f8f6f3;
+  color: #9a8878;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-right: 1px solid #e8dfd0;
+  white-space: nowrap;
+  user-select: none;
+}
+.handle-input {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  flex: 1;
+}
+.handle-input:focus { outline: none; }
+
+.input-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: #9a9490;
+  margin-top: 3px;
+  font-style: italic;
 }
 
 .check {
@@ -3118,10 +3882,43 @@ td a {
 
 .designer-ribbon {
   align-items: end;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   margin-top: 12px;
+}
+
+.ribbon-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 180px;
+}
+
+.ribbon-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.type-select {
+  flex: 0 0 130px;
+}
+
+.ribbon-divider {
+  align-self: stretch;
+  width: 1px;
+  background: #e5e7eb;
+  margin: 0 4px;
+}
+
+.pill-accent {
+  background: #fef3e0;
+  color: #8b5527;
 }
 
 .compact-check {
@@ -3525,4 +4322,131 @@ td a {
     flex-direction: column;
   }
 }
+
+/* ── Toast Notifications ──────────────────────────────────────────────────── */
+.toast-stack {
+  bottom: 24px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+  position: fixed;
+  right: 24px;
+  z-index: 9999;
+}
+
+.toast-chip {
+  align-items: flex-start;
+  border-radius: 10px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.18);
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 10px;
+  max-width: 400px;
+  min-width: 260px;
+  padding: 13px 14px;
+  pointer-events: auto;
+}
+
+.toast-success { background: #14302a; color: #bbf7d0; }
+.toast-error   { background: #3b1414; color: #fecaca; }
+
+.toast-chip > i:first-child { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+.toast-chip > span { flex: 1; line-height: 1.45; }
+
+.toast-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  padding: 0;
+}
+.toast-close:hover { opacity: 1; }
+
+.toast-enter-active,
+.toast-leave-active { transition: all 0.22s ease; }
+.toast-enter-from,
+.toast-leave-to { opacity: 0; transform: translateX(28px); }
+
+/* ── Item Add Drawer ──────────────────────────────────────────────────────── */
+.item-add-drawer { max-width: 380px; }
+
+.item-type-toggle {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 20px;
+}
+
+.item-type-toggle button {
+  align-items: flex-start;
+  background: #f9f5ef;
+  border: 2px solid #e8dccb;
+  border-radius: 8px;
+  color: #4b3f30;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.item-type-toggle button i { font-size: 1.2rem; color: #9b7a4f; }
+.item-type-toggle button span { font-size: 0.9rem; font-weight: 700; }
+.item-type-toggle button small { color: #7a6649; font-size: 0.75rem; line-height: 1.3; }
+.item-type-toggle button.active { background: #fff7ed; border-color: #bd945a; }
+.item-type-toggle button.active i { color: #bd945a; }
+
+.item-drawer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
+.item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
+
+.dietary-toggle {
+  display: flex;
+  gap: 6px;
+}
+.dietary-toggle button {
+  background: #f4ede3;
+  border: 1.5px solid #ddd1bc;
+  border-radius: 20px;
+  color: #6b5a43;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: all 0.15s;
+}
+.dietary-toggle button.active,
+.dietary-toggle button.veg.active { background: #e6f5e9; border-color: #5a9068; color: #2d5a3d; }
+.dietary-toggle button.nonveg.active { background: #fde8e8; border-color: #c96060; color: #7a2020; }
+.dietary-toggle button.egg.active { background: #fef3d9; border-color: #c99a40; color: #6e4e10; }
+
+/* Root-level canvas add button */
+.canvas-root-add {
+  align-items: center;
+  background: transparent;
+  border: 1.5px dashed #d4b88a;
+  border-radius: 8px;
+  color: #9b7a4f;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 10px 0;
+  transition: border-color 0.15s, color 0.15s;
+  width: 100%;
+}
+.canvas-root-add:hover { border-color: #bd945a; color: #7a542a; }
 </style>

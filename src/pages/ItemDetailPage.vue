@@ -25,7 +25,16 @@
       <div class="text-center mb-4">
         <h1 class="fw-bold mb-1">{{ itemData?.name }}</h1>
          <small class="d-block">
-        <span class="vendor-name">{{ itemData.event.vendor.displayName }}</span> @ <span class="event-name">{{ itemData.event.displayName }}</span>
+        <RouterLink
+          v-if="itemData?.event?.vendor?.hasContactPage"
+          :to="`/vendor/${itemData.event.vendor.name}`"
+          class="vendor-name vendor-link"
+        >{{ itemData.event.vendor.displayName }}</RouterLink>
+        <span v-else class="vendor-name">{{ itemData?.event?.vendor?.displayName }}</span>
+        <template v-if="itemData?.menu?.type === 'personalized'">
+          <span class="mx-1 text-muted">@</span>
+          <span class="event-name">{{ itemData.event.displayName }}</span>
+        </template>
       </small>
         <small v-if="itemData?.price" class="d-block text-info">{{ itemData.price }}</small>
       </div>
@@ -180,6 +189,17 @@ onMounted(async () => {
 .event-name {
   color: #bd945a;
   font-weight: 500;
+}
+
+.vendor-link {
+  text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(189, 148, 90, 0.5);
+  transition: border-color 0.15s ease;
+}
+
+.vendor-link:hover {
+  border-bottom-color: #bd945a;
 }
 
 .pk-share-fab {
