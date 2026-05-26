@@ -300,7 +300,7 @@ const socialActions = computed((): SocialAction[] => {
 
   // Directions — always last if a location is available
   if (mapQuery.value && mapsUrl.value !== '#') {
-    actions.push({ key: 'directions', icon: 'bi-navigation-fill', label: 'Directions', href: mapsUrl.value })
+    actions.push({ key: 'directions', icon: 'bi-compass', label: 'Directions', href: mapsUrl.value })
   }
 
   return actions
@@ -540,9 +540,10 @@ a.row-value:hover { color: #BD945A; }
   height: 160px;
   overflow: hidden;
   border-radius: 6px;
-  border: 1.5px solid #BD945A;
+  border: none;
   position: relative;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  /* Refined shadow ring — no solid border line */
+  box-shadow: 0 0 0 1px rgba(189, 148, 90, 0.28), 0 4px 16px rgba(0, 0, 0, 0.09);
 }
 
 .map-embed {
@@ -554,14 +555,18 @@ a.row-value:hover { color: #BD945A; }
   height: calc(100% + 46px);
   border: none;
   display: block;
+  /* Warm sepia cast to pull the map into the cream/gold palette */
+  filter: sepia(0.45) saturate(0.8) brightness(0.97);
 }
 
-/* Transparent overlay prevents all pan / zoom / click inside the iframe */
+/* Overlay: blocks pointer interaction AND adds a subtle warm tone on top */
 .map-overlay {
   position: absolute;
   inset: 0;
   z-index: 1;
   cursor: default;
+  background: rgba(210, 175, 110, 0.1);
+  mix-blend-mode: multiply;
 }
 
 /* ── Quick Links section ─────────────────────────────────────────────────── */
