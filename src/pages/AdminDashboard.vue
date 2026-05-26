@@ -163,15 +163,87 @@
                   <p class="hint wide">If this vendor already exists, use a clearer identifier such as city, branch, year, or a short suffix like <code>radisson-gurgaon-02</code>.</p>
                   <label>Phone<input v-model.trim="vendorPhone" class="form-control" placeholder="+91 90000 00000" /></label>
                   <label>Email<input v-model.trim="vendorEmail" class="form-control" placeholder="events@example.com" /></label>
-                  <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="https://example.com" /></label>
-                  <label>Google Maps<input v-model.trim="vendorMapUrl" class="form-control" placeholder="https://maps.google.com/..." /></label>
+                  <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="example.com" /></label>
+
+                  <!-- Location picker -->
+                  <div class="wide location-block">
+                    <p class="form-label-sm">Location <span class="form-label-hint">· shown as map on contact card</span></p>
+                    <div class="location-search-row">
+                      <div class="location-input-wrap" style="flex:1; position:relative">
+                        <input
+                          v-model="locationSearchQuery"
+                          class="form-control"
+                          placeholder="Search a place…"
+                          autocomplete="off"
+                          @input="onLocationSearch"
+                          @focus="showLocationDropdown = locationSuggestions.length > 0"
+                          @blur="closeLocationDropdown"
+                        />
+                        <div v-if="showLocationDropdown && locationSuggestions.length" class="location-dropdown">
+                          <button
+                            v-for="s in locationSuggestions"
+                            :key="s.place_id"
+                            type="button"
+                            class="location-option"
+                            @mousedown.prevent="selectLocation(s)"
+                          >
+                            <i class="bi bi-geo-alt"></i>
+                            <span>{{ s.display_name }}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="location-gps-btn"
+                        :class="{ locating }"
+                        :title="locating ? 'Getting location…' : 'Use current location'"
+                        @click="useCurrentLocation"
+                      >
+                        <i :class="locating ? 'bi bi-hourglass-split' : 'bi bi-crosshair'"></i>
+                      </button>
+                    </div>
+                    <div v-if="locationDisplay" class="location-confirmed">
+                      <i class="bi bi-check-circle-fill"></i>
+                      <span>{{ locationDisplay }}</span>
+                      <button type="button" class="location-clear" @click="clearLocation"><i class="bi bi-x"></i></button>
+                    </div>
+                  </div>
+
                   <p class="hint wide contact-section-label"><i class="bi bi-share"></i> Social &amp; Messaging</p>
-                  <label>WhatsApp<input v-model.trim="vendorWhatsApp" class="form-control" placeholder="+91 90000 00000" /></label>
-                  <label>Instagram<input v-model.trim="vendorInstagram" class="form-control" placeholder="@handle or profile URL" /></label>
-                  <label>Facebook<input v-model.trim="vendorFacebook" class="form-control" placeholder="Page name or URL" /></label>
-                  <label>LinkedIn<input v-model.trim="vendorLinkedIn" class="form-control" placeholder="Company page URL" /></label>
-                  <label>Twitter / X<input v-model.trim="vendorTwitter" class="form-control" placeholder="@handle" /></label>
-                  <label>YouTube<input v-model.trim="vendorYouTube" class="form-control" placeholder="Channel URL" /></label>
+                  <label>
+                    WhatsApp
+                    <input v-model.trim="vendorWhatsApp" class="form-control" placeholder="+91 90000 00000" />
+                    <span class="input-hint">Leave empty to auto-derive from phone number</span>
+                  </label>
+                  <label>
+                    Instagram
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">@</span>
+                      <input v-model.trim="vendorInstagram" class="form-control handle-input" placeholder="handle  or  instagram.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    Facebook
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">fb</span>
+                      <input v-model.trim="vendorFacebook" class="form-control handle-input" placeholder="page-name  or  facebook.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    LinkedIn
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">in/</span>
+                      <input v-model.trim="vendorLinkedIn" class="form-control handle-input" placeholder="profile  or  linkedin.com/…" />
+                    </div>
+                  </label>
+                  <label>
+                    Twitter / X
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">@</span>
+                      <input v-model.trim="vendorTwitter" class="form-control handle-input" placeholder="handle  or  x.com/…" />
+                    </div>
+                  </label>
+                  <label>YouTube<input v-model.trim="vendorYouTube" class="form-control" placeholder="@channel  or  youtube.com/…" /></label>
                   <p class="hint wide contact-section-label"><i class="bi bi-clock"></i> Business Hours</p>
                   <div class="wide biz-hours-block">
                     <p class="form-label-sm">Days open</p>
@@ -1224,6 +1296,77 @@ const vendorYouTube = ref('');
 const vendorBusinessDays = ref('');
 const vendorBusinessHours = ref('');
 
+// ── Location picker ───────────────────────────────────────────────────────────
+const locationSearchQuery   = ref('');
+const locationSuggestions   = ref<{ place_id: string; display_name: string; lat: string; lon: string }[]>([]);
+const locationDisplay       = ref('');
+const showLocationDropdown  = ref(false);
+const locating              = ref(false);
+let   locationSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onLocationSearch() {
+  if (locationSearchTimer) clearTimeout(locationSearchTimer);
+  locationDisplay.value = '';
+  vendorMapUrl.value    = '';
+  if (!locationSearchQuery.value.trim()) { locationSuggestions.value = []; return; }
+  locationSearchTimer = setTimeout(async () => {
+    try {
+      const q = encodeURIComponent(locationSearchQuery.value);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=6&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'Peshkash-Admin/1.0' } }
+      );
+      locationSuggestions.value = await res.json();
+      showLocationDropdown.value = true;
+    } catch { /* network error – silently ignore */ }
+  }, 380);
+}
+
+function selectLocation(s: { place_id: string; display_name: string; lat: string; lon: string }) {
+  vendorMapUrl.value       = `https://maps.google.com/maps?q=${s.lat},${s.lon}`;
+  locationDisplay.value    = s.display_name.split(',').slice(0, 3).join(', ');
+  locationSearchQuery.value = locationDisplay.value;
+  locationSuggestions.value = [];
+  showLocationDropdown.value = false;
+}
+
+function clearLocation() {
+  vendorMapUrl.value        = '';
+  locationDisplay.value     = '';
+  locationSearchQuery.value = '';
+  locationSuggestions.value = [];
+}
+
+function closeLocationDropdown() {
+  // Small delay so a click on a suggestion registers before the list hides
+  setTimeout(() => { showLocationDropdown.value = false; }, 180);
+}
+
+async function useCurrentLocation() {
+  if (!navigator.geolocation) { setError(new Error('Geolocation not supported in this browser')); return; }
+  locating.value = true;
+  navigator.geolocation.getCurrentPosition(
+    async ({ coords: { latitude, longitude } }) => {
+      vendorMapUrl.value = `https://maps.google.com/maps?q=${latitude},${longitude}`;
+      try {
+        const res  = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          { headers: { 'Accept-Language': 'en', 'User-Agent': 'Peshkash-Admin/1.0' } }
+        );
+        const data = await res.json();
+        locationDisplay.value     = data.display_name?.split(',').slice(0, 3).join(', ') || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        locationSearchQuery.value = locationDisplay.value;
+      } catch {
+        locationDisplay.value     = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        locationSearchQuery.value = locationDisplay.value;
+      }
+      locating.value = false;
+    },
+    () => { setError(new Error('Location access denied or unavailable')); locating.value = false; },
+    { timeout: 8000 }
+  );
+}
+
 // ── Structured business hours inputs ─────────────────────────────────────────
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const vendorDaySelection = ref<string[]>([]);
@@ -1788,6 +1931,10 @@ function resetVendor() {
   vendorTwitter.value = '';
   vendorWhatsApp.value = '';
   vendorYouTube.value = '';
+  locationSearchQuery.value  = '';
+  locationDisplay.value      = '';
+  locationSuggestions.value  = [];
+  showLocationDropdown.value = false;
   vendorBusinessDays.value  = '';
   vendorBusinessHours.value = '';
   vendorDaySelection.value  = [];
@@ -1814,7 +1961,19 @@ function hydrateVendorContactFields(contact: string[]) {
   vendorPhone.value        = find('Phone');
   vendorEmail.value        = find('Email');
   vendorWebsite.value      = find('Website');
-  vendorMapUrl.value       = find('Google Maps');
+  const savedMapUrl = find('Google Maps');
+  vendorMapUrl.value = savedMapUrl;
+  if (savedMapUrl) {
+    try {
+      const u = new URL(savedMapUrl);
+      const q = u.searchParams.get('q');
+      locationSearchQuery.value = q ?? savedMapUrl;
+      locationDisplay.value     = q ?? '';
+    } catch { locationSearchQuery.value = savedMapUrl; }
+  } else {
+    locationSearchQuery.value = '';
+    locationDisplay.value     = '';
+  }
   vendorInstagram.value    = find('Instagram');
   vendorFacebook.value     = find('Facebook');
   vendorLinkedIn.value     = find('LinkedIn');
@@ -3247,6 +3406,147 @@ label {
   font-style: italic;
 }
 .biz-hours-preview i { font-size: 0.72rem; opacity: 0.7; }
+
+/* ── Location picker ────────────────────────────────────────────── */
+.location-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label-hint {
+  font-weight: 400;
+  color: #9a9490;
+  font-size: 0.75rem;
+}
+
+.location-search-row {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.location-input-wrap { position: relative; flex: 1; }
+
+.location-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0d8ce;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.location-option {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f2ede7;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #3a3228;
+  transition: background 0.12s;
+  line-height: 1.35;
+}
+.location-option:last-child { border-bottom: none; }
+.location-option:hover { background: #fdf6ec; }
+.location-option i { color: #BD945A; flex-shrink: 0; margin-top: 2px; }
+.location-option span { flex: 1; }
+
+.location-gps-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid #d5cdc3;
+  background: #f8f6f3;
+  color: #6b6460;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.location-gps-btn:hover { border-color: #BD945A; color: #BD945A; background: #fdf6ec; }
+.location-gps-btn.locating { color: #BD945A; border-color: #BD945A; animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.location-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f2fbf4;
+  border: 1px solid #b8dfc0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #2d6a40;
+}
+.location-confirmed i { color: #4a9e62; flex-shrink: 0; }
+.location-confirmed span { flex: 1; line-height: 1.3; }
+.location-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #7a9e84;
+  font-size: 1rem;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.location-clear:hover { color: #c0392b; }
+
+/* ── Social handle inputs ────────────────────────────────────────── */
+.handle-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.handle-input-wrap:focus-within {
+  border-color: #BD945A;
+  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.12);
+}
+.handle-prefix {
+  padding: 0.375rem 0.6rem 0.375rem 0.75rem;
+  background: #f8f6f3;
+  color: #9a8878;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-right: 1px solid #e8dfd0;
+  white-space: nowrap;
+  user-select: none;
+}
+.handle-input {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  flex: 1;
+}
+.handle-input:focus { outline: none; }
+
+.input-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: #9a9490;
+  margin-top: 3px;
+  font-style: italic;
+}
 
 .check {
   display: flex;
