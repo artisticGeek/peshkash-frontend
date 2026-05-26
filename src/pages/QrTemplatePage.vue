@@ -4,6 +4,8 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { API_BASE_URL } from '../config';
 
+const props = defineProps<{ embedded?: boolean }>();
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Unit = 'mm' | 'cm' | 'in';
@@ -76,6 +78,89 @@ const PRESETS = [
 
 const FONTS = ['Inter', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New', 'Playfair Display'];
 const BASE_SCALE = 3.78; // px per mm at 100% zoom
+
+// ─── Trendy Preset Templates ──────────────────────────────────────────────────
+
+interface PresetTemplate {
+  name: string;
+  icon: string;
+  desc: string;
+  create: () => QrTemplate;
+}
+
+const PRESET_TEMPLATES: PresetTemplate[] = [
+  {
+    name: 'Classic Business Card',
+    icon: 'bi-credit-card',
+    desc: '85 × 54 mm · Warm cream · Gold border',
+    create: () => ({
+      name: 'Classic Business Card', widthMm: 85, heightMm: 54,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#faf8f3', stroke: '#c9a96e', strokeWidth: 0.6, borderRadius: 2, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 41, width: 75, height: 8, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 10, fontWeight: '600', color: '#4a3f2e', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Dark Luxury',
+    icon: 'bi-moon-stars',
+    desc: '85 × 54 mm · Charcoal & gold · Upscale',
+    create: () => ({
+      name: 'Dark Luxury', widthMm: 85, heightMm: 54,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#15191e', stroke: '#15191e', strokeWidth: 0, borderRadius: 2, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Strip', x: 0, y: 44, width: 85, height: 10, locked: true, fill: '#c9a96e', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 46, width: 77, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Inter', fontSize: 7, fontWeight: '700', color: '#15191e', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Acrylic Portrait',
+    icon: 'bi-layout-text-window',
+    desc: '90 × 120 mm · Portrait stand · Bold header',
+    create: () => ({
+      name: 'Acrylic Portrait', widthMm: 90, heightMm: 120,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#ffffff', stroke: '#e8dccb', strokeWidth: 0.4, borderRadius: 3, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Header Bar', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1a1a1a', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'image' as const, name: 'Logo', x: 29, y: 4, width: 32, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 87, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Playfair Display', fontSize: 13, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 103, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Inter', fontSize: 8, fontWeight: '400', color: '#9a8870', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Modern Square',
+    icon: 'bi-stop-btn',
+    desc: '80 × 80 mm · Minimal white · Accent stripe',
+    create: () => ({
+      name: 'Modern Square', widthMm: 80, heightMm: 80,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#ffffff', stroke: '#e8e0d4', strokeWidth: 0.5, borderRadius: 2, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Accent Bar', x: 0, y: 0, width: 80, height: 4, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 67, width: 70, height: 9, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 11, fontWeight: '500', color: '#15191e', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Compact Label',
+    icon: 'bi-tag',
+    desc: '50 × 30 mm · Small format · QR + text',
+    create: () => ({
+      name: 'Compact Label', widthMm: 50, heightMm: 30,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 50, height: 30, locked: true, fill: '#ffffff', stroke: '#d8d0c4', strokeWidth: 0.4, borderRadius: 1.5, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Divider', x: 29, y: 4, width: 0.5, height: 22, locked: true, fill: '#e0d8cc', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 31, y: 10, width: 16, height: 10, locked: false, content: 'Scan for menu', fontFamily: 'Inter', fontSize: 6, fontWeight: '500', color: '#4a3f2e', textAlign: 'left' as const },
+      ]
+    })
+  },
+];
 const EXPORT_DPI = 300;
 const EXPORT_SCALE = EXPORT_DPI / 25.4; // px per mm for export (~11.81)
 const HANDLE_SIZE = 8;
@@ -105,6 +190,12 @@ const tpl = reactive<QrTemplate>({
 // Undo history
 const history = ref<string[]>([]);
 const historyIndex = ref(-1);
+
+// Preview modal state
+const showPreview = ref(false);
+const previewQrValue = ref('https://peshkash.com');
+const previewDataUrl = ref('');
+const previewRendering = ref(false);
 
 // Drag state
 let dragEl: TemplateEl | null = null;
@@ -426,6 +517,17 @@ function backToList() {
   loadTemplates();
 }
 
+function startFromPreset(preset: PresetTemplate) {
+  const t = preset.create();
+  Object.assign(tpl, { id: undefined, name: t.name, widthMm: t.widthMm, heightMm: t.heightMm, elements: t.elements });
+  selectedId.value = null;
+  history.value = [JSON.stringify(tpl.elements)];
+  historyIndex.value = 0;
+  tpl.elements.filter(e => e.type === 'qr').forEach(e => generateQrPreview(e as QrEl));
+  fitZoom();
+  view.value = 'editor';
+}
+
 // ─── Zoom ─────────────────────────────────────────────────────────────────────
 
 const canvasAreaRef = ref<HTMLElement | null>(null);
@@ -453,17 +555,15 @@ function applyPreset(p: typeof PRESETS[0]) {
   fitZoom();
 }
 
-// ─── Export PNG ───────────────────────────────────────────────────────────────
+// ─── Render / Export ─────────────────────────────────────────────────────────
 
-async function exportPng(qrValue = 'https://peshkash.com') {
+async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promise<void> {
   const pw = Math.round(tpl.widthMm * EXPORT_SCALE);
   const ph = Math.round(tpl.heightMm * EXPORT_SCALE);
-  const canvas = document.createElement('canvas');
   canvas.width = pw;
   canvas.height = ph;
   const ctx = canvas.getContext('2d')!;
 
-  // Background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, pw, ph);
 
@@ -530,10 +630,39 @@ async function exportPng(qrValue = 'https://peshkash.com') {
     }
     ctx.restore();
   }
+}
 
+async function exportPng(qrValue = 'https://peshkash.com') {
+  const canvas = document.createElement('canvas');
+  await renderToCanvas(canvas, qrValue);
   const link = document.createElement('a');
   link.download = `${tpl.name.replace(/\s+/g, '-').toLowerCase()}.png`;
   link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// ─── Preview ──────────────────────────────────────────────────────────────────
+
+async function openPreview() {
+  showPreview.value = true;
+  await renderPreview();
+}
+
+async function renderPreview() {
+  previewRendering.value = true;
+  try {
+    const canvas = document.createElement('canvas');
+    await renderToCanvas(canvas, previewQrValue.value || 'https://peshkash.com');
+    previewDataUrl.value = canvas.toDataURL('image/png');
+  } finally {
+    previewRendering.value = false;
+  }
+}
+
+function downloadPreview() {
+  const link = document.createElement('a');
+  link.download = `${tpl.name.replace(/\s+/g, '-').toLowerCase()}-preview.png`;
+  link.href = previewDataUrl.value;
   link.click();
 }
 
@@ -560,44 +689,58 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 <template>
   <!-- ── LIST VIEW ─────────────────────────────────────────── -->
-  <div v-if="view === 'list'" class="qrt-list-page">
+  <div v-if="view === 'list'" class="qrt-list-page" :class="{ 'qrt-list-page--embedded': props.embedded }">
     <div class="qrt-list-header">
       <div>
-        <h2>QR Templates</h2>
-        <p class="hint">Design print-ready layouts once — reuse them for every event or vendor.</p>
+        <h2>Print Templates</h2>
+        <p class="hint">Design print-ready layouts once — reuse for every event or vendor.</p>
       </div>
       <button class="btn btn-primary" @click="newTemplate">
-        <i class="bi bi-plus-lg"></i> New Template
+        <i class="bi bi-plus-lg"></i> Blank Template
       </button>
     </div>
 
-    <div v-if="templates.length === 0" class="qrt-empty">
-      <i class="bi bi-layout-three-columns"></i>
-      <p>No templates yet. Create your first print template.</p>
-      <button class="btn btn-primary" @click="newTemplate">Get Started</button>
-    </div>
-
-    <div v-else class="qrt-grid">
-      <div v-for="t in templates" :key="t.id" class="qrt-card" @click="openTemplate(t)">
-        <div class="qrt-card-thumb">
-          <div class="qrt-card-canvas-preview" :style="{ aspectRatio: `${t.widthMm} / ${t.heightMm}` }">
-            <i class="bi bi-qr-code qrt-thumb-icon"></i>
+    <!-- Trendy presets -->
+    <div class="qrt-presets-section">
+      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start from a preset</p>
+      <div class="qrt-presets-grid">
+        <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
+          <div class="qrt-preset-thumb">
+            <i :class="`bi ${p.icon}`"></i>
+          </div>
+          <div class="qrt-preset-info">
+            <strong>{{ p.name }}</strong>
+            <span>{{ p.desc }}</span>
           </div>
         </div>
-        <div class="qrt-card-info">
-          <strong>{{ t.name }}</strong>
-          <span class="qrt-card-size">{{ t.widthMm }} × {{ t.heightMm }} mm · {{ (t.elements ?? []).length }} element{{ (t.elements ?? []).length !== 1 ? 's' : '' }}</span>
-        </div>
-        <div class="qrt-card-actions">
-          <button class="qrt-icon-btn" title="Open" @click.stop="openTemplate(t)"><i class="bi bi-pencil"></i></button>
-          <button class="qrt-icon-btn danger" title="Delete" @click.stop="deleteTemplate(t.id!)"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+
+    <!-- Saved templates -->
+    <div v-if="templates.length > 0" class="qrt-saved-section">
+      <p class="qrt-section-title"><i class="bi bi-folder2-open"></i> Your templates</p>
+      <div class="qrt-grid">
+        <div v-for="t in templates" :key="t.id" class="qrt-card" @click="openTemplate(t)">
+          <div class="qrt-card-thumb">
+            <div class="qrt-card-canvas-preview" :style="{ aspectRatio: `${t.widthMm} / ${t.heightMm}` }">
+              <i class="bi bi-qr-code qrt-thumb-icon"></i>
+            </div>
+          </div>
+          <div class="qrt-card-info">
+            <strong>{{ t.name }}</strong>
+            <span class="qrt-card-size">{{ t.widthMm }} × {{ t.heightMm }} mm · {{ (t.elements ?? []).length }} element{{ (t.elements ?? []).length !== 1 ? 's' : '' }}</span>
+          </div>
+          <div class="qrt-card-actions">
+            <button class="qrt-icon-btn" title="Open" @click.stop="openTemplate(t)"><i class="bi bi-pencil"></i></button>
+            <button class="qrt-icon-btn danger" title="Delete" @click.stop="deleteTemplate(t.id!)"><i class="bi bi-trash3"></i></button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ── EDITOR VIEW ────────────────────────────────────────── -->
-  <div v-else class="qrt-editor">
+  <div v-else class="qrt-editor" :class="{ 'qrt-editor--embedded': props.embedded }">
 
     <!-- Header -->
     <header class="qrt-header">
@@ -608,6 +751,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
         <span v-if="saveStatus === 'error'" class="qrt-save-status error"><i class="bi bi-exclamation-triangle"></i> Error</span>
         <button class="qrt-icon-btn" title="Undo (Ctrl+Z)" :disabled="historyIndex <= 0" @click="undo"><i class="bi bi-arrow-counterclockwise"></i></button>
         <button class="qrt-icon-btn" title="Redo (Ctrl+Y)" :disabled="historyIndex >= history.length - 1" @click="redo"><i class="bi bi-arrow-clockwise"></i></button>
+        <button class="btn btn-outline-secondary btn-sm" @click="openPreview"><i class="bi bi-eye"></i> Preview</button>
         <button class="btn btn-outline-secondary btn-sm" @click="() => exportPng()"><i class="bi bi-download"></i> Export PNG</button>
         <button class="btn btn-primary btn-sm" :disabled="saving" @click="saveTemplate">
           <i class="bi bi-floppy2"></i> {{ saving ? 'Saving…' : 'Save' }}
@@ -985,6 +1129,53 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     </footer>
 
   </div>
+
+  <!-- ── PREVIEW MODAL ───────────────────────────────────────── -->
+  <Teleport to="body">
+    <div v-if="showPreview" class="qrt-preview-backdrop" @click.self="showPreview = false">
+      <div class="qrt-preview-modal">
+        <div class="qrt-preview-header">
+          <div>
+            <h3>Preview — {{ tpl.name }}</h3>
+            <p class="hint">Rendered at 300 DPI. Actual print quality.</p>
+          </div>
+          <button class="qrt-icon-btn" @click="showPreview = false"><i class="bi bi-x-lg"></i></button>
+        </div>
+
+        <div class="qrt-preview-qr-row">
+          <label class="qrt-preview-qr-label">
+            <span>QR Value to preview</span>
+            <input
+              v-model="previewQrValue"
+              class="form-control form-control-sm"
+              placeholder="https://peshkash.com/your-hash"
+              @change="renderPreview"
+            />
+          </label>
+          <button class="btn btn-outline-secondary btn-sm" :disabled="previewRendering" @click="renderPreview">
+            <i class="bi bi-arrow-clockwise"></i> Re-render
+          </button>
+        </div>
+
+        <div class="qrt-preview-canvas-area">
+          <div v-if="previewRendering" class="qrt-preview-loading">
+            <i class="bi bi-hourglass-split"></i> Rendering…
+          </div>
+          <img v-else-if="previewDataUrl" :src="previewDataUrl" class="qrt-preview-img" :alt="`Preview of ${tpl.name}`" />
+        </div>
+
+        <div class="qrt-preview-footer">
+          <span class="hint">{{ tpl.widthMm }} × {{ tpl.heightMm }} mm · {{ tpl.elements.length }} element{{ tpl.elements.length !== 1 ? 's' : '' }}</span>
+          <div class="qrt-preview-footer-actions">
+            <button class="btn btn-outline-secondary btn-sm" @click="showPreview = false">Close</button>
+            <button class="btn btn-primary btn-sm" :disabled="!previewDataUrl" @click="downloadPreview">
+              <i class="bi bi-download"></i> Download PNG
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -993,6 +1184,12 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   background: #f7f4ef;
   min-height: 100vh;
   padding: 32px 40px;
+}
+
+.qrt-list-page--embedded {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .qrt-list-header {
@@ -1112,6 +1309,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+}
+
+.qrt-editor--embedded {
+  height: 100%;
 }
 
 /* Header */
@@ -1606,4 +1807,183 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 /* Reuse bootstrap btn styles */
 .btn { font-size: 0.84rem; }
 .btn-sm { font-size: 0.78rem; padding: 4px 10px; }
+
+/* ─── Preset & saved sections ────────────────────────────────────────────── */
+.qrt-section-title {
+  align-items: center;
+  color: #7a6a52;
+  display: flex;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+.qrt-presets-section {
+  margin-bottom: 36px;
+}
+
+.qrt-saved-section {
+  margin-bottom: 24px;
+}
+
+.qrt-presets-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.qrt-preset-card {
+  align-items: center;
+  background: #fff;
+  border: 1.5px solid #e6dfd4;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  padding: 14px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.qrt-preset-card:hover {
+  border-color: #BD945A;
+  box-shadow: 0 4px 16px rgba(189, 148, 90, 0.18);
+  transform: translateY(-1px);
+}
+
+.qrt-preset-thumb {
+  align-items: center;
+  background: #f5f0e8;
+  border-radius: 6px;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 1.4rem;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+  color: #BD945A;
+}
+
+.qrt-preset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.qrt-preset-info strong {
+  color: #15191e;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.qrt-preset-info span {
+  color: #9a8870;
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+
+/* ─── Preview modal ──────────────────────────────────────────────────────── */
+.qrt-preview-backdrop {
+  align-items: center;
+  background: rgba(15, 12, 8, 0.65);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.qrt-preview-modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-width: 680px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.qrt-preview-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #e8dccb;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.qrt-preview-header h3 {
+  color: #15191e;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.qrt-preview-qr-row {
+  align-items: flex-end;
+  border-bottom: 1px solid #f0ece6;
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+}
+
+.qrt-preview-qr-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font-size: 0.78rem;
+  gap: 4px;
+}
+
+.qrt-preview-qr-label span { color: #7a6a52; font-weight: 500; }
+
+.qrt-preview-canvas-area {
+  align-items: center;
+  background: #f5f0e8;
+  background-image: radial-gradient(circle, #c8b99a44 1px, transparent 1px);
+  background-size: 16px 16px;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 200px;
+  overflow: auto;
+  padding: 24px;
+}
+
+.qrt-preview-loading {
+  align-items: center;
+  color: #9a8870;
+  display: flex;
+  font-size: 0.88rem;
+  gap: 8px;
+}
+
+.qrt-preview-img {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  max-height: 440px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.qrt-preview-footer {
+  align-items: center;
+  border-top: 1px solid #e8dccb;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+}
+
+.qrt-preview-footer-actions {
+  display: flex;
+  gap: 8px;
+}
 </style>

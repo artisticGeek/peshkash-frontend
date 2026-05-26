@@ -113,7 +113,7 @@ const routes = [
     {
         path: '/dashboard/qr-templates',
         name: 'DashboardQrTemplates',
-        component: () => import('./pages/QrTemplatePage.vue'),
+        component: () => import('./pages/AdminDashboard.vue'),
     },
     {
         path: '/admin',
