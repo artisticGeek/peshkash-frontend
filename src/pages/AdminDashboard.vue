@@ -1,9 +1,12 @@
 <template>
-  <div class="admin-shell">
-    <aside class="admin-sidebar">
-      <div>
-        <p class="eyebrow">Peshkash Admin</p>
-        <h1>{{ activeTitle }}</h1>
+  <div class="admin-shell" :data-sidebar="sidebarState">
+    <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
+      <div class="sidebar-brand">
+        <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
+        <span class="sidebar-brand-name">Peshkash</span>
+        <button class="sidebar-brand-toggle" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
+          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
+        </button>
       </div>
       <nav>
         <RouterLink
@@ -12,30 +15,39 @@
           :to="dashboardRouteBySection[section.key]"
           class="nav-button"
           :class="{ active: isNavActive(section.key) }"
+          :title="section.label"
+          @click="sidebarOverlayOpen = false"
         >
           <i :class="section.icon"></i>
-          <span>{{ section.label }}</span>
+          <span class="nav-label">{{ section.label }}</span>
         </RouterLink>
       </nav>
+      <div class="sidebar-footer">
+        <button class="nav-button sidebar-cycle-btn" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
+          <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
+          <span class="nav-label">{{ sidebarState === 'full' ? 'Compact' : 'Expand' }}</span>
+        </button>
+      </div>
     </aside>
 
     <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
       <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
-        <div>
-          <h2>{{ activeTitle }}</h2>
-          <p>{{ activeSubtitle }}</p>
-        </div>
-        <div class="header-actions">
+        <div class="workspace-header-left">
           <button v-if="activeSection !== 'home'" class="icon-button outlined back-btn" title="Back" aria-label="Back" @click="goBack">
             <i class="bi bi-arrow-left"></i>
             <span v-if="activeSection === 'eventWorkspace' || activeSection === 'qrSheet'">Events</span>
             <span v-else-if="activeSection === 'vendorWorkspace'">Vendors</span>
             <span v-else-if="activeSection === 'preview' || activeSection === 'analytics' || activeSection === 'inventory'">Designer</span>
           </button>
-          <WorkspaceSwitcher v-model="selectedVendorId" :vendors="vendors" :selected-vendor="selectedVendor" />
-          <button class="btn btn-outline-secondary btn-sm" :disabled="loading" @click="loadAll">
+          <div class="workspace-title">
+            <h2>{{ activeTitle }}</h2>
+            <p class="workspace-subtitle">{{ activeSubtitle }}</p>
+          </div>
+        </div>
+        <div class="workspace-header-right">
+          <WorkspaceSwitcher v-model="selectedVendorId" :vendors="vendors" :selected-vendor="selectedVendor" :compact="true" />
+          <button class="icon-button outlined" :disabled="loading" title="Refresh" aria-label="Refresh" @click="loadAll">
             <i class="bi bi-arrow-clockwise"></i>
-            Refresh
           </button>
         </div>
       </header>
@@ -133,12 +145,12 @@
             <button class="btn btn-primary" @click="openVendorEditor()">New Vendor</button>
           </div>
           <div class="table-wrap">
-            <table class="table table-sm align-middle action-table">
+            <table class="table table-sm align-middle action-table vendors-table">
               <thead><tr><th>Vendor</th><th>Description</th><th>Created</th><th>Events</th><th>Contact Card</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)">
+                <tr v-for="vendor in vendors" :key="vendor.id" @click="selectVendor(vendor)" :title="`Set working vendor to ${vendor.displayName}`">
                   <td><strong>{{ vendor.displayName }}</strong><br /><code>{{ vendor.name }}</code></td>
-                  <td>{{ vendor.description || 'No description' }}</td>
+                  <td class="vendor-desc">{{ vendor.description || '—' }}</td>
                   <td>{{ formatDate(vendor.createdAt) }}</td>
                   <td>{{ vendorEventCount(vendor.id) }}</td>
                   <td>{{ vendor.hasContactPage ? 'Active' : 'Inactive' }}</td>
@@ -455,7 +467,7 @@
             </div>
           </div>
 
-          <div class="panel wide-panel">
+          <div class="panel">
             <div class="panel-heading">
               <div>
                 <h3>Linked Menus</h3>
@@ -723,8 +735,22 @@
         </div>
       </section>
 
-      <section v-if="activeSection === 'designer'" class="designer-grid">
-        <div class="panel designer-controls">
+      <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
+
+        <!-- Mobile tab bar (hidden on desktop via CSS) -->
+        <div class="designer-mobile-tabs">
+          <button :class="{ active: designerMobileTab === 'settings' }" @click="designerMobileTab = 'settings'">
+            <i class="bi bi-sliders"></i> Manage
+          </button>
+          <button :class="{ active: designerMobileTab === 'items' }" @click="designerMobileTab = 'items'">
+            <i class="bi bi-list-ul"></i> Library
+          </button>
+          <button :class="{ active: designerMobileTab === 'canvas' }" @click="designerMobileTab = 'canvas'">
+            <i class="bi bi-phone"></i> Preview
+          </button>
+        </div>
+
+        <div class="panel designer-controls designer-panel-settings">
           <div>
             <h3>Menu Designer</h3>
             <p class="hint">Build and manage vendor menus. Select a menu to edit its items on the canvas.</p>
@@ -732,13 +758,22 @@
           <div class="designer-ribbon">
             <label class="ribbon-group">
               Working Menu
-              <select v-model.number="selectedMenuIdForItems" class="form-select">
-                <option :value="0">Select menu</option>
-                <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                  {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
-                </option>
-              </select>
+              <div class="ribbon-menu-row">
+                <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
+                  <option :value="0">Select menu</option>
+                  <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
+                    {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                  </option>
+                </select>
+                <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
+              </div>
             </label>
+            <!-- Inline rename form -->
+            <div v-if="showMenuRenameInline" class="ribbon-rename-row">
+              <input v-model.trim="menuRenameValue" class="form-control" placeholder="New display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
+              <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i></button>
+              <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+            </div>
             <div class="ribbon-divider"></div>
             <label class="ribbon-group">
               New Menu
@@ -769,7 +804,7 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel designer-panel-items">
           <div class="panel-heading compact-heading">
             <div>
               <h3>Item Pool</h3>
@@ -792,7 +827,7 @@
           </div>
         </div>
 
-        <div class="panel menu-render" @dragover.prevent @drop="dropOnMenuRoot">
+        <div class="panel menu-render designer-panel-canvas" @dragover.prevent @drop="dropOnMenuRoot">
           <div class="panel-heading">
             <div>
               <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
@@ -1028,7 +1063,7 @@
             <label class="wide">Destination URL<input v-model.trim="qrForm.url" class="form-control" placeholder="/vendor/radisson-gurgaon" /></label>
             <label class="check"><input v-model="qrForm.isActive" type="checkbox" /> Active</label>
           </div>
-          <div class="preview-box" v-if="qrPreview.shortQrUrl || qrPreview.finalPublicUrl">
+          <div class="preview-box" v-if="(qrPreview.shortQrUrl || qrPreview.finalPublicUrl) && !showQrEditor">
             <div><span>Short QR URL</span><a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer">{{ qrPreview.shortQrUrl }}</a></div>
             <div><span>Final URL</span><a :href="qrPreview.finalPublicUrl" target="_blank" rel="noreferrer">{{ qrPreview.finalPublicUrl }}</a></div>
             <img v-if="qrCodeDataUrl" class="qr-image" :src="qrCodeDataUrl" alt="QR code" />
@@ -1045,13 +1080,14 @@
             <table class="table table-sm align-middle">
               <thead><tr><th>QR</th><th>Target</th><th>Scans</th><th>Updated</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="mapping in qrMappings" :key="mapping.id" @click="openQrEditor(mapping)">
+                <tr v-for="mapping in vendorQrMappings" :key="mapping.id" @click="openQrEditor(mapping)">
                   <td><code>{{ mapping.qrHash }}</code></td>
                   <td>{{ qrTargetLabel(mapping) }}<br /><span class="muted">{{ mapping.url }}</span></td>
                   <td>{{ mapping.usageCount || 0 }}</td>
                   <td>{{ formatDate(mapping.updatedAt || mapping.createdAt) }}</td>
                   <td><button class="icon-button outlined small" title="Manage QR" aria-label="Manage QR" @click.stop="openQrEditor(mapping)"><i class="bi bi-sliders"></i></button></td>
                 </tr>
+                <tr v-if="!vendorQrMappings.length"><td colspan="5" class="muted">No QR mappings for this vendor yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1121,6 +1157,18 @@
     </div>
   </teleport>
 
+  <!-- Mobile hamburger (fixed, outside any sticky container) -->
+  <teleport to="body">
+    <button v-if="!sidebarOverlayOpen" class="mobile-hamburger" type="button" aria-label="Open navigation" @click="sidebarOverlayOpen = true">
+      <i class="bi bi-list"></i>
+    </button>
+  </teleport>
+
+  <!-- Mobile sidebar overlay backdrop -->
+  <teleport to="body">
+    <div v-if="sidebarOverlayOpen" class="sidebar-mobile-backdrop" @click="sidebarOverlayOpen = false"></div>
+  </teleport>
+
   <!-- Item / Category add drawer (studio) -->
   <teleport to="body">
     <div v-if="showItemDrawer" class="drawer-backdrop" @click.self="showItemDrawer = false">
@@ -1164,7 +1212,7 @@
         <!-- Fields -->
         <div class="item-drawer-fields">
           <label>
-            Name <span class="required">*</span>
+            <span>Name <span class="required">*</span></span>
             <input
               v-model.trim="itemDraft.displayName"
               class="form-control"
@@ -1179,13 +1227,28 @@
               <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
             </label>
             <label>
-              Dietary tag
-              <div class="dietary-toggle">
-                <button type="button" :class="{ active: !itemDraft.enumType }" @click="itemDraft.enumType = ''">None</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'veg' }" @click="itemDraft.enumType = 'veg'" class="veg">Veg</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'non-veg' }" @click="itemDraft.enumType = 'non-veg'" class="nonveg">Non-Veg</button>
-                <button type="button" :class="{ active: itemDraft.enumType === 'egg' }" @click="itemDraft.enumType = 'egg'" class="egg">Egg</button>
+              Tag <small class="muted">(type freely, or tap a suggestion)</small>
+              <div class="tag-combobox">
+                <input
+                  v-model.trim="itemDraft.enumType"
+                  class="form-control"
+                  placeholder="e.g. veg, spicy, sale, new…"
+                />
+                <button v-if="itemDraft.enumType" type="button" class="tag-clear-btn" title="Clear tag" @click="itemDraft.enumType = ''">
+                  <i class="bi bi-x"></i>
+                </button>
               </div>
+              <div v-if="vendorEnumTypes.length > 0" class="tag-suggestions">
+                <button
+                  v-for="tag in vendorEnumTypes"
+                  :key="tag"
+                  type="button"
+                  class="tag-chip"
+                  :class="{ active: itemDraft.enumType === tag }"
+                  @click="itemDraft.enumType = itemDraft.enumType === tag ? '' : tag"
+                >{{ tag }}</button>
+              </div>
+              <p v-else class="tag-no-hints">No tags used by this vendor yet — type any label above.</p>
             </label>
           </template>
         </div>
@@ -1274,6 +1337,38 @@ const activeSection = computed<SectionKey>({
   get: () => sectionFromPath(route.path),
   set: (section) => router.push(dashboardRouteBySection[section]),
 });
+type SidebarState = 'full' | 'icons' | 'hidden';
+function defaultSidebarState(): SidebarState {
+  const saved = localStorage.getItem('peshkash-admin-sidebar') as SidebarState | null;
+  if (saved && ['full', 'icons', 'hidden'].includes(saved)) {
+    // Never restore 'hidden' on desktop — user would be stuck with no nav
+    if (saved === 'hidden' && window.innerWidth >= 768) return 'icons';
+    return saved;
+  }
+  return window.innerWidth < 1024 ? 'icons' : 'full';
+}
+const sidebarState = ref<SidebarState>(defaultSidebarState());
+const sidebarOverlayOpen = ref(false);
+watch(sidebarState, (v) => localStorage.setItem('peshkash-admin-sidebar', v));
+
+function cycleSidebar() {
+  if (window.innerWidth >= 768) {
+    // Desktop: only toggle full ↔ icons — 'hidden' traps the user with no nav
+    sidebarState.value = sidebarState.value === 'full' ? 'icons' : 'full';
+  } else {
+    const states: SidebarState[] = ['full', 'icons', 'hidden'];
+    sidebarState.value = states[(states.indexOf(sidebarState.value) + 1) % states.length];
+  }
+}
+
+function toggleSidebar() {
+  if (window.innerWidth < 768) {
+    sidebarOverlayOpen.value = !sidebarOverlayOpen.value;
+  } else {
+    sidebarState.value = sidebarState.value === 'full' ? 'icons' : 'full';
+  }
+}
+
 const loading = ref(false);
 type Toast = { id: number; type: 'success' | 'error'; text: string };
 const toasts = ref<Toast[]>([]);
@@ -1303,6 +1398,9 @@ const draggedLibraryItemId = ref<number | null>(null);
 const draggedDesignedItemId = ref<number | null>(null);
 const showItemDrawer = ref(false);
 const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
+const showMenuRenameInline = ref(false);
+const menuRenameValue = ref('');
+const designerMobileTab = ref<'settings' | 'items' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -1503,6 +1601,22 @@ const importForm = reactive({ menuId: 0, itemId: 0, customMenuDisplayName: '', d
 const selectedVendor = computed(() => vendors.value.find((vendor) => vendor.id === selectedVendorId.value));
 const vendorEvents = computed(() => events.value.filter((event) => event.vendorId === selectedVendorId.value));
 const vendorMenus = computed(() => menus.value.filter((menu) => menu.vendorId === selectedVendorId.value));
+// QR mappings scoped to the selected vendor by inferring ownership from the URL pattern
+const vendorQrMappings = computed(() => {
+  if (!selectedVendorId.value) return qrMappings.value;
+  return qrMappings.value.filter((mapping) => {
+    if (mapping.url?.startsWith('/vendor/')) {
+      const slug = mapping.url.split('/').pop();
+      return vendors.value.find((v) => v.name === slug)?.id === selectedVendorId.value;
+    }
+    const eventSlug = mapping.url?.split('/event/')[1]?.split('/')[0];
+    if (eventSlug) {
+      const event = events.value.find((e) => e.name === eventSlug);
+      return event?.vendorId === selectedVendorId.value;
+    }
+    return true; // custom paths shown in all vendor contexts
+  });
+});
 const vendorMenuIds = computed(() => vendorMenus.value.map((menu) => menu.id));
 const vendorItems = computed(() => items.value.filter((item) => vendorMenuIds.value.includes(item.menuId)));
 const selectedMenuItems = computed(() => items.value.filter((item) => item.menuId === selectedMenuIdForItems.value));
@@ -1524,6 +1638,7 @@ const miscMenuSlug = computed(() => selectedVendor.value ? `${selectedVendor.val
 const miscMenuItems = computed(() => miscMenu.value ? items.value.filter((item) => item.menuId === miscMenu.value!.id) : []);
 const importMenuItems = computed(() => items.value.filter((item) => item.menuId === importForm.menuId));
 const itemTypeOptions = computed(() => Array.from(new Set(vendorItems.value.map((item) => item.type || 'item'))).sort());
+const vendorEnumTypes = computed(() => [...new Set(vendorItems.value.map(i => i.enumType).filter(Boolean))].sort() as string[]);
 const inventoryRows = computed(() => itemRows.value.filter((row) => {
   const query = itemSearch.value.toLowerCase();
   const matchesSearch = !query || [row.displayName, row.name, row.type, row.enumType].some((value) => value?.toLowerCase().includes(query));
@@ -2228,6 +2343,23 @@ async function saveMenu() {
   }
 }
 
+function openMenuRename() {
+  if (!selectedMenuForItems.value) return;
+  menuRenameValue.value = selectedMenuForItems.value.displayName;
+  showMenuRenameInline.value = true;
+}
+
+async function saveMenuRename() {
+  if (!selectedMenuForItems.value || !menuRenameValue.value.trim()) return;
+  try {
+    const menu = selectedMenuForItems.value;
+    await axios.put(adminUrl(`/menus/${menu.id}`), { ...menu, displayName: menuRenameValue.value.trim(), vendorId: selectedVendorId.value });
+    showMenuRenameInline.value = false;
+    await loadAll();
+    setNotice('Menu renamed');
+  } catch (err) { setError(err); }
+}
+
 async function ensureMiscMenu() {
   if (!selectedVendor.value) throw new Error('Select a vendor first');
   const existing = miscMenu.value;
@@ -2619,15 +2751,8 @@ async function linkSelectedMenuToEvent() {
     await axios.post(adminUrl(`/events/${selectedEventIdForItems.value}/menus/${selectedMenuIdForItems.value}`), {
       displayName: selectedMenuForItems.value?.displayName,
     });
-    if (designerFullMenuQr.value) {
-      qrForm.qrHash = `${selectedEventForItems.value?.name}-${selectedMenuForItems.value?.name}`.toLowerCase();
-      qrTargetType.value = 'menu';
-      qrForm.eventId = selectedEventIdForItems.value;
-      qrForm.menuId = selectedMenuIdForItems.value;
-      await buildQrDestination();
-    }
     await loadAll();
-    setNotice('Menu linked to event');
+    setNotice('Menu linked to event — assign a QR hash in QR Bank if needed');
   } catch (err) {
     setError(err);
   }
@@ -2752,7 +2877,16 @@ function editQr(mapping: QrMapping) {
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
   QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
-  qrTargetType.value = 'custom';
+  // Infer target type from the URL so the Target dropdown reflects reality
+  if (mapping.url?.startsWith('/vendor/')) {
+    qrTargetType.value = 'vendor';
+  } else if (mapping.url?.includes('/item/')) {
+    qrTargetType.value = 'item';
+  } else if (mapping.url?.startsWith('/event/')) {
+    qrTargetType.value = 'menu';
+  } else {
+    qrTargetType.value = 'custom';
+  }
 }
 
 function openQrEditor(mapping?: QrMapping) {
@@ -2852,6 +2986,15 @@ watch(() => qrForm.qrHash, () => {
 
 watch(() => route.fullPath, hydrateRouteContext);
 
+// Reset the inline event editor whenever we navigate back to the events list
+// so it never shows pre-populated with a previously-edited event's data
+watch(activeSection, (section) => {
+  if (section === 'events') {
+    showEventEditor.value = false;
+    resetEvent();
+  }
+});
+
 onMounted(async () => {
   await loadAll();
   selectedMenuIdForItems.value = vendorMenus.value[0]?.id ?? 0;
@@ -2862,34 +3005,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  background: #f7f2ea;
-  color: #2f2a24;
-  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.admin-sidebar {
-  background: #171512;
-  color: #fff;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
+/* ── Global typography ──────────────────────────────────────────────────────── */
 .eyebrow {
-  margin: 0 0 6px;
   color: #bd945a;
-  text-transform: uppercase;
   font-size: 0.72rem;
-  letter-spacing: 0.08em;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
 }
 
-.admin-sidebar h1,
 .workspace-header h2,
 .panel h3,
 .adhoc-box h4 {
@@ -2897,27 +3022,103 @@ onMounted(async () => {
   margin: 0;
 }
 
-.admin-sidebar h1 {
-  font-size: 1.5rem;
+/* ── Shell & sidebar layout ─────────────────────────────────────────────────── */
+.admin-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  background: #f7f2ea;
+  color: #2f2a24;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: grid-template-columns 0.22s ease;
+}
+.admin-shell[data-sidebar="icons"] { grid-template-columns: 64px 1fr; }
+.admin-shell[data-sidebar="hidden"] { grid-template-columns: 0px 1fr; }
+
+.admin-sidebar {
+  background: #171512;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100vh;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
+  transition: width 0.22s ease;
+  width: 260px;
+  flex-shrink: 0;
 }
 
+/* Brand row */
+.sidebar-brand {
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 12px;
+}
+.sidebar-logo {
+  color: #BD945A;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+}
+.sidebar-brand-name {
+  color: rgba(255,255,255,0.9);
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.sidebar-brand-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.95rem;
+  height: 30px;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0 6px;
+  transition: color 0.12s;
+  flex-shrink: 0;
+}
+.sidebar-brand-toggle:hover { color: rgba(255,255,255,0.8); }
+
+/* Nav */
 .admin-sidebar nav {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  overflow-y: auto;
+  padding: 4px 8px;
 }
 
 .nav-button {
-  border: 0;
-  background: transparent;
-  color: rgba(255,255,255,0.74);
-  display: flex;
   align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.72);
+  cursor: pointer;
+  display: flex;
   gap: 10px;
+  padding: 10px 10px;
   text-align: left;
   text-decoration: none;
-  padding: 10px 12px;
-  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
 }
+.nav-button i { font-size: 1rem; flex-shrink: 0; }
+.nav-label { font-size: 0.88rem; }
 
 .nav-button.active,
 .nav-button:hover {
@@ -2925,9 +3126,197 @@ onMounted(async () => {
   color: #fff;
 }
 
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 8px 8px 16px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.sidebar-cycle-btn {
+  width: 100%;
+  color: rgba(255,255,255,0.44);
+  font-size: 0.8rem;
+}
+.sidebar-cycle-btn:hover { color: rgba(255,255,255,0.7); }
+
+/* Icons-only state */
+.admin-shell[data-sidebar="icons"] .admin-sidebar { width: 56px; }
+.admin-shell[data-sidebar="icons"] .nav-label,
+.admin-shell[data-sidebar="icons"] .sidebar-brand-name { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
+.admin-shell[data-sidebar="icons"] .nav-button { justify-content: center; padding: 10px 0; }
+.admin-shell[data-sidebar="icons"] .sidebar-brand { justify-content: center; gap: 0; }
+.admin-shell[data-sidebar="icons"] .sidebar-brand-toggle { display: none; }
+.admin-shell[data-sidebar="icons"] .sidebar-cycle-btn { justify-content: center; }
+
+/* Hidden state (desktop) */
+.admin-shell[data-sidebar="hidden"] .admin-sidebar { width: 0; }
+
+/* Overlay open: always show labels regardless of sidebar state */
+.admin-sidebar.sidebar--overlay-open .nav-label,
+.admin-sidebar.sidebar--overlay-open .sidebar-brand-name { opacity: 1; width: auto; overflow: visible; pointer-events: auto; }
+.admin-sidebar.sidebar--overlay-open .nav-button { justify-content: flex-start; padding: 10px; }
+.admin-sidebar.sidebar--overlay-open .sidebar-brand { justify-content: flex-start; gap: 10px; }
+.admin-sidebar.sidebar--overlay-open .sidebar-cycle-btn { justify-content: flex-start; }
+
+/* ── Workspace header ─────────────────────────────────────────────────────── */
+.workspace-header {
+  align-items: center;
+  background: #fffcf7;
+  border-bottom: 1px solid #ede8df;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.workspace-header-left {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.workspace-title {
+  min-width: 0;
+}
+.workspace-title h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-subtitle {
+  color: #6f665c;
+  font-size: 0.8rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-header-right {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Mobile-only fixed hamburger (teleported to body, outside any sticky container) */
+.mobile-hamburger {
+  align-items: center;
+  background: #171512;
+  border: 0;
+  border-radius: 0 0 8px 0;
+  color: #BD945A;
+  cursor: pointer;
+  display: none;
+  font-size: 1.3rem;
+  height: 44px;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 44px;
+  z-index: 150;
+}
+
+/* ── Mobile sidebar overlay ─────────────────────────────────────────────── */
+.sidebar-mobile-backdrop {
+  background: rgba(0,0,0,0.48);
+  bottom: 0;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 199;
+}
+
 .admin-main {
-  padding: 24px;
+  min-width: 0;
   overflow: auto;
+  padding: 16px 20px;
+}
+
+/* Mobile layout */
+@media (max-width: 767px) {
+  .admin-shell {
+    grid-template-columns: 1fr !important;
+  }
+  .admin-main { padding: 12px 14px; }
+  .mobile-hamburger { display: flex; }
+  .workspace-header { padding: 8px 12px 8px 52px; } /* indent past fixed hamburger */
+  .workspace-title h2 { font-size: 1rem; }
+  .workspace-subtitle { display: none; }
+
+  /* Designer mobile tab layout */
+  .designer-mobile-tabs {
+    align-items: stretch;
+    background: #fffcf7;
+    border: 1px solid #e8dccb;
+    border-radius: 8px;
+    display: flex;
+    gap: 0;
+    grid-column: 1 / -1;
+    overflow: hidden;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .designer-mobile-tabs button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: #7a6a52;
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    gap: 5px;
+    justify-content: center;
+    padding: 10px 4px;
+    transition: background 0.12s;
+  }
+  .designer-mobile-tabs button.active {
+    background: #b98f56;
+    color: #fff;
+  }
+  .designer-mobile-tabs button:not(.active):hover { background: #f5f0e8; }
+
+  /* Hide panels that aren't the active tab on mobile */
+  .designer-grid[data-tab="settings"] .designer-panel-items,
+  .designer-grid[data-tab="settings"] .designer-panel-canvas { display: none; }
+  .designer-grid[data-tab="items"] .designer-panel-settings,
+  .designer-grid[data-tab="items"] .designer-panel-canvas { display: none; }
+  .designer-grid[data-tab="canvas"] .designer-panel-settings,
+  .designer-grid[data-tab="canvas"] .designer-panel-items { display: none; }
+
+  /* Sidebar: fixed overlay on mobile */
+  .admin-sidebar {
+    height: 100vh;
+    left: 0;
+    position: fixed;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    width: 260px !important;
+    z-index: 200;
+  }
+  .admin-sidebar.sidebar--overlay-open {
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+    transform: translateX(0);
+  }
+  .sidebar-brand-toggle { display: none; }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .admin-shell:not([data-sidebar="full"]) { grid-template-columns: 64px 1fr; }
+  .admin-main { padding: 14px 16px; }
 }
 
 .admin-main--canvas {
@@ -2949,20 +3338,18 @@ onMounted(async () => {
   max-width: 1100px;
 }
 
-.workspace-header,
 .panel-heading {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  display: flex;
   gap: 16px;
+  justify-content: space-between;
   margin-bottom: 16px;
 }
 
-.workspace-header p,
 .hint {
-  margin: 4px 0 0;
   color: #6f665c;
   font-size: 0.88rem;
+  margin: 4px 0 0;
 }
 
 .metric-card,
@@ -3015,35 +3402,6 @@ onMounted(async () => {
   color: #fff;
 }
 
-.header-actions {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-}
-
-.workspace-switcher {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #e6dfd4;
-  border-radius: 999px;
-  display: flex;
-  gap: 10px;
-  padding: 6px 8px 6px 12px;
-}
-
-.workspace-switcher span {
-  color: #6b7280;
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.workspace-switcher select {
-  border: 0;
-  min-width: 190px;
-}
-
-.workspace-switcher a,
 .admin-main a.btn,
 .nav-button {
   text-decoration: none;
@@ -3328,6 +3686,22 @@ label {
 
 .action-table tbody tr {
   cursor: default;
+}
+
+/* Vendor rows are clickable (set working vendor) — show it */
+.vendors-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.vendors-table tbody tr:hover {
+  background: rgba(189, 148, 90, 0.06);
+}
+/* Cap vendor description so long text doesn't wreck the table */
+.vendors-table .vendor-desc {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .analytics-panel {
@@ -3951,8 +4325,19 @@ td a {
 }
 
 .modal-pane-scroll {
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  padding: 16px 20px 24px;
+  padding: 16px 20px 0;
+}
+
+.modal-pane-scroll .actions:last-child {
+  background: #fffcf7;
+  border-top: 1px solid #ede8df;
+  margin-top: auto;
+  padding: 12px 0 16px;
+  position: sticky;
+  bottom: 0;
 }
 
 .qr-pane {
@@ -4083,6 +4468,13 @@ td a {
   grid-column: 1 / -1;
 }
 
+/* Mobile tab bar — hidden on desktop, shown via mobile media query */
+@media (min-width: 768px) {
+  .designer-mobile-tabs {
+    display: none;
+  }
+}
+
 .designer-ribbon {
   align-items: end;
   display: flex;
@@ -4114,9 +4506,26 @@ td a {
 
 .ribbon-divider {
   align-self: stretch;
-  width: 1px;
   background: #e5e7eb;
   margin: 0 4px;
+  width: 1px;
+}
+
+.ribbon-menu-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+.ribbon-menu-row .form-select { flex: 1; }
+
+.ribbon-rename-row {
+  align-items: center;
+  background: #f5f0e8;
+  border: 1px solid #e0d5c3;
+  border-radius: 6px;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
 }
 
 .pill-accent {
@@ -4485,9 +4894,6 @@ td a {
   .admin-shell {
     grid-template-columns: 1fr;
   }
-  .admin-sidebar nav {
-    grid-template-columns: repeat(2, 1fr);
-  }
   .two-column,
   .designer-grid,
   .preview-layout,
@@ -4613,25 +5019,56 @@ td a {
 .item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
 .item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
 
-.dietary-toggle {
+.tag-combobox {
+  position: relative;
   display: flex;
-  gap: 6px;
+  align-items: center;
 }
-.dietary-toggle button {
-  background: #f4ede3;
+.tag-combobox input {
+  padding-right: 28px;
+  text-transform: none;
+  font-weight: 400;
+}
+.tag-clear-btn {
+  background: transparent;
+  border: 0;
+  color: #9a8870;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 6px;
+  position: absolute;
+  right: 2px;
+}
+.tag-clear-btn:hover { color: #c84b4b; }
+
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.tag-chip {
+  background: #f0ece6;
   border: 1.5px solid #ddd1bc;
   border-radius: 20px;
   color: #6b5a43;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  padding: 4px 12px;
-  transition: all 0.15s;
+  padding: 3px 10px;
+  transition: all 0.12s;
 }
-.dietary-toggle button.active,
-.dietary-toggle button.veg.active { background: #e6f5e9; border-color: #5a9068; color: #2d5a3d; }
-.dietary-toggle button.nonveg.active { background: #fde8e8; border-color: #c96060; color: #7a2020; }
-.dietary-toggle button.egg.active { background: #fef3d9; border-color: #c99a40; color: #6e4e10; }
+.tag-chip:hover { background: #e8e0d4; border-color: #c9a96e; }
+.tag-chip.active { background: #fef3d9; border-color: #c9a96e; color: #6e4e10; }
+
+.tag-no-hints {
+  color: #aaa;
+  font-size: 0.72rem;
+  font-weight: 400;
+  margin: 5px 0 0;
+  text-transform: none;
+}
 
 /* Root-level canvas add button */
 .canvas-root-add {
