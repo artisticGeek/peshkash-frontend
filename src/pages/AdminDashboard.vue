@@ -740,13 +740,13 @@
         <!-- Mobile tab bar (hidden on desktop via CSS) -->
         <div class="designer-mobile-tabs">
           <button :class="{ active: designerMobileTab === 'settings' }" @click="designerMobileTab = 'settings'">
-            <i class="bi bi-sliders"></i> Settings
+            <i class="bi bi-sliders"></i> Manage
           </button>
           <button :class="{ active: designerMobileTab === 'items' }" @click="designerMobileTab = 'items'">
-            <i class="bi bi-list-ul"></i> Items
+            <i class="bi bi-list-ul"></i> Library
           </button>
           <button :class="{ active: designerMobileTab === 'canvas' }" @click="designerMobileTab = 'canvas'">
-            <i class="bi bi-phone"></i> Canvas
+            <i class="bi bi-phone"></i> Preview
           </button>
         </div>
 
@@ -1390,7 +1390,7 @@ const showItemDrawer = ref(false);
 const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
-const designerMobileTab = ref<'settings' | 'items' | 'canvas'>('canvas');
+const designerMobileTab = ref<'settings' | 'items' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -3218,6 +3218,9 @@ onMounted(async () => {
     gap: 0;
     grid-column: 1 / -1;
     overflow: hidden;
+    position: sticky;
+    top: 0;
+    z-index: 20;
   }
   .designer-mobile-tabs button {
     align-items: center;
@@ -4405,9 +4408,11 @@ td a {
   grid-column: 1 / -1;
 }
 
-/* Mobile tab bar — hidden on desktop */
-.designer-mobile-tabs {
-  display: none;
+/* Mobile tab bar — hidden on desktop, shown via mobile media query */
+@media (min-width: 768px) {
+  .designer-mobile-tabs {
+    display: none;
+  }
 }
 
 .designer-ribbon {
