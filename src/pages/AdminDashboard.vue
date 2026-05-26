@@ -59,6 +59,9 @@
             <RouterLink class="icon-action" to="/dashboard/qr" title="Open QR Bank">
               <i class="bi bi-qr-code"></i><span>QR Bank</span>
             </RouterLink>
+            <RouterLink class="icon-action" to="/dashboard/qr-templates" title="QR Print Templates">
+              <i class="bi bi-layout-wtf"></i><span>Print Templates</span>
+            </RouterLink>
           </div>
         </div>
 
