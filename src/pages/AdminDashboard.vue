@@ -156,121 +156,134 @@
               <button class="icon-button" type="button" aria-label="Close" @click="closeVendorEditor"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="vendor-modal-grid">
-              <div class="modal-pane">
+              <!-- LEFT PANE: scrollable -->
+              <div class="modal-pane modal-pane-scroll">
+
+                <!-- Section: Identity -->
+                <p class="form-section-label"><i class="bi bi-building"></i> Identity</p>
                 <div class="form-grid">
                   <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
-                  <label>Public identifier<input v-model.trim="vendorForm.name" class="form-control" placeholder="radisson-gurgaon" @input="syncVendorQrDraft" /></label>
-                  <p class="hint wide">If this vendor already exists, use a clearer identifier such as city, branch, year, or a short suffix like <code>radisson-gurgaon-02</code>.</p>
+                  <label>
+                    Public identifier
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">@</span>
+                      <input v-model.trim="vendorForm.name" class="form-control handle-input" placeholder="radisson-gurgaon" @input="syncVendorQrDraft" />
+                    </div>
+                    <span class="input-hint" v-if="vendorForm.name">{{ originUrl }}/vendor/{{ vendorForm.name }}</span>
+                    <span class="input-hint" v-else>URL-friendly slug — letters, numbers, hyphens only</span>
+                  </label>
+                  <label class="wide">Logo URL <small class="muted">(direct image URL, optional)</small><input v-model.trim="vendorForm.logoUrl" class="form-control" placeholder="https://…" /></label>
+                  <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="2"></textarea></label>
+                </div>
+
+                <!-- Section: Contact -->
+                <p class="form-section-label"><i class="bi bi-telephone"></i> Contact</p>
+                <div class="form-grid">
                   <label>Phone<input v-model.trim="vendorPhone" class="form-control" placeholder="+91 90000 00000" /></label>
                   <label>Email<input v-model.trim="vendorEmail" class="form-control" placeholder="events@example.com" /></label>
                   <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="example.com" /></label>
-
-                  <!-- Location picker -->
-                  <div class="wide location-block">
-                    <p class="form-label-sm">Location <span class="form-label-hint">· shown as map on contact card</span></p>
-                    <div class="location-search-row">
-                      <div class="location-input-wrap" style="flex:1; position:relative">
-                        <input
-                          v-model="locationSearchQuery"
-                          class="form-control"
-                          placeholder="Search a place…"
-                          autocomplete="off"
-                          @input="onLocationSearch"
-                          @focus="showLocationDropdown = locationSuggestions.length > 0"
-                          @blur="closeLocationDropdown"
-                        />
-                        <div v-if="showLocationDropdown && locationSuggestions.length" class="location-dropdown">
-                          <button
-                            v-for="s in locationSuggestions"
-                            :key="s.place_id"
-                            type="button"
-                            class="location-option"
-                            @mousedown.prevent="selectLocation(s)"
-                          >
-                            <i class="bi bi-geo-alt"></i>
-                            <span>{{ s.display_name }}</span>
-                          </button>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        class="location-gps-btn"
-                        :class="{ locating }"
-                        :title="locating ? 'Getting location…' : 'Use current location'"
-                        @click="useCurrentLocation"
-                      >
-                        <i :class="locating ? 'bi bi-hourglass-split' : 'bi bi-crosshair'"></i>
-                      </button>
-                    </div>
-                    <div v-if="locationDisplay" class="location-confirmed">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>{{ locationDisplay }}</span>
-                      <button type="button" class="location-clear" @click="clearLocation"><i class="bi bi-x"></i></button>
-                    </div>
-                  </div>
-
-                  <p class="hint wide contact-section-label"><i class="bi bi-share"></i> Social &amp; Messaging</p>
-                  <label>
-                    WhatsApp
-                    <input v-model.trim="vendorWhatsApp" class="form-control" placeholder="+91 90000 00000" />
-                    <span class="input-hint">Leave empty to auto-derive from phone number</span>
-                  </label>
-                  <label>
-                    Instagram
-                    <div class="handle-input-wrap">
-                      <span class="handle-prefix">@</span>
-                      <input v-model.trim="vendorInstagram" class="form-control handle-input" placeholder="handle  or  instagram.com/…" />
-                    </div>
-                  </label>
-                  <label>
-                    Facebook
-                    <div class="handle-input-wrap">
-                      <span class="handle-prefix">fb</span>
-                      <input v-model.trim="vendorFacebook" class="form-control handle-input" placeholder="page-name  or  facebook.com/…" />
-                    </div>
-                  </label>
-                  <label>
-                    LinkedIn
-                    <div class="handle-input-wrap">
-                      <span class="handle-prefix">in/</span>
-                      <input v-model.trim="vendorLinkedIn" class="form-control handle-input" placeholder="profile  or  linkedin.com/…" />
-                    </div>
-                  </label>
-                  <label>
-                    Twitter / X
-                    <div class="handle-input-wrap">
-                      <span class="handle-prefix">@</span>
-                      <input v-model.trim="vendorTwitter" class="form-control handle-input" placeholder="handle  or  x.com/…" />
-                    </div>
-                  </label>
-                  <label>YouTube<input v-model.trim="vendorYouTube" class="form-control" placeholder="@channel  or  youtube.com/…" /></label>
-                  <p class="hint wide contact-section-label"><i class="bi bi-clock"></i> Business Hours</p>
-                  <div class="wide biz-hours-block">
-                    <p class="form-label-sm">Days open</p>
-                    <div class="day-chips">
-                      <button
-                        v-for="d in WEEK_DAYS"
-                        :key="d"
-                        type="button"
-                        class="day-chip"
-                        :class="{ active: vendorDaySelection.includes(d) }"
-                        @click="toggleDay(d)"
-                      >{{ d }}</button>
-                    </div>
-                    <p class="form-label-sm" style="margin-top:10px">Hours</p>
-                    <div class="time-range-row">
-                      <input type="time" v-model="vendorHoursFrom" class="form-control time-input" />
-                      <span class="time-sep">to</span>
-                      <input type="time" v-model="vendorHoursTo" class="form-control time-input" />
-                    </div>
-                    <p v-if="vendorBusinessDays || vendorBusinessHours" class="biz-hours-preview">
-                      <i class="bi bi-eye"></i>
-                      {{ [vendorBusinessDays, vendorBusinessHours].filter(Boolean).join('  ·  ') }}
-                    </p>
-                  </div>
                   <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
-                  <label class="wide">Logo URL <small class="muted">(direct image URL, optional)</small><input v-model.trim="vendorForm.logoUrl" class="form-control" placeholder="https://..." /></label>
-                  <label class="wide">Description<textarea v-model.trim="vendorForm.description" class="form-control" rows="3"></textarea></label>
+                </div>
+
+                <!-- Section: Location -->
+                <p class="form-section-label"><i class="bi bi-geo-alt"></i> Location <span class="form-label-hint">· shown as map on contact card</span></p>
+                <div class="wide location-block">
+                  <div class="location-search-row">
+                    <div class="location-input-wrap" style="flex:1; position:relative">
+                      <input
+                        v-model="locationSearchQuery"
+                        class="form-control"
+                        placeholder="Search a place…"
+                        autocomplete="off"
+                        @input="onLocationSearch"
+                        @focus="showLocationDropdown = locationSuggestions.length > 0"
+                        @blur="closeLocationDropdown"
+                      />
+                      <div v-if="showLocationDropdown && locationSuggestions.length" class="location-dropdown">
+                        <button
+                          v-for="s in locationSuggestions"
+                          :key="s.place_id"
+                          type="button"
+                          class="location-option"
+                          @mousedown.prevent="selectLocation(s)"
+                        >
+                          <i class="bi bi-geo-alt"></i>
+                          <span>{{ s.display_name }}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="location-gps-btn"
+                      :class="{ locating }"
+                      :title="locating ? 'Getting location…' : 'Use current location'"
+                      @click="useCurrentLocation"
+                    >
+                      <i :class="locating ? 'bi bi-hourglass-split' : 'bi bi-crosshair'"></i>
+                    </button>
+                  </div>
+                  <div v-if="locationDisplay" class="location-confirmed">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <span>{{ locationDisplay }}</span>
+                    <button type="button" class="location-clear" @click="clearLocation"><i class="bi bi-x"></i></button>
+                  </div>
+                </div>
+
+                <!-- Section: Business Hours -->
+                <p class="form-section-label"><i class="bi bi-clock"></i> Business Hours</p>
+                <div class="wide biz-hours-block">
+                  <p class="form-label-sm">Days open</p>
+                  <div class="day-chips">
+                    <button
+                      v-for="d in WEEK_DAYS"
+                      :key="d"
+                      type="button"
+                      class="day-chip"
+                      :class="{ active: vendorDaySelection.includes(d) }"
+                      @click="toggleDay(d)"
+                    >{{ d }}</button>
+                  </div>
+                  <p class="form-label-sm" style="margin-top:10px">Hours</p>
+                  <div class="time-range-row">
+                    <input type="time" v-model="vendorHoursFrom" class="form-control time-input" />
+                    <span class="time-sep">to</span>
+                    <input type="time" v-model="vendorHoursTo" class="form-control time-input" />
+                  </div>
+                  <p v-if="vendorBusinessDays || vendorBusinessHours" class="biz-hours-preview">
+                    <i class="bi bi-eye"></i>
+                    {{ [vendorBusinessDays, vendorBusinessHours].filter(Boolean).join('  ·  ') }}
+                  </p>
+                </div>
+
+                <!-- Section: Social & Messaging -->
+                <p class="form-section-label"><i class="bi bi-share"></i> Social &amp; Messaging</p>
+                <div class="social-rows-block wide">
+                  <div v-for="(row, idx) in vendorSocials" :key="idx" class="social-row-item">
+                    <select v-model="row.type" class="form-control social-type-select">
+                      <option v-for="t in SOCIAL_TYPES" :key="t.key" :value="t.key">{{ t.label }}</option>
+                    </select>
+                    <div class="handle-input-wrap" style="flex:1">
+                      <span v-if="getSocialMeta(row.type).prefix" class="handle-prefix">{{ getSocialMeta(row.type).prefix }}</span>
+                      <input
+                        v-model.trim="row.value"
+                        class="form-control handle-input"
+                        :placeholder="getSocialMeta(row.type).hint"
+                      />
+                    </div>
+                    <button type="button" class="remove-row-btn" @click="removeSocial(idx)" title="Remove"><i class="bi bi-x"></i></button>
+                  </div>
+                  <button
+                    type="button"
+                    class="add-social-btn"
+                    :disabled="vendorSocials.length >= SOCIAL_TYPES.length"
+                    @click="addSocial"
+                  >
+                    <i class="bi bi-plus"></i> Add Social
+                  </button>
+                </div>
+
+                <!-- Contact card product toggle -->
+                <div class="form-grid" style="margin-top:16px">
                   <label class="product-toggle wide" :class="{ selected: vendorForm.hasContactPage }">
                     <input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" />
                     <i class="bi bi-person-vcard"></i>
@@ -280,6 +293,7 @@
                     </span>
                   </label>
                 </div>
+
                 <div class="actions">
                   <button class="btn btn-primary" type="submit" :disabled="loading">
                     <i class="bi bi-check2-circle"></i>
@@ -288,12 +302,21 @@
                   <button class="btn btn-outline-secondary" type="button" @click="closeVendorEditor" aria-label="Cancel"><i class="bi bi-x-lg"></i></button>
                 </div>
               </div>
+
+              <!-- RIGHT PANE: static QR -->
               <div class="modal-pane qr-pane">
                 <h4>Contact Card QR</h4>
                 <p class="hint">Preview stays inactive until the vendor is saved. Saving a contact-card product activates this mapping.</p>
                 <div class="preview-box">
                   <div><span>Destination</span><code>{{ vendorQrDraft.url || 'Save a vendor to generate destination' }}</code></div>
-                  <label>QR Hash<input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" @input="renderVendorQr" /></label>
+                  <label>
+                    QR Hash
+                    <input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" @input="renderVendorQr" />
+                    <span v-if="qrHashChanged" class="input-hint warn">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      Changed from <code>{{ savedQrHash }}</code>
+                    </span>
+                  </label>
                   <div v-if="vendorQrCodeDataUrl && vendorForm.hasContactPage" class="qr-preview-card">
                     <span class="qr-status" :class="{ active: vendorQrIsActive }">
                       <i :class="vendorQrIsActive ? 'bi bi-check-circle-fill' : 'bi bi-clock-history'"></i>
@@ -304,7 +327,23 @@
                     <code v-else>{{ originUrl }}/{{ vendorQrDraft.qrHash }}</code>
                   </div>
                   <p v-else class="muted">Add the contact card product to preview and activate the vendor QR.</p>
-                  <button class="btn btn-primary btn-sm" type="button" :disabled="!vendorForm.id || !vendorForm.hasContactPage || !vendorQrDraft.qrHash" @click="saveVendorQr">
+
+                  <!-- QR hash change confirmation -->
+                  <div v-if="qrHashConfirmPending" class="qr-hash-warn">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <p>Existing printed QR codes pointing to <strong>{{ savedQrHash }}</strong> will stop working. Only change this if you're replacing the physical QR.</p>
+                    <div class="qr-hash-warn-actions">
+                      <button type="button" class="btn btn-danger btn-sm" @click="confirmAndActivateQr">Yes, update QR</button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" @click="qrHashConfirmPending = false">Cancel</button>
+                    </div>
+                  </div>
+
+                  <button
+                    v-if="showActivateQr && !qrHashConfirmPending"
+                    class="btn btn-primary btn-sm"
+                    type="button"
+                    @click="handleActivateQr"
+                  >
                     <i class="bi bi-qr-code"></i>
                     Activate QR
                   </button>
@@ -1287,12 +1326,32 @@ const vendorPhone = ref('');
 const vendorEmail = ref('');
 const vendorWebsite = ref('');
 const vendorMapUrl = ref('');
-const vendorInstagram = ref('');
-const vendorFacebook = ref('');
-const vendorLinkedIn = ref('');
-const vendorTwitter = ref('');
-const vendorWhatsApp = ref('');
-const vendorYouTube = ref('');
+// Dynamic social rows — replaces 6 individual refs
+const SOCIAL_TYPES = [
+  { key: 'WhatsApp',  icon: 'bi-whatsapp',  label: 'WhatsApp',   prefix: null,  hint: 'Number — blank auto-derives from phone' },
+  { key: 'Instagram', icon: 'bi-instagram', label: 'Instagram',  prefix: '@',   hint: 'handle or instagram.com/…' },
+  { key: 'Facebook',  icon: 'bi-facebook',  label: 'Facebook',   prefix: null,  hint: 'page name or facebook.com/…' },
+  { key: 'LinkedIn',  icon: 'bi-linkedin',  label: 'LinkedIn',   prefix: 'in/', hint: 'profile or linkedin.com/…' },
+  { key: 'Twitter',   icon: 'bi-twitter-x', label: 'Twitter / X',prefix: '@',   hint: 'handle or x.com/…' },
+  { key: 'YouTube',   icon: 'bi-youtube',   label: 'YouTube',    prefix: '@',   hint: 'channel or youtube.com/…' },
+] as const;
+type SocialKey = (typeof SOCIAL_TYPES)[number]['key'];
+
+const vendorSocials = ref<{ type: SocialKey | string; value: string }[]>([]);
+
+function getSocialMeta(type: string) {
+  return SOCIAL_TYPES.find(t => t.key === type) ?? { key: type, icon: 'bi-link-45deg', label: type, prefix: null, hint: '' };
+}
+function addSocial() {
+  const used = new Set(vendorSocials.value.map(s => s.type));
+  const next = SOCIAL_TYPES.find(t => !used.has(t.key));
+  if (next) vendorSocials.value.push({ type: next.key, value: '' });
+}
+function removeSocial(idx: number) { vendorSocials.value.splice(idx, 1); }
+
+// QR hash change detection
+const savedQrHash          = ref('');
+const qrHashConfirmPending = ref(false);
 const vendorBusinessDays = ref('');
 const vendorBusinessHours = ref('');
 
@@ -1518,6 +1577,12 @@ const vendorQrIsActive = computed(() => Boolean(
   && vendorQrDraft.qrHash
   && qrMappings.value.some((mapping) => mapping.qrHash === vendorQrDraft.qrHash && mapping.url === vendorQrDraft.url && mapping.isActive)
 ));
+const qrHashChanged = computed(() =>
+  Boolean(vendorForm.id && savedQrHash.value && vendorQrDraft.qrHash && vendorQrDraft.qrHash !== savedQrHash.value)
+);
+const showActivateQr = computed(() =>
+  Boolean(vendorForm.id && vendorForm.hasContactPage && vendorQrDraft.qrHash && !vendorQrIsActive.value)
+);
 const publishProducts = computed(() => [
   {
     key: 'contactCard',
@@ -1925,12 +1990,9 @@ function resetVendor() {
   vendorEmail.value = '';
   vendorWebsite.value = '';
   vendorMapUrl.value = '';
-  vendorInstagram.value = '';
-  vendorFacebook.value = '';
-  vendorLinkedIn.value = '';
-  vendorTwitter.value = '';
-  vendorWhatsApp.value = '';
-  vendorYouTube.value = '';
+  vendorSocials.value        = [];
+  savedQrHash.value          = '';
+  qrHashConfirmPending.value = false;
   locationSearchQuery.value  = '';
   locationDisplay.value      = '';
   locationSuggestions.value  = [];
@@ -1949,10 +2011,13 @@ function editVendor(vendor: Vendor) {
   Object.assign(vendorForm, vendor);
   vendorContactText.value = vendor.contact?.join(', ') ?? '';
   hydrateVendorContactFields(vendor.contact ?? []);
-  hydrateVendorContactFields(vendor.contact ?? []);
   selectedVendorId.value = vendor.id;
   showVendorEditor.value = true;
   activeSection.value = 'vendors';
+  // Track the hash that's already active so we can detect changes
+  const existingMapping = qrMappings.value.find(m => m.url === `/vendor/${vendor.name}` && m.isActive);
+  savedQrHash.value = existingMapping?.qrHash ?? `${vendor.name}-card`;
+  qrHashConfirmPending.value = false;
   syncVendorQrDraft();
 }
 
@@ -1974,24 +2039,17 @@ function hydrateVendorContactFields(contact: string[]) {
     locationSearchQuery.value = '';
     locationDisplay.value     = '';
   }
-  vendorInstagram.value    = find('Instagram');
-  vendorFacebook.value     = find('Facebook');
-  vendorLinkedIn.value     = find('LinkedIn');
-  vendorTwitter.value      = find('Twitter');
-  vendorWhatsApp.value     = find('WhatsApp');
-  vendorYouTube.value      = find('YouTube');
+  // Rebuild social rows from recognised keys present in contact[]
+  const socialKeys: SocialKey[] = ['WhatsApp', 'Instagram', 'Facebook', 'LinkedIn', 'Twitter', 'YouTube'];
+  vendorSocials.value = socialKeys
+    .map(key => ({ type: key, value: find(key) }))
+    .filter(s => s.value);
 
   const days  = find('Business Days');
   const hours = find('Business Hours');
-
-  // Set string refs directly (watchers won't fire since we're also setting structured refs)
   vendorBusinessDays.value  = days;
   vendorBusinessHours.value = hours;
-
-  // Populate structured day chips from stored string
-  vendorDaySelection.value = parseDaySelection(days);
-
-  // Populate structured time inputs — parse "9:00 AM – 6:00 PM" back to "09:00" / "18:00"
+  vendorDaySelection.value  = parseDaySelection(days);
   const timeParts = hours.split(/\s*[-–]\s*/);
   vendorHoursFrom.value = fmt12to24(timeParts[0] ?? '');
   vendorHoursTo.value   = fmt12to24(timeParts[1] ?? '');
@@ -2000,20 +2058,16 @@ function hydrateVendorContactFields(contact: string[]) {
 }
 
 function vendorContactPayload() {
-  return [
-    ['Phone',          vendorPhone.value],
-    ['WhatsApp',       vendorWhatsApp.value],
-    ['Email',          vendorEmail.value],
-    ['Website',        vendorWebsite.value],
-    ['Google Maps',    vendorMapUrl.value],
-    ['Instagram',      vendorInstagram.value],
-    ['Facebook',       vendorFacebook.value],
-    ['LinkedIn',       vendorLinkedIn.value],
-    ['Twitter',        vendorTwitter.value],
-    ['YouTube',        vendorYouTube.value],
-    ['Business Days',  vendorBusinessDays.value],
-    ['Business Hours', vendorBusinessHours.value],
-  ].filter(([, value]) => String(value).trim()).map(([label, value]) => `${label}: ${String(value).trim()}`);
+  const rows: [string, string][] = [
+    ['Phone',         vendorPhone.value],
+    ['Email',         vendorEmail.value],
+    ['Website',       vendorWebsite.value],
+    ['Google Maps',   vendorMapUrl.value],
+    ['Business Days', vendorBusinessDays.value],
+    ['Business Hours',vendorBusinessHours.value],
+    ...vendorSocials.value.map(s => [s.type, s.value] as [string, string]),
+  ];
+  return rows.filter(([, v]) => String(v).trim()).map(([label, v]) => `${label}: ${String(v).trim()}`);
 }
 
 async function renderVendorQr() {
@@ -2078,6 +2132,19 @@ async function saveVendorQr() {
   }
 }
 
+function handleActivateQr() {
+  if (qrHashChanged.value) {
+    qrHashConfirmPending.value = true;
+  } else {
+    saveVendorQr();
+  }
+}
+
+async function confirmAndActivateQr() {
+  qrHashConfirmPending.value = false;
+  await saveVendorQr();
+}
+
 async function saveVendorQrMapping() {
   if (!vendorForm.id) throw new Error('Save the vendor before activating the QR');
   if (!vendorForm.hasContactPage) throw new Error('Add the contact card product before activating this QR');
@@ -2088,6 +2155,8 @@ async function saveVendorQrMapping() {
   existing
     ? await axios.put(adminUrl(`/qr-mappings/${existing.id}`), payload)
     : await axios.post(adminUrl('/qr-mappings'), payload);
+  savedQrHash.value = vendorQrDraft.qrHash;
+  qrHashConfirmPending.value = false;
 }
 
 function resetEvent() {
@@ -3338,6 +3407,118 @@ label {
   text-transform: uppercase;
 }
 
+.form-section-label {
+  align-items: center;
+  border-bottom: 1px solid #e8dfd0;
+  color: #a07c4a;
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 6px;
+  letter-spacing: 0.03em;
+  margin: 14px 0 8px;
+  padding-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.form-section-label:first-child {
+  margin-top: 0;
+}
+
+/* Social rows */
+.social-rows-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.social-row-item {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.social-type-select {
+  flex-shrink: 0;
+  width: 130px;
+}
+
+.add-social-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px dashed #c9a96e;
+  border-radius: 5px;
+  color: #a07c4a;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 500;
+  gap: 4px;
+  padding: 5px 10px;
+  width: fit-content;
+}
+
+.add-social-btn:hover:not(:disabled) {
+  background: #fdf5e8;
+}
+
+.add-social-btn:disabled {
+  color: #bbb;
+  border-color: #ddd;
+  cursor: default;
+}
+
+.remove-row-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #b07070;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 30px;
+  justify-content: center;
+  width: 28px;
+}
+
+.remove-row-btn:hover {
+  background: #fce8e8;
+}
+
+/* QR hash change warning */
+.qr-hash-warn {
+  background: #fff8ed;
+  border: 1px solid #e8c96e;
+  border-radius: 5px;
+  color: #7a5a1a;
+  font-size: 0.82rem;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.qr-hash-warn > i {
+  color: #c87a00;
+  margin-right: 4px;
+}
+
+.qr-hash-warn p {
+  margin: 4px 0 8px;
+}
+
+.qr-hash-warn-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.input-hint.warn {
+  color: #b05000;
+}
+
+.input-hint.warn i {
+  margin-right: 3px;
+}
+
 /* ── Business hours structured input ───────────────────────────── */
 .biz-hours-block {
   grid-column: 1 / -1;
@@ -3695,10 +3876,12 @@ td a {
   background: #fff;
   border-radius: 6px;
   box-shadow: 0 24px 70px rgba(21, 25, 30, 0.28);
+  display: flex;
+  flex-direction: column;
   max-height: calc(100vh - 48px);
   max-width: 1120px;
-  overflow: auto;
-  padding: 20px;
+  overflow: hidden;
+  padding: 0;
   width: min(100%, 1120px);
 }
 
@@ -3706,9 +3889,9 @@ td a {
   align-items: start;
   border-bottom: 1px solid #ece7de;
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  padding: 18px 20px 14px;
 }
 
 .icon-button {
@@ -3744,19 +3927,27 @@ td a {
 
 .vendor-modal-grid {
   display: grid;
-  gap: 18px;
+  flex: 1;
+  gap: 0;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-pane {
   min-width: 0;
 }
 
+.modal-pane-scroll {
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
 .qr-pane {
   background: #fbfaf8;
-  border: 1px solid #e6dfd4;
-  border-radius: 5px;
-  padding: 14px;
+  border-left: 1px solid #e6dfd4;
+  overflow-y: auto;
+  padding: 18px 16px;
 }
 
 .qr-pane h4 {
