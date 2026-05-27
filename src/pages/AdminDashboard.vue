@@ -584,7 +584,10 @@
           </aside>
         </div>
 
-        <div v-if="!selectedEventForItems" class="panel empty-state">
+        <div v-if="loading && !selectedEventForItems" class="panel empty-state">
+          <p class="hint">Loading event…</p>
+        </div>
+        <div v-if="!loading && !selectedEventForItems" class="panel empty-state">
           <h3>Event not found</h3>
           <p class="hint">Choose an event from the event list, or create a new draft.</p>
           <RouterLink class="btn btn-primary" to="/dashboard/events">Back to Events</RouterLink>
@@ -5201,10 +5204,17 @@ td a {
 
 /* ── Mobile overrides (placed after base rules to win cascade) ──────────────── */
 @media (max-width: 767px) {
+  /* Stack home intro text above action grid */
+  .home-intro {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   /* 2×2 grid for home shortcut buttons */
   .home-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
 }
 </style>
