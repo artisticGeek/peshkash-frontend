@@ -107,7 +107,7 @@
             <RouterLink class="icon-button outlined" to="/dashboard/events" title="All events" aria-label="All events"><i class="bi bi-arrow-right"></i></RouterLink>
           </div>
           <div class="table-wrap">
-            <table class="table table-sm align-middle action-table">
+            <table class="table table-sm align-middle action-table home-events-table">
               <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
@@ -394,7 +394,7 @@
             </div>
           </form>
           <div class="table-wrap">
-            <table class="table table-sm align-middle action-table">
+            <table class="table table-sm align-middle action-table events-table">
               <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
@@ -403,9 +403,9 @@
                   <td><span class="status-pill" :class="`status-${event.status}`">{{ event.status }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
                   <td class="row-actions">
-                    <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)">Open</RouterLink>
-                    <button class="btn btn-outline-secondary btn-sm" @click="editEventInline(event)">Edit</button>
-                    <RouterLink v-if="event.status !== 'active'" class="btn btn-outline-primary btn-sm" :to="adminPublishRoute(event)"><i class="bi bi-send-check"></i> Publish</RouterLink>
+                    <RouterLink class="btn btn-outline-secondary btn-sm" :to="adminEventRoute(event)"><i class="bi bi-box-arrow-up-right"></i><span class="btn-text"> Open</span></RouterLink>
+                    <button class="btn btn-outline-secondary btn-sm" @click="editEventInline(event)"><i class="bi bi-pencil"></i><span class="btn-text"> Edit</span></button>
+                    <RouterLink v-if="event.status !== 'active'" class="btn btn-outline-primary btn-sm" :to="adminPublishRoute(event)"><i class="bi bi-send-check"></i><span class="btn-text"> Publish</span></RouterLink>
                     <button v-if="event.status !== 'active'" class="btn btn-outline-danger btn-sm" title="Delete event" @click.stop="deleteEvent(event)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
@@ -584,7 +584,10 @@
           </aside>
         </div>
 
-        <div v-if="!selectedEventForItems" class="panel empty-state">
+        <div v-if="loading && !selectedEventForItems" class="panel empty-state">
+          <p class="hint">Loading event…</p>
+        </div>
+        <div v-if="!loading && !selectedEventForItems" class="panel empty-state">
           <h3>Event not found</h3>
           <p class="hint">Choose an event from the event list, or create a new draft.</p>
           <RouterLink class="btn btn-primary" to="/dashboard/events">Back to Events</RouterLink>
@@ -3393,6 +3396,33 @@ function confirmDeactivate() {
     transform: translateX(0);
   }
   .sidebar-brand-toggle { display: none; }
+
+  /* Workspace header right: keep as row (no stacking of vendor + refresh) */
+  .workspace-header-right {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* Vendors table: hide low-value columns on mobile */
+  .vendors-table th:nth-child(2),
+  .vendors-table td:nth-child(2),
+  .vendors-table th:nth-child(3),
+  .vendors-table td:nth-child(3),
+  .vendors-table th:nth-child(5),
+  .vendors-table td:nth-child(5) { display: none; }
+
+  /* Events tables: hide Window and Menus columns on mobile */
+  .events-table th:nth-child(2),
+  .events-table td:nth-child(2),
+  .events-table th:nth-child(4),
+  .events-table td:nth-child(4),
+  .home-events-table th:nth-child(2),
+  .home-events-table td:nth-child(2),
+  .home-events-table th:nth-child(4),
+  .home-events-table td:nth-child(4) { display: none; }
+
+  .events-table .row-actions .btn-text { display: none; }
+  .events-table .row-actions .btn { padding: 4px 7px; }
 }
 
 /* Tablet */
@@ -5007,7 +5037,7 @@ td a {
     align-items: stretch;
     flex-direction: column;
   }
-  .workspace-switcher {
+  .workspace-switcher:not(.workspace-switcher--compact) {
     align-items: stretch;
     border-radius: 8px;
     flex-direction: column;
@@ -5171,4 +5201,20 @@ td a {
   width: 100%;
 }
 .canvas-root-add:hover { border-color: #bd945a; color: #7a542a; }
+
+/* ── Mobile overrides (placed after base rules to win cascade) ──────────────── */
+@media (max-width: 767px) {
+  /* Stack home intro text above action grid */
+  .home-intro {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* 2×2 grid for home shortcut buttons */
+  .home-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+}
 </style>
