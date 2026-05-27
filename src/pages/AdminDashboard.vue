@@ -1088,93 +1088,129 @@
         </div>
       </section>
 
-      <section v-if="activeSection === 'qr'" class="two-column">
-        <form class="panel" @submit.prevent="saveQr">
-          <h3>QR Bank</h3>
-          <p class="hint">Reusable QR assets and their current public destinations.</p>
-          <div class="qr-target-tabs">
-            <button type="button" :class="{ active: qrTargetType === 'event' }" @click="qrTargetType = 'event'">Event QR <span class="tab-badge">dynamic</span></button>
-            <button type="button" :class="{ active: qrTargetType === 'vendor' }" @click="qrTargetType = 'vendor'">Vendor Card</button>
-            <button type="button" :class="{ active: qrTargetType === 'menu' }" @click="qrTargetType = 'menu'">Static Menu</button>
-            <button type="button" :class="{ active: qrTargetType === 'item' }" @click="qrTargetType = 'item'">Specific Item</button>
-            <button type="button" :class="{ active: qrTargetType === 'custom' }" @click="qrTargetType = 'custom'">Custom</button>
-          </div>
-          <p v-if="qrTargetType === 'event'" class="hint qr-event-hint"><i class="bi bi-info-circle"></i> Event QRs resolve dynamically — always serve the event's current linked menu without reprinting.</p>
-          <div class="form-grid">
-            <label>QR Hash<input v-model.trim="qrForm.qrHash" class="form-control" placeholder="radisson-gurgaon-card" /></label>
-            <label>Target<select v-model="qrTargetType" class="form-select"><option value="event">Event QR (dynamic)</option><option value="vendor">Vendor Contact Card</option><option value="menu">Event Menu (static)</option><option value="item">Event Item</option><option value="custom">Custom Path</option></select></label>
-            <label v-if="qrTargetType !== 'vendor' && qrTargetType !== 'custom'">Event<select v-model.number="qrForm.eventId" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
-            <label v-if="qrTargetType === 'menu'">Menu<select v-model.number="qrForm.menuId" class="form-select"><option :value="0">Select menu</option><option v-for="menu in menusForQrEvent" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
-            <label v-if="qrTargetType === 'item'">Item<select v-model.number="qrForm.itemId" class="form-select"><option :value="0">Select item</option><option v-for="item in itemsForQrEvent" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option></select></label>
-            <label v-if="qrTargetType !== 'event'" class="wide">Destination URL<input v-model.trim="qrForm.url" class="form-control" placeholder="/vendor/radisson-gurgaon" /></label>
-            <label class="check"><input v-model="qrForm.isActive" type="checkbox" /> Active</label>
-          </div>
-          <div class="preview-box" v-if="(qrPreview.shortQrUrl || qrPreview.finalPublicUrl) && !showQrEditor">
-            <div><span>Short QR URL</span><a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer">{{ qrPreview.shortQrUrl }}</a></div>
-            <div><span>Final URL</span><a :href="qrPreview.finalPublicUrl" target="_blank" rel="noreferrer">{{ qrPreview.finalPublicUrl }}</a></div>
-            <img v-if="qrCodeDataUrl" class="qr-image" :src="qrCodeDataUrl" alt="QR code" />
-          </div>
-          <div class="actions">
-            <button class="btn btn-outline-secondary" type="button" :disabled="loading" @click="buildQrDestination">Generate Destination</button>
-            <button class="btn btn-primary" type="submit" :disabled="loading">Save Mapping</button>
-          </div>
-        </form>
+      <section v-if="activeSection === 'qr'" class="qr-bank-section">
 
-        <div class="panel">
-          <h3>QR Assets</h3>
-          <div class="table-wrap">
-            <table class="table table-sm align-middle">
-              <thead><tr><th>QR</th><th>Target</th><th>Scans</th><th>Updated</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="mapping in vendorQrMappings" :key="mapping.id" @click="openQrEditor(mapping)">
-                  <td><code>{{ mapping.qrHash }}</code><br /><span v-if="mapping.type === 'event'" class="type-pill dynamic">dynamic</span></td>
-                  <td>{{ qrTargetLabel(mapping) }}<br /><span class="muted">{{ mapping.type === 'event' ? '→ resolves at scan time' : mapping.url }}</span></td>
-                  <td>{{ mapping.usageCount || 0 }}</td>
-                  <td>{{ formatDate(mapping.updatedAt || mapping.createdAt) }}</td>
-                  <td><button class="icon-button outlined small" title="Manage QR" aria-label="Manage QR" @click.stop="openQrEditor(mapping)"><i class="bi bi-sliders"></i></button></td>
-                </tr>
-                <tr v-if="!vendorQrMappings.length"><td colspan="5" class="muted">No QR mappings for this vendor yet.</td></tr>
-              </tbody>
-            </table>
+        <!-- ── QR Bank header ─────────────────────────────────────── -->
+        <div class="qr-bank-header panel">
+          <div>
+            <h3>QR Bank <span v-if="vendorQrMappings.length" class="qr-count-badge">{{ vendorQrMappings.length }}</span></h3>
+            <p class="hint">Physical QR asset inventory. Each hash is permanently printed — reassign destinations anytime without reprinting.</p>
+          </div>
+          <button class="btn btn-primary" type="button" @click="openQrEditor()">
+            <i class="bi bi-plus-lg"></i> New QR Asset
+          </button>
+        </div>
+
+        <!-- ── Empty state ────────────────────────────────────────── -->
+        <div v-if="!vendorQrMappings.length" class="qr-empty-state panel">
+          <i class="bi bi-qr-code qr-empty-icon"></i>
+          <div>
+            <p class="mb-0">No QR assets yet.</p>
+            <p class="hint">Create your first reusable QR to start your physical QR inventory.</p>
           </div>
         </div>
 
+        <!-- ── Inventory grid ─────────────────────────────────────── -->
+        <div v-else class="qr-inventory-grid">
+          <div
+            v-for="mapping in vendorQrMappings"
+            :key="mapping.id"
+            class="qr-asset-card"
+            :class="{ 'qr-card-selected': selectedQrMapping?.id === mapping.id, 'qr-card-warn': qrStatus(mapping) === 'needs_reassignment' }"
+            @click="openQrEditor(mapping)"
+          >
+            <div class="qr-card-top">
+              <code class="qr-hash-code">{{ mapping.qrHash }}</code>
+              <span :class="`type-badge type-${qrTypeBadge(mapping).css}`">{{ qrTypeBadge(mapping).label }}</span>
+            </div>
+            <div class="qr-card-target">{{ qrTargetLabel(mapping) }}</div>
+            <div class="qr-card-footer">
+              <span :class="`status-chip chip-${qrStatus(mapping)}`">
+                <i :class="qrStatus(mapping) === 'needs_reassignment' ? 'bi bi-exclamation-circle-fill' : qrStatus(mapping) === 'inactive' ? 'bi bi-dash-circle' : 'bi bi-check-circle-fill'"></i>
+                {{ qrStatus(mapping) === 'needs_reassignment' ? 'Needs reassignment' : qrStatus(mapping) === 'inactive' ? 'Inactive' : 'Active' }}
+              </span>
+              <span class="qr-scan-pill"><i class="bi bi-eye"></i> {{ mapping.usageCount || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Edit / Reassign modal ──────────────────────────────── -->
         <div v-if="showQrEditor" class="modal-backdrop-custom" @click.self="closeQrEditor">
           <form class="vendor-modal" @submit.prevent="saveQr">
             <div class="modal-title-row">
               <div>
                 <h3>{{ selectedQrMapping ? selectedQrMapping.qrHash : 'New QR Asset' }}</h3>
-                <p class="hint">Inspect current usage and remap the reusable QR safely.</p>
+                <p class="hint">{{ selectedQrMapping ? 'Reassign destination without reprinting the physical card.' : 'Create a permanently-printable QR asset.' }}</p>
               </div>
               <button class="icon-button" type="button" aria-label="Close" @click="closeQrEditor"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="vendor-modal-grid">
-              <div class="modal-pane">
+              <div class="modal-pane modal-pane-scroll">
                 <div class="form-grid">
-                  <label>QR Hash<input v-model.trim="qrForm.qrHash" class="form-control" /></label>
-                  <label>Target<select v-model="qrTargetType" class="form-select"><option value="event">Event QR (dynamic)</option><option value="vendor">Vendor Contact Card</option><option value="menu">Event Menu (static)</option><option value="item">Event Item</option><option value="custom">Custom Path</option></select></label>
-                  <label v-if="qrTargetType === 'event'">Event<select v-model.number="qrForm.eventId" class="form-select"><option :value="0">Select event</option><option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option></select></label>
-                  <label v-if="qrTargetType !== 'event'" class="wide">Destination URL<input v-model.trim="qrForm.url" class="form-control" /></label>
+                  <label>QR Hash<input v-model.trim="qrForm.qrHash" class="form-control" placeholder="radisson-gurgaon-card" /></label>
+                  <label>Target Type
+                    <select v-model="qrTargetType" class="form-select">
+                      <option value="event">Event QR (dynamic)</option>
+                      <option value="vendor">Contact Card</option>
+                      <option value="menu">Menu Static</option>
+                      <option value="item">Item Spotlight</option>
+                      <option value="custom">Custom Path</option>
+                    </select>
+                  </label>
+                  <label v-if="qrTargetType === 'event' || qrTargetType === 'menu' || qrTargetType === 'item'">
+                    Event
+                    <select v-model.number="qrForm.eventId" class="form-select">
+                      <option :value="0">Select event</option>
+                      <option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option>
+                    </select>
+                  </label>
+                  <label v-if="qrTargetType === 'menu'">
+                    Menu
+                    <select v-model.number="qrForm.menuId" class="form-select">
+                      <option :value="0">Select menu</option>
+                      <option v-for="menu in menusForQrEvent" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option>
+                    </select>
+                  </label>
+                  <label v-if="qrTargetType === 'item'">
+                    Item
+                    <select v-model.number="qrForm.itemId" class="form-select">
+                      <option :value="0">Select item</option>
+                      <option v-for="item in itemsForQrEvent" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option>
+                    </select>
+                  </label>
+                  <label v-if="qrTargetType === 'custom'" class="wide">Destination URL<input v-model.trim="qrForm.url" class="form-control" placeholder="/vendor/radisson-gurgaon" /></label>
                   <label class="check"><input v-model="qrForm.isActive" type="checkbox" /> Active</label>
                 </div>
                 <div class="actions">
-                  <button class="btn btn-outline-secondary" type="button" @click="buildQrDestination"><i class="bi bi-magic"></i> Generate</button>
-                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Save QR</button>
+                  <button v-if="qrTargetType !== 'event'" class="btn btn-outline-secondary" type="button" @click="buildQrDestination"><i class="bi bi-magic"></i> Preview URL</button>
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Save</button>
                   <button v-if="selectedQrMapping" class="btn btn-outline-danger" type="button" @click="deleteQrMappingConfirmed(selectedQrMapping!)"><i class="bi bi-trash"></i></button>
                 </div>
               </div>
               <div class="modal-pane qr-pane">
-                <h4>Current Mapping</h4>
+                <h4>Current Assignment</h4>
                 <div class="qr-detail-list">
-                  <div><span>Target</span><strong>{{ selectedQrMapping ? qrTargetLabel(selectedQrMapping) : 'Draft' }}</strong></div>
+                  <div><span>Target</span><strong>{{ selectedQrMapping ? qrTargetLabel(selectedQrMapping) : '—' }}</strong></div>
+                  <div v-if="selectedQrMapping">
+                    <span>Status</span>
+                    <strong>
+                      <span :class="`status-chip chip-${qrStatus(selectedQrMapping)}`" style="font-size:0.72rem">
+                        <i :class="qrStatus(selectedQrMapping) === 'needs_reassignment' ? 'bi bi-exclamation-circle-fill' : qrStatus(selectedQrMapping) === 'inactive' ? 'bi bi-dash-circle' : 'bi bi-check-circle-fill'"></i>
+                        {{ qrStatus(selectedQrMapping) === 'needs_reassignment' ? 'Needs reassignment' : qrStatus(selectedQrMapping) === 'inactive' ? 'Inactive' : 'Active' }}
+                      </span>
+                    </strong>
+                  </div>
                   <div><span>Scans</span><strong>{{ selectedQrMapping?.usageCount || 0 }}</strong></div>
-                  <div><span>Vendor</span><strong>{{ selectedQrMapping ? qrVendorLabel(selectedQrMapping) : selectedVendor?.displayName || 'Not selected' }}</strong></div>
-                  <div><span>Events</span><strong>{{ selectedQrMapping ? qrEventLabels(selectedQrMapping) : 'No event linked' }}</strong></div>
+                  <div><span>Vendor</span><strong>{{ selectedQrMapping ? qrVendorLabel(selectedQrMapping) : selectedVendor?.displayName || '—' }}</strong></div>
+                  <div><span>Event</span><strong>{{ selectedQrMapping ? qrEventLabels(selectedQrMapping) : '—' }}</strong></div>
                   <div><span>Created</span><strong>{{ formatDate(selectedQrMapping?.createdAt) }}</strong></div>
-                  <div><span>Last activated</span><strong>{{ formatDate(selectedQrMapping?.updatedAt) }}</strong></div>
+                  <div><span>Updated</span><strong>{{ formatDate(selectedQrMapping?.updatedAt) }}</strong></div>
                 </div>
                 <img v-if="qrCodeDataUrl" class="qr-image" :src="qrCodeDataUrl" alt="QR code" />
-                <a v-if="qrPreview.shortQrUrl" :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer">{{ qrPreview.shortQrUrl }}</a>
+                <div v-if="qrPreview.shortQrUrl" class="qr-url-row" style="margin-top:8px">
+                  <a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer" class="qr-link-small">{{ qrPreview.shortQrUrl }}</a>
+                  <button class="icon-button small" type="button" @click="copyText(qrPreview.shortQrUrl)" title="Copy"><i class="bi bi-clipboard"></i></button>
+                </div>
               </div>
             </div>
           </form>
@@ -2977,10 +3013,33 @@ function qrTargetLabel(mapping: QrMapping) {
   }
   if (mapping.url?.includes('/item/')) {
     const slug = decodeURIComponent(mapping.url.split('/item/')[1] || '');
-    return items.value.find((item) => item.name === slug)?.displayName || 'Item target';
+    return items.value.find((item) => item.name === slug)?.displayName || 'Item spotlight';
   }
-  if (mapping.url?.startsWith('/event/')) return 'Event menu';
-  return 'Custom path';
+  if (mapping.url?.startsWith('/event/')) {
+    const parts = mapping.url.split('/');
+    const menuSlug = parts[4];
+    const menu = menuSlug ? menus.value.find((m) => m.name === menuSlug) : null;
+    return menu ? `${menu.displayName} (static)` : 'Event menu';
+  }
+  return mapping.url || 'Custom path';
+}
+
+function qrStatus(mapping: QrMapping): 'active' | 'inactive' | 'needs_reassignment' {
+  if (!mapping.isActive) return 'inactive';
+  if (mapping.type === 'event' && !mapping.eventId) return 'needs_reassignment';
+  if (mapping.url?.includes('/item/')) {
+    const itemSlug = decodeURIComponent(mapping.url.split('/item/')[1] || '');
+    if (itemSlug && !items.value.some((i) => i.name === itemSlug)) return 'needs_reassignment';
+  }
+  return 'active';
+}
+
+function qrTypeBadge(mapping: QrMapping): { label: string; css: string } {
+  if (mapping.type === 'event') return { label: 'Event Dynamic', css: 'dynamic' };
+  if (mapping.url?.startsWith('/vendor/')) return { label: 'Contact Card', css: 'contact' };
+  if (mapping.url?.includes('/item/')) return { label: 'Item Spotlight', css: 'item' };
+  if (mapping.url?.startsWith('/event/')) return { label: 'Menu Static', css: 'menu' };
+  return { label: 'Custom', css: 'custom' };
 }
 
 function qrVendorLabel(mapping: QrMapping) {
@@ -5416,5 +5475,197 @@ td a {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  /* QR Bank: single column on mobile */
+  .qr-inventory-grid {
+    grid-template-columns: 1fr;
+  }
+  .qr-bank-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+/* ── QR Bank redesign ────────────────────────────────────────────────────────── */
+.qr-bank-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.qr-bank-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.qr-bank-header h3 {
+  margin-bottom: 4px;
+}
+
+.qr-count-badge {
+  background: #e8ddd0;
+  border-radius: 999px;
+  color: #5a4226;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  vertical-align: middle;
+}
+
+.qr-empty-state {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+}
+
+.qr-empty-icon {
+  color: #c8b89a;
+  flex-shrink: 0;
+  font-size: 2.4rem;
+}
+
+.qr-inventory-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.qr-asset-card {
+  background: #fff;
+  border: 1.5px solid #e6dfd4;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.qr-asset-card:hover {
+  border-color: #c49a63;
+  box-shadow: 0 4px 14px rgba(189, 148, 90, 0.12);
+}
+
+.qr-card-selected {
+  border-color: #b98f56;
+  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.18);
+}
+
+.qr-card-warn {
+  border-color: #e8a44a;
+}
+
+.qr-card-top {
+  align-items: flex-start;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.qr-hash-code {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.type-badge {
+  border-radius: 4px;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.type-badge.type-dynamic {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.type-badge.type-contact {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.type-badge.type-menu {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.type-badge.type-item {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.type-badge.type-custom {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.qr-card-target {
+  color: #171512;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  min-height: 2.2em;
+}
+
+.qr-card-footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.status-chip {
+  align-items: center;
+  border-radius: 20px;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 700;
+  gap: 4px;
+  padding: 2px 7px;
+}
+
+.chip-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.chip-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.chip-needs_reassignment {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.qr-scan-pill {
+  color: #9a8878;
+  font-size: 0.75rem;
+  gap: 3px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.qr-link-small {
+  color: #853f19;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
