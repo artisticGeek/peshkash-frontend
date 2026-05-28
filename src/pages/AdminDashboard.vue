@@ -35,11 +35,9 @@
     <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
       <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
         <div class="workspace-header-left">
-          <button v-if="activeSection !== 'home'" class="back-btn" title="Back" aria-label="Back" @click="goBack">
+          <button v-if="backDestLabel" class="back-btn" :title="`Back to ${backDestLabel}`" :aria-label="`Back to ${backDestLabel}`" @click="goBack">
             <i class="bi bi-arrow-left"></i>
-            <span v-if="activeSection === 'eventWorkspace' || activeSection === 'qrSheet'">Events</span>
-            <span v-else-if="activeSection === 'vendorWorkspace'">Vendors</span>
-            <span v-else-if="activeSection === 'preview' || activeSection === 'analytics' || activeSection === 'inventory'">Designer</span>
+            <span>{{ backDestLabel }}</span>
           </button>
           <div class="workspace-title">
             <h2>{{ activeTitle }}</h2>
@@ -1070,29 +1068,77 @@
           </div>
         </div>
 
-        <!-- ── Inventory grid ─────────────────────────────────────── -->
-        <div v-else class="qr-inventory-grid">
-          <div
-            v-for="mapping in vendorQrMappings"
-            :key="mapping.id"
-            class="qr-asset-card"
-            :class="{ 'qr-card-selected': selectedQrMapping?.id === mapping.id, 'qr-card-warn': qrStatus(mapping) === 'needs_reassignment' }"
-            @click="openQrEditor(mapping)"
-          >
-            <div class="qr-card-top">
-              <code class="qr-hash-code">{{ mapping.qrHash }}</code>
-              <span :class="`type-badge type-${qrTypeBadge(mapping).css}`">{{ qrTypeBadge(mapping).label }}</span>
+        <!-- ── Filters + table ────────────────────────────────────── -->
+        <template v-else>
+          <div class="qr-filters-bar">
+            <div class="sheet-search qr-search">
+              <i class="bi bi-search"></i>
+              <input v-model.trim="qrSearch" class="form-control" placeholder="Search by hash or target…" />
             </div>
-            <div class="qr-card-target">{{ qrTargetLabel(mapping) }}</div>
-            <div class="qr-card-footer">
-              <span :class="`status-chip chip-${qrStatus(mapping)}`">
-                <i :class="qrStatus(mapping) === 'needs_reassignment' ? 'bi bi-exclamation-circle-fill' : qrStatus(mapping) === 'inactive' ? 'bi bi-dash-circle' : 'bi bi-check-circle-fill'"></i>
-                {{ qrStatus(mapping) === 'needs_reassignment' ? 'Needs reassignment' : qrStatus(mapping) === 'inactive' ? 'Inactive' : 'Active' }}
-              </span>
-              <span class="qr-scan-pill"><i class="bi bi-eye"></i> {{ mapping.usageCount || 0 }}</span>
+            <div class="qr-type-tabs">
+              <button :class="{ active: qrTypeFilter === 'all' }" @click="qrTypeFilter = 'all'">All</button>
+              <button :class="{ active: qrTypeFilter === 'dynamic' }" @click="qrTypeFilter = 'dynamic'">Event</button>
+              <button :class="{ active: qrTypeFilter === 'contact' }" @click="qrTypeFilter = 'contact'">Contact</button>
+              <button :class="{ active: qrTypeFilter === 'menu' }" @click="qrTypeFilter = 'menu'">Menu</button>
+              <button :class="{ active: qrTypeFilter === 'item' }" @click="qrTypeFilter = 'item'">Item</button>
+            </div>
+            <select v-model="qrSortBy" class="form-select form-select-sm qr-sort-select">
+              <option value="scans">Most scans</option>
+              <option value="hash">Hash A–Z</option>
+              <option value="status">Status</option>
+            </select>
+          </div>
+
+          <div class="panel">
+            <div class="table-wrap">
+              <table class="table table-sm align-middle action-table qr-table">
+                <thead>
+                  <tr>
+                    <th>Hash</th>
+                    <th>Type</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th>Paid</th>
+                    <th class="col-scans">Scans</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="mapping in filteredQrMappings"
+                    :key="mapping.id"
+                    class="clickable-row"
+                    :class="{ 'qr-row-warn': qrStatus(mapping) === 'needs_reassignment' }"
+                    @click="openQrEditor(mapping)"
+                  >
+                    <td><code class="qr-hash-code">{{ mapping.qrHash }}</code></td>
+                    <td><span :class="`type-badge type-${qrTypeBadge(mapping).css}`">{{ qrTypeBadge(mapping).label }}</span></td>
+                    <td class="qr-target-cell">{{ qrTargetLabel(mapping) }}</td>
+                    <td>
+                      <span :class="`status-chip chip-${qrStatus(mapping)}`">
+                        <i :class="qrStatus(mapping) === 'needs_reassignment' ? 'bi bi-exclamation-circle-fill' : qrStatus(mapping) === 'inactive' ? 'bi bi-dash-circle' : 'bi bi-check-circle-fill'"></i>
+                        {{ qrStatus(mapping) === 'needs_reassignment' ? 'Reassign' : qrStatus(mapping) === 'inactive' ? 'Inactive' : 'Active' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span :class="mapping.paid !== false ? 'paid-badge paid-badge--paid' : 'paid-badge paid-badge--unpaid'">
+                        {{ mapping.paid !== false ? 'Paid' : 'Unpaid' }}
+                      </span>
+                    </td>
+                    <td class="col-scans">{{ mapping.usageCount || 0 }}</td>
+                    <td class="row-actions" @click.stop>
+                      <button class="icon-btn" title="Edit" @click.stop="openQrEditor(mapping)"><i class="bi bi-pencil"></i></button>
+                      <button class="icon-btn" title="Print template" @click.stop="openPrintForQr(mapping)"><i class="bi bi-printer"></i></button>
+                    </td>
+                  </tr>
+                  <tr v-if="!filteredQrMappings.length">
+                    <td colspan="7" class="muted" style="padding:20px;text-align:center">No QR codes match your filter.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        </template>
 
         <!-- ── QR Asset modal ─────────────────────────────────────── -->
         <div v-if="showQrEditor" class="modal-backdrop-custom" @click.self="closeQrEditor">
@@ -1170,9 +1216,16 @@
                   </label>
                   <label v-if="qrTargetType === 'custom'" class="wide">Destination<input v-model.trim="qrForm.url" class="form-control" placeholder="/vendor/radisson-gurgaon" /></label>
                   <label class="check"><input v-model="qrForm.isActive" type="checkbox" /> Active</label>
+                  <label class="check"><input v-model="qrForm.paid" type="checkbox" /> Paid</label>
+                </div>
+                <div class="form-group mt-2">
+                  <label class="form-label mb-1" style="font-size:0.8rem;font-weight:600;color:#6b5a42">Print Template</label>
+                  <input v-model.trim="qrForm.templateLabel" class="form-control form-control-sm" placeholder="e.g. Radisson Standard, Tent Card Gold…" />
+                  <p class="hint mb-0 mt-1" style="font-size:0.72rem">Assign a label to identify which print template to use for this QR.</p>
                 </div>
                 <div class="actions">
                   <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Save</button>
+                  <button v-if="selectedQrMapping" class="btn btn-outline-secondary" type="button" @click="openPrintForQr(selectedQrMapping!)"><i class="bi bi-printer"></i> Print</button>
                   <button v-if="selectedQrMapping" class="btn btn-outline-danger" type="button" @click="deleteQrMappingConfirmed(selectedQrMapping!)"><i class="bi bi-trash"></i></button>
                 </div>
               </div>
@@ -1443,7 +1496,7 @@ type Vendor = { id: number; name: string; displayName: string; description?: str
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
-type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string };
+type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
 
@@ -1568,6 +1621,7 @@ const events = ref<EventRow[]>([]);
 const menus = ref<MenuRow[]>([]);
 const items = ref<ItemRow[]>([]);
 const qrMappings = ref<QrMapping[]>([]);
+const qrLocalMeta = ref<Record<number, { paid?: boolean; templateLabel?: string }>>({});
 const selectedQrMapping = ref<QrMapping | null>(null);
 const previews = reactive<{ menus: Preview[]; items: Preview[] }>({ menus: [], items: [] });
 const eventMenuMap = ref<Record<number, MenuRow[]>>({});
@@ -1749,7 +1803,7 @@ const vendorForm = reactive<any>({ id: null, name: '', displayName: '', descript
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
 const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
-const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, eventId: 0, menuId: 0, itemId: 0 });
+const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
 const productSelections = reactive<Record<string, boolean>>({
   contactCard: false,
@@ -1765,7 +1819,8 @@ const vendorEvents = computed(() => events.value.filter((event) => event.vendorI
 const vendorMenus = computed(() => menus.value.filter((menu) => menu.vendorId === selectedVendorId.value));
 // QR mappings scoped to the selected vendor
 const vendorQrMappings = computed(() => {
-  if (!selectedVendorId.value) return qrMappings.value;
+  const withMeta = (m: QrMapping) => ({ ...m, paid: qrLocalMeta.value[m.id]?.paid ?? true, templateLabel: qrLocalMeta.value[m.id]?.templateLabel ?? '' });
+  if (!selectedVendorId.value) return qrMappings.value.map(withMeta);
   return qrMappings.value.filter((mapping) => {
     // Prefer the explicit vendorId field the backend now returns
     if (mapping.vendorId != null) return mapping.vendorId === selectedVendorId.value;
@@ -1780,7 +1835,7 @@ const vendorQrMappings = computed(() => {
       return event?.vendorId === selectedVendorId.value;
     }
     return true; // custom paths shown in all vendor contexts
-  });
+  }).map(withMeta);
 });
 const eventQrMapping = computed(() =>
   selectedEventForItems.value
@@ -2116,11 +2171,27 @@ function isNavActive(section: SectionKey) {
   return false;
 }
 
+const BACK_DEST: Partial<Record<SectionKey, { label: string; path: string }>> = {
+  vendorWorkspace: { label: 'Vendors',       path: '/dashboard/vendors' },
+  eventWorkspace:  { label: 'Events',        path: '/dashboard/events' },
+  qrSheet:         { label: 'Events',        path: '/dashboard/events' },
+  publish:         { label: 'Events',        path: '/dashboard/events' },
+  preview:         { label: 'Designer',      path: '/dashboard/menus/studio' },
+  analytics:       { label: 'Designer',      path: '/dashboard/menus/studio' },
+  inventory:       { label: 'Designer',      path: '/dashboard/menus/studio' },
+  items:           { label: 'Designer',      path: '/dashboard/menus/studio' },
+  vendors:         { label: 'Dashboard',     path: '/dashboard/home' },
+  events:          { label: 'Dashboard',     path: '/dashboard/home' },
+  designer:        { label: 'Dashboard',     path: '/dashboard/home' },
+  menus:           { label: 'Dashboard',     path: '/dashboard/home' },
+  qr:              { label: 'Dashboard',     path: '/dashboard/home' },
+};
+
+const backDestLabel = computed(() => BACK_DEST[activeSection.value]?.label ?? '');
+
 function goBack() {
-  if (activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet') router.push('/dashboard/events');
-  else if (activeSection.value === 'analytics' || activeSection.value === 'inventory') router.push('/dashboard/menus/studio');
-  else if (activeSection.value === 'vendorWorkspace') router.push('/dashboard/vendors');
-  else router.push('/dashboard/home');
+  const dest = BACK_DEST[activeSection.value];
+  router.push(dest?.path ?? '/dashboard/home');
 }
 
 function adminEventRoute(event: EventRow) {
@@ -3050,7 +3121,7 @@ async function buildQrDestination() {
 }
 
 function editQr(mapping: QrMapping) {
-  Object.assign(qrForm, { qrHash: mapping.qrHash, url: mapping.url || '', isActive: mapping.isActive, eventId: mapping.eventId || 0, menuId: 0, itemId: 0 });
+  Object.assign(qrForm, { qrHash: mapping.qrHash, url: mapping.url || '', isActive: mapping.isActive, paid: mapping.paid !== false, templateLabel: mapping.templateLabel || '', eventId: mapping.eventId || 0, menuId: 0, itemId: 0 });
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
   if (mapping.shortQrUrl) QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
@@ -3176,6 +3247,7 @@ async function saveQr() {
     qrPreview.shortQrUrl = data.shortQrUrl;
     qrPreview.finalPublicUrl = data.finalPublicUrl;
     qrCodeDataUrl.value = await QRCode.toDataURL(data.shortQrUrl, { margin: 1, width: 180 });
+    qrLocalMeta.value[data.id] = { paid: qrForm.paid, templateLabel: qrForm.templateLabel };
     await loadAll();
     selectedQrMapping.value = data;
     setNotice('QR mapping saved');
@@ -3316,6 +3388,32 @@ function confirmDeactivate() {
   if (!window.confirm('Deactivate this event? All associated QRs will stop working immediately.')) return;
   setEventStatusTo('inactive');
 }
+
+// ── QR Bank table filters ─────────────────────────────────────────────────────
+const qrSearch = ref('');
+const qrTypeFilter = ref('all');
+const qrSortBy = ref<'scans' | 'hash' | 'status'>('scans');
+
+const filteredQrMappings = computed(() => {
+  let list = [...vendorQrMappings.value];
+  if (qrSearch.value) {
+    const q = qrSearch.value.toLowerCase();
+    list = list.filter((m) => m.qrHash.toLowerCase().includes(q) || qrTargetLabel(m).toLowerCase().includes(q));
+  }
+  if (qrTypeFilter.value !== 'all') {
+    list = list.filter((m) => qrTypeBadge(m).css === qrTypeFilter.value);
+  }
+  if (qrSortBy.value === 'scans') list.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+  else if (qrSortBy.value === 'hash') list.sort((a, b) => a.qrHash.localeCompare(b.qrHash));
+  else list.sort((a, b) => qrStatus(a).localeCompare(qrStatus(b)));
+  return list;
+});
+
+function openPrintForQr(mapping: QrMapping) {
+  selectedQrHashForPrint.value = mapping.qrHash;
+  router.push('/dashboard/qr-templates');
+}
+const selectedQrHashForPrint = ref('');
 
 // ── Workspace switcher modal ───────────────────────────────────────────────────
 const showWsModal = ref(false);
@@ -4024,16 +4122,16 @@ label {
   text-transform: uppercase;
 }
 .status-pill.status-active {
-  background: #dcfce7;
-  color: #15803d;
+  background: #dff0da;
+  color: #2e6320;
 }
 .status-pill.status-draft {
-  background: #fef3c7;
-  color: #92400e;
+  background: #f0e8d8;
+  color: #7a5226;
 }
 .status-pill.status-inactive {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: #eae8e5;
+  color: #6b6560;
 }
 
 /* Back button — borderless text+icon */
@@ -4213,8 +4311,8 @@ label {
   color: #6b7280;
 }
 .type-pill.personalized {
-  background: #fef3c7;
-  color: #92400e;
+  background: #f0e8d8;
+  color: #7a5226;
 }
 
 .hero-panel {
@@ -5908,28 +6006,28 @@ td.row-actions .icon-btn + a {
 }
 
 .type-badge.type-dynamic {
-  background: #fef3c7;
-  color: #92400e;
+  background: #fef0d8;
+  color: #7a5226;
 }
 
 .type-badge.type-contact {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #e8e0d4;
+  color: #4e3520;
 }
 
 .type-badge.type-menu {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #ede8de;
+  color: #5a3d22;
 }
 
 .type-badge.type-item {
-  background: #ffedd5;
-  color: #9a3412;
+  background: #e4ddd3;
+  color: #6b4826;
 }
 
 .type-badge.type-custom {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #eae8e5;
+  color: #5a5550;
 }
 
 .qr-card-target {
@@ -5959,18 +6057,18 @@ td.row-actions .icon-btn + a {
 }
 
 .chip-active {
-  background: #dcfce7;
-  color: #15803d;
+  background: #dff0da;
+  color: #2e6320;
 }
 
 .chip-inactive {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: #eae8e5;
+  color: #6b6560;
 }
 
 .chip-needs_reassignment {
-  background: #fef3c7;
-  color: #92400e;
+  background: #f0e8d8;
+  color: #7a5226;
 }
 
 .qr-scan-pill {
@@ -6525,5 +6623,116 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 }
 @media (max-width: 480px) {
   .home-metrics { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── QR Bank table ───────────────────────────────────────────────────────── */
+.qr-filters-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.qr-search {
+  flex: 1;
+  min-width: 180px;
+}
+
+.qr-type-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.qr-type-tabs button {
+  background: #f7f2ea;
+  border: 1px solid #e8dccb;
+  border-radius: 4px;
+  color: #6b5a42;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  transition: background 0.12s;
+}
+
+.qr-type-tabs button:hover { background: #f0e8d8; }
+.qr-type-tabs button.active {
+  background: #e8dccb;
+  border-color: #c8a87a;
+  color: #3a2a10;
+}
+
+.qr-sort-select {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.qr-table .qr-hash-code {
+  background: #f0ebe3;
+  border-radius: 4px;
+  color: #7a542a;
+  font-size: 0.78rem;
+  padding: 2px 6px;
+}
+
+.qr-target-cell {
+  color: #4a3a2a;
+  font-size: 0.82rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-scans {
+  color: #6b7280;
+  font-size: 0.82rem;
+  text-align: right;
+  white-space: nowrap;
+  width: 60px;
+}
+
+.paid-badge {
+  border-radius: 10px;
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.paid-badge--paid   { background: #dff0da; color: #2e6320; }
+.paid-badge--unpaid { background: #f0e8d8; color: #7a5226; }
+
+.qr-row-warn { background: rgba(250, 230, 195, 0.3); }
+.qr-row-warn:hover { background: rgba(250, 220, 170, 0.45) !important; }
+
+.icon-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #7a6650;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  height: 26px;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.12s, border-color 0.12s;
+  width: 26px;
+}
+
+.icon-btn:hover {
+  background: #f0e8d8;
+  border-color: #d8bd8f;
+  color: #3a2010;
+}
+
+@media (max-width: 700px) {
+  .qr-filters-bar { flex-direction: column; align-items: stretch; }
+  .qr-type-tabs { flex-wrap: wrap; }
+  .qr-target-cell { max-width: 120px; }
 }
 </style>
