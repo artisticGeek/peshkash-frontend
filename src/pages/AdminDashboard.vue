@@ -3945,10 +3945,24 @@ async function deleteVendorById(id: number, name: string) {
   gap: 10px;
   justify-content: space-between;
   min-height: 46px;
-  padding: 8px 16px;
+  padding: 8px 20px;
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+/* Content sections get top spacing since admin-main no longer has padding-top */
+.admin-main > section,
+.admin-main > .home-workspace {
+  padding-top: 16px;
+}
+
+/* Make the workspace-header span edge-to-edge (break out of horizontal padding) */
+.admin-main:not(.admin-main--canvas) > .workspace-header {
+  margin-left: -20px;
+  margin-right: -20px;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 .workspace-header-left {
   align-items: center;
@@ -4016,7 +4030,7 @@ async function deleteVendorById(id: number, name: string) {
 .admin-main {
   min-width: 0;
   overflow: auto;
-  padding: 16px 20px;
+  padding: 0 20px 16px;
 }
 
 /* Mobile layout */
@@ -4024,9 +4038,11 @@ async function deleteVendorById(id: number, name: string) {
   .admin-shell {
     grid-template-columns: 1fr !important;
   }
-  .admin-main { padding: 12px 14px; }
+  .admin-main { padding: 0 14px 12px; }
+  .admin-main > section, .admin-main > .home-workspace { padding-top: 12px; }
   .mobile-hamburger { display: flex; }
-  .workspace-header { padding: 8px 12px 8px 52px; } /* indent past fixed hamburger */
+  .workspace-header { padding: 8px 14px 8px 52px; } /* indent past fixed hamburger */
+  .admin-main:not(.admin-main--canvas) > .workspace-header { margin-left: -14px; margin-right: -14px; padding-left: 52px; padding-right: 14px; }
   .workspace-title h2 { font-size: 1rem; }
   .workspace-subtitle { display: none; }
 
@@ -4117,7 +4133,9 @@ async function deleteVendorById(id: number, name: string) {
 /* Tablet */
 @media (min-width: 768px) and (max-width: 1023px) {
   .admin-shell:not([data-sidebar="full"]) { grid-template-columns: 64px 1fr; }
-  .admin-main { padding: 14px 16px; }
+  .admin-main { padding: 0 16px 14px; }
+  .admin-main > section, .admin-main > .home-workspace { padding-top: 14px; }
+  .admin-main:not(.admin-main--canvas) > .workspace-header { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
 }
 
 .admin-main--canvas {
