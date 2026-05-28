@@ -33,7 +33,7 @@
     </aside>
 
     <main class="admin-main" :class="{ 'admin-main--canvas': activeSection === 'qr-templates' }">
-      <header v-if="activeSection !== 'qr-templates'" class="workspace-header">
+      <header class="workspace-header">
         <div class="workspace-header-left">
           <button v-if="backDestLabel" class="back-btn" :title="`Back to ${backDestLabel}`" :aria-label="`Back to ${backDestLabel}`" @click="goBack">
             <i class="bi bi-arrow-left"></i>
@@ -1154,7 +1154,6 @@
                 </span>
               </div>
               <div class="qr-modal-header-right">
-                <!-- Analytics chips replace plain text -->
                 <div v-if="selectedQrMapping" class="qr-analytics-strip">
                   <div class="qr-stat-chip">
                     <i class="bi bi-eye qr-stat-icon"></i>
@@ -1167,26 +1166,110 @@
                       <rect x="0" y="0" :width="Math.max(4, qrScanBarPct(selectedQrMapping) * 0.44)" height="10" rx="3" fill="#BD945A"/>
                     </svg>
                   </div>
-                  <div class="qr-stat-chip qr-stat-chip--muted">
-                    <i class="bi bi-calendar3 qr-stat-icon"></i>
-                    <div class="qr-stat-content">
-                      <strong class="qr-stat-val">{{ formatDate(selectedQrMapping.updatedAt) }}</strong>
-                      <span class="qr-stat-label">updated</span>
-                    </div>
-                  </div>
                 </div>
+                <!-- Edit toggle in view mode -->
+                <button v-if="qrModalMode === 'view'" class="btn btn-sm btn-primary qr-edit-btn" type="button" @click="qrModalMode = 'edit'">
+                  <i class="bi bi-pencil"></i> Edit
+                </button>
+                <button v-else-if="qrModalMode === 'edit' && selectedQrMapping" class="btn btn-sm btn-outline-secondary qr-edit-btn" type="button" @click="qrModalMode = 'view'">
+                  <i class="bi bi-eye"></i> View
+                </button>
                 <button class="icon-button" type="button" aria-label="Close" @click="closeQrEditor"><i class="bi bi-x-lg"></i></button>
               </div>
             </div>
 
-            <!-- Body: 2-column (form | preview) -->
-            <div class="qr-modal-body-v2">
+            <!-- VIEW MODE: read-only display -->
+            <div v-if="qrModalMode === 'view' && selectedQrMapping" class="qr-view-body">
+
+              <!-- LEFT: QR visual + destination -->
+              <div class="qr-view-visual-pane">
+                <div class="qr-view-qr-wrap">
+                  <div v-if="!qrForm.selectedTemplateId || !currentQrTemplate" class="plain-qr-center">
+                    <img v-if="qrCodeDataUrl" class="qr-view-img" :src="qrCodeDataUrl" alt="QR code" />
+                    <div v-else class="qr-view-placeholder"><i class="bi bi-qr-code"></i></div>
+                  </div>
+                  <div v-else class="tpl-canvas-outer">
+                    <div class="tpl-canvas-preview" :style="tplCanvasStyle">
+                      <template v-for="el in currentTemplateElements" :key="el.id">
+                        <div :style="tplElStyle(el)">
+                          <template v-if="el.type === 'qr'">
+                            <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" style="width:100%;height:100%;object-fit:contain;display:block" />
+                            <div v-else style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#eee;color:#aaa;font-size:1.4rem"><i class="bi bi-qr-code"></i></div>
+                          </template>
+                          <img v-else-if="el.type === 'image' && el.src" :src="el.src" :style="`width:100%;height:100%;object-fit:${el.objectFit||'contain'};opacity:${el.opacity??1}`" />
+                          <template v-else-if="el.type === 'text'">{{ el.content }}</template>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="currentQrTemplate" class="qr-view-tpl-chip">
+                  <i class="bi bi-palette"></i> {{ currentQrTemplate.name }}
+                </div>
+                <div v-else class="qr-view-tpl-chip qr-view-tpl-chip--none">
+                  <i class="bi bi-qr-code"></i> Plain QR
+                </div>
+
+                <!-- Destination card -->
+                <div class="qr-view-dest">
+                  <div class="qr-view-dest-row">
+                    <span class="qr-view-dest-key">Scan URL</span>
+                    <div class="qr-view-dest-val-wrap">
+                      <a v-if="qrPreview.shortQrUrl" :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer" class="qr-view-url">{{ qrPreview.shortQrUrl }}</a>
+                      <span v-else class="muted">—</span>
+                      <button v-if="qrPreview.shortQrUrl" class="icon-button small" type="button" @click="copyText(qrPreview.shortQrUrl)" title="Copy"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                  </div>
+                  <div class="qr-view-dest-row">
+                    <span class="qr-view-dest-key">Target</span>
+                    <strong class="qr-view-dest-val">{{ qrTargetLabel(selectedQrMapping) }}</strong>
+                  </div>
+                </div>
+
+                <button v-if="qrCodeDataUrl" class="btn btn-outline-secondary btn-sm qr-dl-btn" type="button" @click="downloadQrPng">
+                  <i class="bi bi-download"></i> Download QR PNG
+                </button>
+              </div>
+
+              <!-- RIGHT: Analytics -->
+              <div class="qr-view-analytics-pane">
+                <p class="form-section-label"><i class="bi bi-bar-chart-line"></i> Scan Analytics</p>
+                <div class="qr-view-bigstat">
+                  <span class="qr-view-bigstat-num">{{ selectedQrMapping.usageCount || 0 }}</span>
+                  <span class="qr-view-bigstat-label">total scans</span>
+                </div>
+                <div v-if="vendorQrMappings.length" class="qr-view-chart-wrap">
+                  <Bar :data="qrViewChartData" :options="qrViewChartOptions" />
+                </div>
+                <p v-else class="muted" style="font-size:0.8rem">No scan data yet.</p>
+                <div class="qr-view-meta-grid">
+                  <div class="qr-view-meta-item">
+                    <span>Status</span>
+                    <span :class="`status-chip chip-${qrStatus(selectedQrMapping)}`" style="font-size:0.72rem">
+                      <i :class="qrStatus(selectedQrMapping) === 'inactive' ? 'bi bi-dash-circle' : 'bi bi-check-circle-fill'"></i>
+                      {{ qrStatus(selectedQrMapping) === 'needs_reassignment' ? 'Needs reassignment' : qrStatus(selectedQrMapping) === 'inactive' ? 'Inactive' : 'Active' }}
+                    </span>
+                  </div>
+                  <div class="qr-view-meta-item">
+                    <span>Payment</span>
+                    <span :class="selectedQrMapping.paid !== false ? 'paid-badge paid-badge--paid' : 'paid-badge paid-badge--unpaid'">{{ selectedQrMapping.paid !== false ? 'Paid' : 'Unpaid' }}</span>
+                  </div>
+                  <div class="qr-view-meta-item">
+                    <span>Updated</span>
+                    <strong>{{ formatDate(selectedQrMapping.updatedAt) }}</strong>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- EDIT MODE: 2-column form -->
+            <div v-else-if="qrModalMode === 'edit'" class="qr-modal-body-v2">
 
               <!-- LEFT: Form pane -->
               <div class="modal-pane modal-pane-scroll">
                 <p class="form-section-label"><i class="bi bi-pencil-square"></i> {{ selectedQrMapping ? 'Reassign' : 'Configure' }}</p>
                 <div class="form-grid">
-                  <!-- Hash: read-only on edit -->
                   <label class="wide">
                     Hash
                     <input v-if="!selectedQrMapping" v-model.trim="qrForm.qrHash" class="form-control" placeholder="radisson-gurgaon-card" />
@@ -1195,7 +1278,6 @@
                       <span class="field-lock" title="Hash cannot be changed after creation"><i class="bi bi-lock-fill"></i></span>
                     </div>
                   </label>
-                  <!-- Type: read-only on edit -->
                   <label>
                     Type
                     <select v-if="!selectedQrMapping" v-model="qrTargetType" class="form-select">
@@ -1237,7 +1319,6 @@
                   </label>
                 </div>
 
-                <!-- Status + Payment as segmented toggles -->
                 <div class="qr-status-row">
                   <div class="qr-status-field">
                     <p class="form-section-label" style="margin:0 0 6px"><i class="bi bi-toggle-on"></i> Status</p>
@@ -1271,7 +1352,6 @@
 
               <!-- RIGHT: Preview pane -->
               <div class="modal-pane qr-pane">
-                <!-- Template selector -->
                 <div class="template-select-row">
                   <p class="form-section-label" style="margin:0 0 6px"><i class="bi bi-palette"></i> Print Template</p>
                   <div class="template-select-combo">
@@ -1279,21 +1359,15 @@
                       <option :value="0">— Plain QR (no template) —</option>
                       <option v-for="t in qrTemplates" :key="t.id" :value="t.id">{{ t.name }}</option>
                     </select>
-                    <button v-if="selectedQrMapping" class="icon-btn" type="button" title="Open full print editor" @click="openPrintForQr(selectedQrMapping!)">
-                      <i class="bi bi-printer"></i>
-                    </button>
                   </div>
                   <p v-if="!qrTemplates.length" class="hint mt-1" style="font-size:0.72rem">No templates saved yet. <button type="button" class="link-button" @click="openPrintForQr(selectedQrMapping!)">Create one →</button></p>
                 </div>
 
-                <!-- Preview area -->
                 <div class="tpl-preview-wrap">
-                  <!-- Plain QR (no template selected) -->
                   <div v-if="!qrForm.selectedTemplateId" class="plain-qr-center">
                     <img v-if="qrCodeDataUrl" class="qr-modal-img" :src="qrCodeDataUrl" alt="QR code" />
                     <div v-else class="qr-modal-img-placeholder"><i class="bi bi-qr-code"></i></div>
                   </div>
-                  <!-- Template preview -->
                   <div v-else class="tpl-canvas-outer">
                     <div class="tpl-canvas-preview" :style="tplCanvasStyle">
                       <template v-for="el in currentTemplateElements" :key="el.id">
@@ -1310,7 +1384,6 @@
                   </div>
                 </div>
 
-                <!-- URL row + meta + download -->
                 <div class="qr-pane-footer">
                   <div v-if="qrPreview.shortQrUrl" class="qr-url-row">
                     <a :href="qrPreview.shortQrUrl" target="_blank" rel="noreferrer" class="qr-link-small">{{ qrPreview.shortQrUrl }}</a>
@@ -1320,7 +1393,7 @@
                     <div><span>Target</span><strong>{{ qrTargetLabel(selectedQrMapping) }}</strong></div>
                     <div><span>Updated</span><strong>{{ formatDate(selectedQrMapping.updatedAt) }}</strong></div>
                   </div>
-                  <button v-if="qrCodeDataUrl" class="btn btn-outline-secondary btn-sm qr-dl-btn" type="button" title="Download plain QR as PNG" @click="downloadQrPng">
+                  <button v-if="qrCodeDataUrl" class="btn btn-outline-secondary btn-sm qr-dl-btn" type="button" @click="downloadQrPng">
                     <i class="bi bi-download"></i> Download QR
                   </button>
                 </div>
@@ -1332,13 +1405,6 @@
       </section>
 
       <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
-        <div class="qrt-topbar">
-          <button class="back-btn" @click="goBack">
-            <i class="bi bi-arrow-left"></i>
-            <span>QR Bank</span>
-          </button>
-          <h2>Print Templates</h2>
-        </div>
         <QrTemplatePage :embedded="true" />
       </section>
     </main>
@@ -1720,6 +1786,7 @@ const items = ref<ItemRow[]>([]);
 const qrMappings = ref<QrMapping[]>([]);
 const qrLocalMeta = ref<Record<number, { paid?: boolean; templateLabel?: string; selectedTemplateId?: number }>>({});
 const selectedQrMapping = ref<QrMapping | null>(null);
+const qrModalMode = ref<'view' | 'edit'>('view');
 const qrTemplates = ref<Array<{ id: number; name: string; widthMm: number; heightMm: number; elements: any[] }>>([]);
 const previews = reactive<{ menus: Preview[]; items: Preview[] }>({ menus: [], items: [] });
 const eventMenuMap = ref<Record<number, MenuRow[]>>({});
@@ -2283,6 +2350,7 @@ const BACK_DEST: Partial<Record<SectionKey, { label: string; path: string }>> = 
   designer:        { label: 'Dashboard',     path: '/dashboard/home' },
   menus:           { label: 'Dashboard',     path: '/dashboard/home' },
   qr:              { label: 'Dashboard',     path: '/dashboard/home' },
+  'qr-templates':  { label: 'QR Bank',       path: '/dashboard/qr' },
 };
 
 const backDestLabel = computed(() => BACK_DEST[activeSection.value]?.label ?? '');
@@ -3240,6 +3308,7 @@ function editQr(mapping: QrMapping) {
 function openQrEditor(mapping?: QrMapping) {
   selectedQrMapping.value = mapping || null;
   showQrEditor.value = true;
+  qrModalMode.value = mapping ? 'view' : 'edit';
   if (mapping) editQr(mapping);
   loadQrTemplates();
 }
@@ -3640,6 +3709,37 @@ const qrScanChartOptions = {
   scales: {
     x: { ticks: { font: { size: 11 }, maxRotation: 30 }, grid: { display: false } },
     y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
+  },
+} as const;
+
+const qrViewChartData = computed(() => {
+  const sorted = [...vendorQrMappings.value]
+    .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+    .slice(0, 8);
+  const currentId = selectedQrMapping.value?.id;
+  return {
+    labels: sorted.map((m) => m.qrHash),
+    datasets: [{
+      label: 'Scans',
+      data: sorted.map((m) => m.usageCount || 0),
+      backgroundColor: sorted.map((m) => m.id === currentId ? '#BD945A' : 'rgba(189,148,90,0.3)'),
+      borderColor: sorted.map((m) => m.id === currentId ? '#9f743d' : 'rgba(159,116,61,0.35)'),
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  };
+});
+
+const qrViewChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { callbacks: { title: (items: any[]) => `QR: ${items[0].label}` } },
+  },
+  scales: {
+    x: { ticks: { font: { size: 10 }, maxRotation: 35 }, grid: { display: false } },
+    y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
   },
 } as const;
 
@@ -4447,24 +4547,6 @@ label {
 }
 .ws-modal-new:hover { background: #f7efe3; color: #15191e; }
 
-/* QR templates topbar */
-.qrt-topbar {
-  align-items: center;
-  background: rgba(247, 242, 234, 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(216, 189, 143, 0.35);
-  display: flex;
-  gap: 12px;
-  padding: 10px 16px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.qrt-topbar h2 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 0;
-}
 
 /* Inline menu attach row */
 .attach-menu-row {
@@ -5186,10 +5268,13 @@ td a {
 }
 
 .qr-pane {
+  align-items: center;
   background: #fbfaf8;
   border-left: 1px solid #e6dfd4;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: 18px 16px;
+  text-align: center;
 }
 
 .qr-pane h4 {
@@ -5759,6 +5844,13 @@ td a {
   .compact-filters,
   .designer-ribbon {
     grid-template-columns: 1fr;
+  }
+  /* Preview pane moves to top in stacked layouts */
+  .vendor-modal-grid .qr-pane,
+  .qr-modal-body-v2 .qr-pane {
+    border-bottom: 1px solid #e6dfd4;
+    border-left: none;
+    order: -1;
   }
   .hero-panel,
   .publish-context {
@@ -6715,7 +6807,7 @@ td.row-actions .icon-btn + a {
   padding-top: 10px;
 }
 
-.qr-dl-btn { align-self: flex-start; }
+.qr-dl-btn { align-self: center; }
 
 /* Override qr-pane for v2 layout */
 .qr-modal-body-v2 .qr-pane {
@@ -6730,6 +6822,186 @@ td.row-actions .icon-btn + a {
   margin-top: auto;
   padding-top: 14px;
 }
+
+/* ── QR View Mode ─────────────────────────────────────────────────────────── */
+.qr-view-body {
+  display: grid;
+  flex: 1;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.qr-view-visual-pane {
+  align-items: center;
+  background: #fbfaf8;
+  border-right: 1px solid #e6dfd4;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.qr-view-analytics-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 20px 18px;
+}
+
+.qr-view-qr-wrap {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.qr-view-img {
+  border: 1px solid #e4d7c5;
+  border-radius: 8px;
+  display: block;
+  height: 180px;
+  width: 180px;
+}
+
+.qr-view-placeholder {
+  align-items: center;
+  background: #f3f0eb;
+  border: 2px dashed #d8bd8f;
+  border-radius: 8px;
+  color: #b8a48a;
+  display: flex;
+  font-size: 3rem;
+  height: 180px;
+  justify-content: center;
+  width: 180px;
+}
+
+.qr-view-tpl-chip {
+  align-items: center;
+  background: #f0ece5;
+  border: 1px solid #ddd3c3;
+  border-radius: 20px;
+  color: #7a542a;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 6px;
+  padding: 4px 12px;
+}
+
+.qr-view-tpl-chip--none {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #9a8878;
+}
+
+.qr-view-dest {
+  background: #fff;
+  border: 1px solid #e8dfd0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  width: 100%;
+  max-width: 340px;
+}
+
+.qr-view-dest-row {
+  align-items: center;
+  border-bottom: 1px solid #f0ebe3;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 16px;
+}
+
+.qr-view-dest-row:last-child { border-bottom: none; }
+
+.qr-view-dest-key {
+  color: #9a8878;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.qr-view-dest-val-wrap {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.qr-view-url {
+  color: #BD945A;
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: break-word;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.qr-view-url:hover { text-decoration: underline; }
+
+.qr-view-dest-val {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.qr-view-bigstat {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+}
+
+.qr-view-bigstat-num {
+  color: #BD945A;
+  font-size: 2.4rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.qr-view-bigstat-label {
+  color: #9a8878;
+  font-size: 0.82rem;
+}
+
+.qr-view-chart-wrap {
+  flex: 1;
+  height: 180px;
+  min-height: 120px;
+  position: relative;
+}
+
+.qr-view-meta-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.qr-view-meta-item {
+  align-items: center;
+  border-bottom: 1px solid #f0ebe3;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.qr-view-meta-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+.qr-view-meta-item > span:first-child {
+  color: #9a8878;
+  font-size: 0.78rem;
+}
+
+.qr-edit-btn { font-size: 0.78rem; padding: 4px 10px; }
 
 /* ── Status dot ──────────────────────────────────────────────────────────── */
 .status-dot { background: #d1d5db; border-radius: 50%; display: inline-block; height: 10px; width: 10px; }
@@ -6923,10 +7195,16 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 @media (max-width: 900px) {
   .home-metrics { grid-template-columns: repeat(2, 1fr); }
   .qr-modal-body-v2 { grid-template-columns: 1fr; overflow-y: auto; }
-  .qr-modal-body-v2 .qr-pane { border-top: 1px solid #e6dfd4; }
   .qr-activity-row { grid-template-columns: 100px auto 1fr 30px; }
   .qr-analytics-strip { display: none; }
 }
+/* QR view mode stacks on truly narrow screens only */
+@media (max-width: 620px) {
+  .qr-view-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .qr-view-visual-pane { border-right: none; border-bottom: 1px solid #e6dfd4; }
+  .qr-view-chart-wrap { height: 140px; }
+}
+
 @media (max-width: 480px) {
   .home-metrics { grid-template-columns: 1fr 1fr; }
 }
