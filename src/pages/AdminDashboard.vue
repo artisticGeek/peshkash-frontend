@@ -99,8 +99,30 @@
           </RouterLink>
         </div>
 
+        <!-- ── Charts row ──────────────────────────────────────────────── -->
+        <div class="home-charts-row">
+          <div class="panel home-chart-panel">
+            <div class="panel-heading">
+              <h3>QR Scans by Code</h3>
+              <RouterLink class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
+            </div>
+            <div v-if="vendorQrMappings.length" class="chart-canvas-wrap">
+              <Bar :data="qrScanChartData" :options="qrScanChartOptions" />
+            </div>
+            <p v-else class="muted chart-empty">No QR codes yet — create one in QR Bank.</p>
+          </div>
+          <div class="panel home-chart-panel">
+            <div class="panel-heading">
+              <h3>Assets Overview</h3>
+            </div>
+            <div class="chart-canvas-wrap chart-canvas-wrap--donut">
+              <Doughnut :data="overviewChartData" :options="overviewChartOptions" />
+            </div>
+          </div>
+        </div>
+
         <!-- ── Events list ───────────────────────────────────────────── -->
-        <div class="panel">
+        <div class="panel home-events-panel">
           <div class="panel-heading">
             <h3>Events</h3>
             <RouterLink class="icon-btn" to="/dashboard/events" title="Manage events"><i class="bi bi-arrow-right"></i></RouterLink>
@@ -119,25 +141,6 @@
                 <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events yet.</td></tr>
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <!-- ── QR scan activity ──────────────────────────────────────── -->
-        <div v-if="vendorQrMappings.length" class="panel">
-          <div class="panel-heading">
-            <h3>QR Activity</h3>
-            <RouterLink class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
-          </div>
-          <div class="qr-activity-list">
-            <div v-for="mapping in [...vendorQrMappings].sort((a,b) => (b.usageCount||0)-(a.usageCount||0)).slice(0,6)"
-                 :key="mapping.id" class="qr-activity-row">
-              <code class="qr-hash-sm">{{ mapping.qrHash }}</code>
-              <span :class="`type-badge type-${qrTypeBadge(mapping).css}`">{{ qrTypeBadge(mapping).label }}</span>
-              <div class="qr-activity-bar-wrap">
-                <div class="qr-activity-bar" :style="{ width: Math.min(100, ((mapping.usageCount||0) / Math.max(...vendorQrMappings.map(m=>m.usageCount||0), 1)) * 100) + '%' }"></div>
-              </div>
-              <span class="qr-activity-count">{{ mapping.usageCount || 0 }}</span>
-            </div>
           </div>
         </div>
       </section>
@@ -776,86 +779,57 @@
           <button :class="{ active: designerMobileTab === 'settings' }" @click="designerMobileTab = 'settings'">
             <i class="bi bi-sliders"></i> Manage
           </button>
-          <button :class="{ active: designerMobileTab === 'items' }" @click="designerMobileTab = 'items'">
-            <i class="bi bi-list-ul"></i> Library
-          </button>
           <button :class="{ active: designerMobileTab === 'canvas' }" @click="designerMobileTab = 'canvas'">
             <i class="bi bi-phone"></i> Preview
           </button>
         </div>
 
+        <!-- Two-pane designer header -->
         <div class="panel designer-controls designer-panel-settings">
-          <div>
-            <h3>Menu Designer</h3>
-          </div>
-          <div class="designer-ribbon">
-            <label class="ribbon-group">
-              Working Menu
-              <div class="ribbon-menu-row">
+          <div class="designer-header-panes">
+            <!-- Pane 1: Working Menu -->
+            <div class="designer-pane">
+              <span class="pane-label">Working Menu</span>
+              <div class="pane-row">
                 <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
                   <option :value="0">Select menu</option>
                   <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                    {{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                    {{ isMenuLinked(menu.id) ? '∞ ' : '' }}{{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
                   </option>
                 </select>
                 <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
+                <button class="icon-button outlined small" :disabled="!selectedMenuIdForItems" title="Link to event" @click="showLinkEventModal = true"><i class="bi bi-link-45deg"></i></button>
               </div>
-            </label>
-            <!-- Inline rename form -->
-            <div v-if="showMenuRenameInline" class="ribbon-rename-row">
-              <input v-model.trim="menuRenameValue" class="form-control" placeholder="New display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
-              <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i></button>
-              <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+              <!-- Inline rename form -->
+              <div v-if="showMenuRenameInline" class="ribbon-rename-row">
+                <input v-model.trim="menuRenameValue" class="form-control" placeholder="New display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
+                <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i></button>
+                <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+              </div>
+              <!-- Linked event indicator -->
+              <div v-if="selectedMenuIdForItems && linkedEventsForMenu(selectedMenuIdForItems)" class="linked-event-hint">
+                <i class="bi bi-infinity"></i>
+                <span>{{ linkedEventsForMenu(selectedMenuIdForItems) }}</span>
+              </div>
             </div>
-            <div class="ribbon-divider"></div>
-            <label class="ribbon-group">
-              New Menu
-              <div class="ribbon-input-row">
+
+            <div class="designer-pane-divider"></div>
+
+            <!-- Pane 2: New Menu -->
+            <div class="designer-pane">
+              <span class="pane-label">New Menu</span>
+              <div class="pane-row">
                 <input v-model.trim="designerMenuName" class="form-control" placeholder="Display name" />
                 <select v-model="designerMenuType" class="form-select form-select-sm type-select">
                   <option value="generic">Generic</option>
                   <option value="personalized">Personalized</option>
                 </select>
+                <button class="btn btn-primary icon-label" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">
+                  <i class="bi bi-plus-lg"></i>
+                  Create
+                </button>
               </div>
-            </label>
-            <button class="btn btn-primary icon-label" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">
-              <i class="bi bi-plus-lg"></i>
-              Create
-            </button>
-            <div class="ribbon-divider"></div>
-            <label class="ribbon-group">
-              Link to Event
-              <select v-model.number="selectedEventIdForItems" class="form-select">
-                <option :value="0">Select event</option>
-                <option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option>
-              </select>
-            </label>
-            <button class="btn btn-outline-primary icon-label" :disabled="!selectedEventIdForItems || !selectedMenuIdForItems" @click="linkSelectedMenuToEvent">
-              <i class="bi bi-bag-plus"></i>
-              Add To Event
-            </button>
-          </div>
-        </div>
-
-        <div class="panel designer-panel-items">
-          <div class="panel-heading compact-heading">
-            <div>
-              <h3>Item Pool</h3>
             </div>
-          </div>
-          <div class="sheet-search studio-search"><i class="bi bi-search"></i><input v-model.trim="designerSearch" class="form-control" placeholder="Search items to add" /></div>
-          <div class="library-list">
-            <button
-              v-for="item in availableDesignerItems"
-              :key="item.id"
-              class="library-row"
-              draggable="true"
-              @dragstart="dragLibraryItem(item)"
-              @click="copyItemToDesignedMenu(item)"
-            >
-              <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ item.type || 'item' }}</small></span>
-              <i class="bi bi-plus-lg"></i>
-            </button>
           </div>
         </div>
 
@@ -865,6 +839,7 @@
               <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
             </div>
             <div class="actions slim-actions">
+              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Browse item library" aria-label="Browse library" @click="showItemPoolDrawer = true"><i class="bi bi-search"></i></button>
               <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Add item or category" aria-label="Add item" @click="openItemDrawer(null)"><i class="bi bi-plus-lg"></i></button>
               <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Arrange" aria-label="Arrange" @click="showArrangeDrawer = true"><i class="bi bi-diagram-3"></i></button>
               <RouterLink class="icon-button outlined" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'" title="Open preview" aria-label="Open preview"><i class="bi bi-phone"></i></RouterLink>
@@ -1282,10 +1257,10 @@
     </div>
   </teleport>
 
-  <!-- Item / Category add drawer (studio) -->
+  <!-- Item / Category add MODAL (studio) -->
   <teleport to="body">
-    <div v-if="showItemDrawer" class="drawer-backdrop" @click.self="showItemDrawer = false">
-      <aside class="side-drawer item-add-drawer">
+    <div v-if="showItemDrawer" class="modal-backdrop-custom" @click.self="showItemDrawer = false">
+      <div class="item-add-modal">
         <div class="modal-title-row">
           <div>
             <h3>Add to Menu</h3>
@@ -1373,7 +1348,74 @@
             Add {{ itemDraft.type === 'category' ? 'Category' : 'Item' }}
           </button>
         </div>
+      </div>
+    </div>
+  </teleport>
+
+  <!-- Item Pool pull-out drawer -->
+  <teleport to="body">
+    <div v-if="showItemPoolDrawer" class="drawer-backdrop" @click.self="showItemPoolDrawer = false">
+      <aside class="side-drawer item-pool-drawer">
+        <div class="modal-title-row">
+          <div>
+            <h3>Item Library</h3>
+            <p class="hint">Click to add items, or drag onto the canvas</p>
+          </div>
+          <button class="icon-button" type="button" aria-label="Close" @click="showItemPoolDrawer = false">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="sheet-search studio-search">
+          <i class="bi bi-search"></i>
+          <input v-model.trim="designerSearch" class="form-control" placeholder="Search items…" autofocus />
+        </div>
+        <div class="library-list pool-library-list">
+          <button
+            v-for="item in availableDesignerItems"
+            :key="item.id"
+            class="library-row"
+            draggable="true"
+            @dragstart="dragLibraryItem(item)"
+            @click="copyItemToDesignedMenu(item); showItemPoolDrawer = false"
+          >
+            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ item.type || 'item' }}</small></span>
+            <i class="bi bi-plus-lg"></i>
+          </button>
+          <p v-if="!availableDesignerItems.length" class="muted pool-empty">{{ designerSearch ? 'No items match your search.' : 'All items are already in this menu.' }}</p>
+        </div>
       </aside>
+    </div>
+  </teleport>
+
+  <!-- Link Menu to Event modal -->
+  <teleport to="body">
+    <div v-if="showLinkEventModal" class="ws-modal-backdrop" @click.self="showLinkEventModal = false">
+      <div class="ws-modal link-event-modal">
+        <div class="ws-modal-header">
+          <h3>Link to Event</h3>
+          <button class="icon-button" type="button" aria-label="Close" @click="showLinkEventModal = false"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="link-event-body">
+          <p class="hint link-event-hint">Linking <strong>{{ selectedMenuForItems?.displayName || 'this menu' }}</strong> to an event makes it available when guests scan the event QR code.</p>
+          <label>
+            Event
+            <select v-model.number="selectedEventIdForItems" class="form-select">
+              <option :value="0">Select event</option>
+              <option v-for="event in vendorEvents" :key="event.id" :value="event.id">{{ event.displayName }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="ws-modal-footer">
+          <button
+            class="btn btn-primary link-event-confirm-btn"
+            :disabled="!selectedEventIdForItems || !selectedMenuIdForItems"
+            @click="linkSelectedMenuToEventAndClose"
+          >
+            <i class="bi bi-infinity"></i>
+            Link Menu to Event
+          </button>
+        </div>
+      </div>
     </div>
   </teleport>
 </template>
@@ -1383,6 +1425,13 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { Bar, Doughnut } from 'vue-chartjs';
+import {
+  Chart as ChartJS,
+  CategoryScale, LinearScale, BarElement, ArcElement,
+  Tooltip, Legend, Title,
+} from 'chart.js';
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, Title);
 import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import MenuTree from '../components/MenuTree.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
@@ -1512,7 +1561,7 @@ const showItemDrawer = ref(false);
 const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
-const designerMobileTab = ref<'settings' | 'items' | 'canvas'>('settings');
+const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
 const events = ref<EventRow[]>([]);
@@ -3271,6 +3320,67 @@ function confirmDeactivate() {
 // ── Workspace switcher modal ───────────────────────────────────────────────────
 const showWsModal = ref(false);
 const showQrSheetModal = ref(false);
+const showItemPoolDrawer = ref(false);
+const showLinkEventModal = ref(false);
+
+function isMenuLinked(menuId: number): boolean {
+  return events.value.some((ev) => eventMenus(ev.id).some((m) => m.id === menuId));
+}
+
+async function linkSelectedMenuToEventAndClose() {
+  await linkSelectedMenuToEvent();
+  showLinkEventModal.value = false;
+}
+
+// ── Chart data ────────────────────────────────────────────────────────────────
+const qrScanChartData = computed(() => {
+  const sorted = [...vendorQrMappings.value]
+    .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+    .slice(0, 8);
+  return {
+    labels: sorted.map((m) => m.qrHash),
+    datasets: [{
+      label: 'Scans',
+      data: sorted.map((m) => m.usageCount || 0),
+      backgroundColor: 'rgba(189,148,90,0.75)',
+      borderColor: '#9f743d',
+      borderWidth: 1,
+      borderRadius: 5,
+    }],
+  };
+});
+
+const qrScanChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { callbacks: { title: (items: any[]) => `QR: ${items[0].label}` } },
+  },
+  scales: {
+    x: { ticks: { font: { size: 11 }, maxRotation: 30 }, grid: { display: false } },
+    y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
+  },
+} as const;
+
+const overviewChartData = computed(() => ({
+  labels: ['Events', 'Menus', 'Items', 'QR Assets'],
+  datasets: [{
+    data: [vendorEvents.value.length, vendorMenus.value.length, vendorItems.value.length, vendorQrMappings.value.length],
+    backgroundColor: ['#BD945A', '#c4a86e', '#9b7a4f', '#7a5c35'],
+    borderWidth: 0,
+    hoverOffset: 6,
+  }],
+}));
+
+const overviewChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom' as const, labels: { font: { size: 11 }, boxWidth: 12, padding: 14 } },
+  },
+  cutout: '60%',
+} as const;
 
 function selectVendorWs(id: number) {
   selectedVendorId.value = id;
@@ -3576,12 +3686,8 @@ async function deleteVendorById(id: number, name: string) {
   .designer-mobile-tabs button:not(.active):hover { background: #f5f0e8; }
 
   /* Hide panels that aren't the active tab on mobile */
-  .designer-grid[data-tab="settings"] .designer-panel-items,
   .designer-grid[data-tab="settings"] .designer-panel-canvas { display: none; }
-  .designer-grid[data-tab="items"] .designer-panel-settings,
-  .designer-grid[data-tab="items"] .designer-panel-canvas { display: none; }
-  .designer-grid[data-tab="canvas"] .designer-panel-settings,
-  .designer-grid[data-tab="canvas"] .designer-panel-items { display: none; }
+  .designer-grid[data-tab="canvas"] .designer-panel-settings { display: none; }
 
   /* Sidebar: fixed overlay on mobile */
   .admin-sidebar {
@@ -3772,7 +3878,11 @@ label {
 }
 
 .home-workspace {
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: 1fr;
+}
+
+.home-events-panel {
+  grid-column: 1 / -1;
 }
 
 .home-intro {
@@ -4915,12 +5025,11 @@ td a {
 }
 
 .designer-grid {
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
 }
 
 .designer-controls {
   align-self: start;
-  grid-column: 1 / -1;
 }
 
 /* Mobile tab bar — hidden on desktop, shown via mobile media query */
@@ -6241,6 +6350,168 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 .qr-image { border: 1px solid #e4d7c5; border-radius: 6px; display: block; height: 160px; width: 160px; }
 
 .saved-state { color: #9a8878; font-size: 0.75rem; }
+
+/* ── Home dashboard charts ───────────────────────────────────────────────── */
+.home-charts-row {
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
+}
+
+.home-chart-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-canvas-wrap {
+  flex: 1;
+  height: 220px;
+  position: relative;
+}
+
+.chart-canvas-wrap--donut {
+  height: 220px;
+}
+
+.chart-empty {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  font-size: 0.85rem;
+  justify-content: center;
+  padding: 32px 0;
+  text-align: center;
+}
+
+/* ── Designer two-pane header ────────────────────────────────────────────── */
+.designer-header-panes {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.designer-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+  padding: 4px 16px 4px 0;
+}
+
+.designer-pane:last-child { padding-right: 0; }
+
+.pane-label {
+  color: #6b7280;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pane-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.pane-row .form-select,
+.pane-row .form-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.pane-row .type-select { flex: 0 0 120px; }
+
+.designer-pane-divider {
+  align-self: stretch;
+  background: #e5e7eb;
+  margin: 0 12px;
+  width: 1px;
+  flex-shrink: 0;
+}
+
+.linked-event-hint {
+  align-items: center;
+  color: #4b8b3b;
+  display: flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 5px;
+}
+
+.linked-event-hint i { font-size: 0.85rem; }
+
+/* ── Item add modal ──────────────────────────────────────────────────────── */
+.item-add-modal {
+  background: #fffcf7;
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(42, 34, 24, 0.22);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 0;
+  width: min(100%, 440px);
+}
+
+.item-add-modal .modal-title-row { padding: 18px 20px 14px; }
+.item-add-modal .item-type-toggle { margin: 0 20px 16px; }
+.item-add-modal .item-drawer-fields { margin: 0 20px 16px; }
+.item-add-modal .drawer-actions { margin: 0; padding: 12px 20px 18px; }
+
+/* ── Item Pool drawer ────────────────────────────────────────────────────── */
+.item-pool-drawer { max-width: 380px; }
+
+.pool-library-list {
+  max-height: calc(100vh - 200px);
+}
+
+.pool-empty {
+  font-size: 0.85rem;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* ── Link Event modal ────────────────────────────────────────────────────── */
+.link-event-modal {
+  width: min(92vw, 400px);
+}
+
+.link-event-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.link-event-hint { margin: 0; }
+
+.link-event-confirm-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ── Designer grid: now two-column with controls full-width ─────────────── */
+.designer-grid {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .home-charts-row {
+    grid-template-columns: 1fr;
+  }
+  .designer-header-panes {
+    flex-direction: column;
+  }
+  .designer-pane-divider {
+    height: 1px;
+    margin: 8px 0;
+    width: 100%;
+  }
+}
 
 .link-button { background: transparent; border: 0; color: #8b5527; cursor: pointer; font-size: 0.82rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .link-button:hover { color: #15191e; }
