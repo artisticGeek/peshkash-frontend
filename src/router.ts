@@ -116,6 +116,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
+    path: '/dashboard/analytics',
+    name: 'DashboardAnalytics',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
     path: '/admin',
     redirect: '/dashboard/home',
   },

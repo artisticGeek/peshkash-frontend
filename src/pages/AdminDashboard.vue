@@ -770,6 +770,11 @@
         </div>
       </section>
 
+      <!-- ── Analytics Dashboard ─────────────────────────────────────── -->
+      <section v-if="activeSection === 'insights'" class="panel" style="min-height: 80vh;">
+        <AnalyticsSection />
+      </section>
+
       <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
 
         <!-- Mobile tab bar (hidden on desktop via CSS) -->
@@ -1652,9 +1657,10 @@ import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import MenuTree from '../components/MenuTree.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
+import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import { API_BASE_URL } from '../config';
 
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
+type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
@@ -1670,6 +1676,7 @@ const sections = [
   { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
   { key: 'qr-templates',  label: 'Print Templates',   icon: 'bi bi-layout-wtf' },
+  { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
 ] as const;
 
 const route = useRoute();
@@ -1691,6 +1698,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   'qr-templates': '/dashboard/qr-templates',
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
+  insights:       '/dashboard/analytics',
 };
 
 function sectionFromPath(path: string): SectionKey {
@@ -1707,6 +1715,7 @@ function sectionFromPath(path: string): SectionKey {
   if (path.startsWith('/dashboard/menus')) return 'designer';
   if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
   if (path.startsWith('/dashboard/qr')) return 'qr';
+  if (path.startsWith('/dashboard/analytics')) return 'insights';
   return 'home';
 }
 
@@ -2138,6 +2147,7 @@ const activeSubtitle = computed(() => {
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
     'qr-templates': 'Design print-ready layouts once — reuse them for every event or vendor.',
+    insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
   };
   return copy[activeSection.value];
 });
@@ -2351,6 +2361,7 @@ const BACK_DEST: Partial<Record<SectionKey, { label: string; path: string }>> = 
   menus:           { label: 'Dashboard',     path: '/dashboard/home' },
   qr:              { label: 'Dashboard',     path: '/dashboard/home' },
   'qr-templates':  { label: 'QR Bank',       path: '/dashboard/qr' },
+  insights:        { label: 'Dashboard',     path: '/dashboard/home' },
 };
 
 const backDestLabel = computed(() => BACK_DEST[activeSection.value]?.label ?? '');
