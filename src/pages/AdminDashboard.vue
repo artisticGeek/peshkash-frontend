@@ -71,7 +71,7 @@
               {{ vendorEvents.filter(e => e.status === 'active').length }} live
             </span>
           </RouterLink>
-          <RouterLink class="metric-tile" to="/dashboard/menus">
+          <RouterLink class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-layout-three-columns"></i></span>
             <div>
               <strong class="metric-value">{{ vendorMenus.length }}</strong>
@@ -87,7 +87,7 @@
             </div>
             <span class="metric-tile-sub">{{ vendorQrMappings.reduce((s, m) => s + (m.usageCount || 0), 0) }} scans</span>
           </RouterLink>
-          <RouterLink class="metric-tile" to="/dashboard/inventory">
+          <RouterLink class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-boxes"></i></span>
             <div>
               <strong class="metric-value">{{ items.length }}</strong>
@@ -463,7 +463,7 @@
               class="btn btn-outline-danger"
               @click="confirmDeactivate"
             ><i class="bi bi-stop-circle"></i> Deactivate</button>
-            <button class="icon-btn icon-btn--outlined" title="QR Sheet" @click="showQrSheetModal = true"><i class="bi bi-qr-code"></i></button>
+            <RouterLink class="icon-btn icon-btn--outlined" :to="adminQrSheetRoute(selectedEventForItems!)" title="QR Sheet"><i class="bi bi-qr-code"></i></RouterLink>
             <RouterLink class="icon-btn icon-btn--outlined" to="/dashboard/menus/studio" title="Menu Designer"><i class="bi bi-layout-three-columns"></i></RouterLink>
           </div>
         </div>
@@ -3668,7 +3668,6 @@ function tplElStyle(el: any): Record<string, string> {
 
 // ── Workspace switcher modal ───────────────────────────────────────────────────
 const showWsModal = ref(false);
-const showQrSheetModal = ref(false);
 const showItemPoolDrawer = ref(false);
 const showLinkEventModal = ref(false);
 
