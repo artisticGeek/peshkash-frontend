@@ -147,9 +147,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import { API_BASE_URL } from '../config'
+import { useAnalytics } from '../composables/useAnalytics'
 
 const route = useRoute()
 const vendorName = route.params.vendorName as string
+
+// Analytics — context is filled after data loads
+const analytics = useAnalytics()
 
 const vendorData = ref<any>(null)
 const isLoading  = ref(true)
@@ -357,6 +361,8 @@ onMounted(async () => {
       throw new Error(`Failed to load vendor card: ${res.status}`)
     }
     vendorData.value = await res.json()
+    // Track vendor contact page view
+    analytics.track('vendor_contact_view', { vendorId: vendorData.value?.id })
   } catch (err: any) {
     error.value = err.message || 'An error occurred while loading the vendor card'
   } finally {

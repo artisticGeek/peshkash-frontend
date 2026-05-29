@@ -114,10 +114,13 @@ import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import MenuTree from '../components/MenuTree.vue'
 import { API_BASE_URL } from '../config'
+import { useAnalytics } from '../composables/useAnalytics'
 
 const route = useRoute()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
+
+const analytics = useAnalytics()
 
 const menuData = ref<any>(null)
 const isLoading = ref(true)
@@ -203,6 +206,12 @@ onMounted(async () => {
     const data = await res.json()
     menuData.value = data
     console.log('Menu data loaded:', data)
+    // Track menu page view
+    analytics.track('menu_view', {
+      vendorId: data?.vendor?.id,
+      eventId: data?.event?.id,
+      menuId: data?.menu?.id,
+    })
   } catch (err: any) {
     error.value = err.message || 'An error occurred while loading the menu'
     console.error('Error loading menu:', err)
