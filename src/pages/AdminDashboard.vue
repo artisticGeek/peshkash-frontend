@@ -102,7 +102,10 @@
           <div class="panel home-chart-panel">
             <div class="panel-heading">
               <h3>QR Scans by Code</h3>
-              <RouterLink class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
+              <div class="d-flex gap-1">
+                <RouterLink class="icon-btn" to="/dashboard/analytics" title="Full Analytics"><i class="bi bi-bar-chart-line"></i></RouterLink>
+                <RouterLink class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
+              </div>
             </div>
             <div v-if="vendorQrMappings.length" class="chart-canvas-wrap">
               <Bar :data="qrScanChartData" :options="qrScanChartOptions" />

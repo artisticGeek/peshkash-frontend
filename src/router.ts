@@ -134,3 +134,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes,
 })
+
+// GA page view on every navigation
+router.afterEach((to) => {
+  import('./utils/ga').then(({ gtagPageView }) => gtagPageView(to.fullPath));
+})
