@@ -30,7 +30,8 @@ export function initGA(): void {
   document.head.appendChild(script);
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function (...args: any[]) { window.dataLayer.push(args); };
+  // Must use `arguments` (not rest params) — GA4 checks for [object Arguments], not Array
+  window.gtag = function () { window.dataLayer.push(arguments); } as typeof window.gtag;
   window.gtag('js', new Date());
   // Disable auto page_view — we fire them manually via router.afterEach
   window.gtag('config', GA_ID, { send_page_view: false });
