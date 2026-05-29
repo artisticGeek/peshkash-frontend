@@ -168,6 +168,7 @@
                     <span :class="vendor.hasContactPage ? 'status-dot active' : 'status-dot'" :title="vendor.hasContactPage ? 'Contact card active' : 'No contact card'"></span>
                   </td>
                   <td class="row-actions" @click.stop>
+                    <button class="icon-btn" title="View analytics" @click.stop="openVendorAnalytics(vendor)"><i class="bi bi-bar-chart-line"></i></button>
                     <button class="icon-btn" title="Edit vendor" @click.stop="openVendorEditor(vendor)"><i class="bi bi-pencil"></i></button>
                     <button class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
                   </td>
@@ -176,6 +177,15 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- Vendor analytics panel — shown when bar-chart icon clicked -->
+        <div v-if="analyticsVendorId" class="panel">
+          <VendorAnalyticsPanel
+            :vendor-id="analyticsVendorId"
+            :vendor-name="analyticsVendorName"
+            @close="analyticsVendorId = null"
+          />
         </div>
 
         <div v-if="showVendorEditor" class="modal-backdrop-custom" @click.self="closeVendorEditor">
@@ -613,6 +623,14 @@
               <button class="btn btn-primary" :disabled="!canPublish" @click="publishSelectedEvent"><i class="bi bi-send-check"></i> Publish</button>
             </div>
           </aside>
+        </div>
+
+        <!-- Event analytics panel -->
+        <div v-if="selectedEventForItems" class="panel">
+          <EventAnalyticsPanel
+            :event-id="selectedEventForItems.id"
+            :event-name="selectedEventForItems.displayName"
+          />
         </div>
 
         <div v-if="loading && !selectedEventForItems" class="panel empty-state">
@@ -1661,6 +1679,8 @@ import MenuTree from '../components/MenuTree.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
+import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
+import EventAnalyticsPanel from '../components/analytics/EventAnalyticsPanel.vue';
 import { API_BASE_URL } from '../config';
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
@@ -1767,6 +1787,14 @@ const selectedMenuIdForItems = ref(0);
 const selectedEventIdForItems = ref(0);
 const showItemContextPicker = ref(false);
 const showVendorEditor = ref(false);
+const analyticsVendorId = ref<number | null>(null);
+const analyticsVendorName = ref('');
+
+function openVendorAnalytics(vendor: { id: number; displayName: string }) {
+  analyticsVendorId.value = vendor.id;
+  analyticsVendorName.value = vendor.displayName;
+  showVendorEditor.value = false;
+}
 const showEventEditor = ref(false);
 const showArrangeDrawer = ref(false);
 const showQrEditor = ref(false);
