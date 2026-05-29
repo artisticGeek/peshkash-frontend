@@ -109,10 +109,10 @@
     </div>
 
     <!-- Floating Share Button -->
-    <button 
+    <button
       v-if="itemData"
       class="btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-3 shadow-lg pk-share-fab"
-      @click="win.navigator?.share && win.navigator?.share({ title: itemData?.name, url: win.location.href })"
+      @click="shareItem"
       aria-label="Share this item"
       style="width: 56px; height: 56px; z-index: 1000;"
     >
@@ -125,6 +125,8 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue';
+import { API_BASE_URL } from '../config';
+import { useAnalytics } from '../composables/useAnalytics';
 
 const route = useRoute()
 const eventName = route.params.eventName as string
@@ -134,10 +136,10 @@ const itemName = route.params.itemName as string
 const itemData = ref<any>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const win = window
 const rating = ref<number>(0)
 const feedback = ref('')
 const showFeedback = ref(false)
+const analytics = useAnalytics()
 
 const setRating = (n: number) => {
   rating.value = n
@@ -148,13 +150,28 @@ const setRating = (n: number) => {
   }, 2000)
 }
 
+function shareItem() {
+  analytics.track('share_click', {
+    vendorId: itemData.value?.event?.vendor?.id,
+    eventId: itemData.value?.event?.id,
+    menuId: itemData.value?.menu?.id,
+    itemId: itemData.value?.id,
+  });
+  navigator.share?.({ title: itemData.value?.name, url: window.location.href });
+}
+
 onMounted(async () => {
   try {
-    const res = await fetch(`https://peshkash-backend.onrender.com/api/event/${eventName}/menu/${menuName}/item/${itemName}`)
+    const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}/item/${itemName}`)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     const data = await res.json()
     itemData.value = data
-    console.log(itemData.value)
+    analytics.track('item_detail_view', {
+      vendorId: data?.event?.vendor?.id,
+      eventId: data?.event?.id,
+      menuId: data?.menu?.id,
+      itemId: data?.id,
+    })
   } catch (err: any) {
     error.value = err.message
   } finally {

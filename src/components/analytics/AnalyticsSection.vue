@@ -161,7 +161,7 @@
       </div>
 
       <!-- Device Split + Copy Summary row -->
-      <div class="row g-3">
+      <div class="row g-3 mb-3">
         <div class="col-12 col-md-6">
           <div class="card border-0 shadow-sm">
             <div class="card-body">
@@ -190,6 +190,18 @@
           </div>
         </div>
       </div>
+
+      <!-- Top Items table -->
+      <div class="row g-3">
+        <div class="col-12">
+          <div class="card border-0 shadow-sm">
+            <div class="card-body">
+              <h6 class="fw-semibold mb-3">Top Items / Products</h6>
+              <TopItemsTable :range="range" :vendor-id="selectedVendorId" :show-vendor="true" :show-event="true" />
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
 
     <!-- Empty state (first-run — no rows at all) -->
@@ -210,6 +222,7 @@ import ScanChart from './ScanChart.vue';
 import TopTable from './TopTable.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
 import DeviceSplit from './DeviceSplit.vue';
+import TopItemsTable from './TopItemsTable.vue';
 
 interface Vendor { id: number; displayName: string; name: string }
 interface QrDetail {

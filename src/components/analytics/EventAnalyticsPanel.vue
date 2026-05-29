@@ -78,18 +78,8 @@
         <div class="col-12 col-md-5">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-              <h6 class="fw-semibold mb-3 small text-uppercase text-muted">Top Items Viewed</h6>
-              <div v-if="summary.topItemsViewed?.length">
-                <div v-for="(item, i) in summary.topItemsViewed.slice(0, 6)" :key="item.itemId"
-                  class="d-flex justify-content-between align-items-center mb-2">
-                  <span class="small d-flex align-items-center gap-2">
-                    <span class="rank-num">{{ i + 1 }}</span>
-                    {{ item.itemName }}
-                  </span>
-                  <span class="badge bg-light text-dark border">{{ item.views }}</span>
-                </div>
-              </div>
-              <p v-else class="text-muted small mb-0">No item views recorded yet.</p>
+              <h6 class="fw-semibold mb-3 small text-uppercase text-muted">Top Items</h6>
+              <TopItemsTable :range="range" :event-id="eventId" :show-vendor="false" :show-event="false" />
             </div>
           </div>
         </div>
@@ -134,6 +124,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import KpiCard from './KpiCard.vue';
 import ScanChart from './ScanChart.vue';
+import TopItemsTable from './TopItemsTable.vue';
 
 const props = defineProps<{ eventId: number; eventName: string }>();
 

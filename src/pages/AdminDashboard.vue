@@ -761,19 +761,16 @@
 
       <section v-if="activeSection === 'analytics'" class="stack-layout">
         <div class="panel">
-          <button class="btn btn-outline-secondary btn-sm mb-3" @click="activeSection = 'inventory'">Back to Item Library</button>
-          <h3>{{ selectedAnalyticsItem ? itemLabel(selectedAnalyticsItem) : 'Item Analytics' }}</h3>
-          <p class="hint">Usage is derived from current menu and event mappings.</p>
-          <table v-if="selectedAnalyticsItem" class="table table-sm align-middle">
-            <tbody>
-              <tr><td>Slug</td><td><code>{{ selectedAnalyticsItem.name }}</code></td></tr>
-              <tr><td>Source menu</td><td>{{ menuName(selectedAnalyticsItem.menuId) }}</td></tr>
-              <tr><td>Parent</td><td>{{ parentName(selectedAnalyticsItem.parentId) }}</td></tr>
-              <tr><td>Type</td><td>{{ selectedAnalyticsItem.type || 'item' }}</td></tr>
-              <tr><td>Feedback</td><td>No feedback captured</td></tr>
-              <tr><td>Scans</td><td>No scan data</td></tr>
-            </tbody>
-          </table>
+          <button class="btn btn-outline-secondary btn-sm mb-3" @click="activeSection = 'inventory'">
+            <i class="bi bi-arrow-left me-1"></i>Back to Item Library
+          </button>
+          <ItemAnalyticsPanel
+            v-if="selectedAnalyticsItem"
+            :item-id="selectedAnalyticsItem.id"
+            :item-name="itemLabel(selectedAnalyticsItem)"
+            :item-type="selectedAnalyticsItem.type"
+          />
+          <p v-else class="text-muted small">No item selected.</p>
         </div>
         <div class="panel">
           <h3>Used In</h3>
@@ -1681,6 +1678,7 @@ import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import EventAnalyticsPanel from '../components/analytics/EventAnalyticsPanel.vue';
+import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import { API_BASE_URL } from '../config';
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
