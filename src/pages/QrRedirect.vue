@@ -9,6 +9,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { API_BASE_URL } from '../config';
+import { gtagEvent } from '../utils/ga';
 
 const route = useRoute();
 const router = useRouter();
@@ -33,6 +34,7 @@ onMounted(async () => {
       const redirectUrl = data.redirectionUrl;
 
       if (redirectUrl) {
+        gtagEvent('qr_scan', { qr_hash: qrHash });
         router.push(redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`);
       } else {
         errorMessage.value = 'API response missing redirectionUrl.';
@@ -43,8 +45,8 @@ onMounted(async () => {
       errorMessage.value = `API responded with status: ${apiResponse.status}`;
       error.value = true;
       loading.value = false;
-  }
-} catch (err: any) {
+    }
+  } catch (err: any) {
     errorMessage.value = `Error fetching redirect URL: ${err.message}`;
     error.value = true;
     loading.value = false;

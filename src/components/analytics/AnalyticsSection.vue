@@ -2,9 +2,14 @@
   <div class="analytics-section">
     <!-- Header + filters -->
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
-      <div>
-        <h5 class="fw-bold mb-0">Analytics</h5>
-        <p class="text-muted small mb-0">QR scan and engagement data</p>
+      <div class="d-flex align-items-center gap-2">
+        <div>
+          <h5 class="fw-bold mb-0">Analytics</h5>
+          <p class="text-muted small mb-0">QR scan and engagement data</p>
+        </div>
+        <span v-if="gaEnabled" class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size:0.7rem;">
+          <i class="bi bi-graph-up me-1"></i>GA Active
+        </span>
       </div>
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <!-- Vendor filter -->
@@ -137,6 +142,7 @@
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
+import { gaEnabled } from '../../utils/ga';
 import KpiCard from './KpiCard.vue';
 import ScanChart from './ScanChart.vue';
 import TopTable from './TopTable.vue';

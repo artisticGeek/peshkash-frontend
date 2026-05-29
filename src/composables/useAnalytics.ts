@@ -1,7 +1,11 @@
 /**
  * useAnalytics — fire-and-forget action tracking composable.
  *
- * Usage in any public page:
+ * Dual-writes to:
+ *   1. /api/analytics/action  — our Postgres backend (detailed, vendor-scoped)
+ *   2. Google Analytics 4     — only when VITE_GA_MEASUREMENT_ID is configured
+ *
+ * Usage:
  *   const { track } = useAnalytics({ vendorId: 3, eventId: 12 })
  *   track('whatsapp_click')
  *
@@ -10,6 +14,7 @@
  */
 
 import { API_BASE_URL } from '../config';
+import { gtagEvent } from '../utils/ga';
 
 export interface AnalyticsContext {
   vendorId?: number;
@@ -34,13 +39,14 @@ export type ActionType =
 
 export function useAnalytics(ctx: AnalyticsContext = {}) {
   /**
-   * Fire-and-forget: post action to /api/analytics/action.
+   * Fire-and-forget: posts to backend AND fires a GA custom event.
    * Always returns void synchronously — never await this.
    */
   function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): void {
-    const payload = { actionType, ...ctx, ...extra };
+    const merged = { ...ctx, ...extra };
+    const payload = { actionType, ...merged };
 
-    // Use sendBeacon when leaving a page, fetch otherwise
+    // ── 1. Backend (Postgres via Redis queue) ──────────────────────────
     const body = JSON.stringify(payload);
     const url = `${API_BASE_URL}/analytics/action`;
 
@@ -54,6 +60,15 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
         keepalive: true,
       }).catch(() => {/* silent */});
     }
+
+    // ── 2. Google Analytics 4 (no-op if VITE_GA_MEASUREMENT_ID not set) ─
+    gtagEvent(actionType, {
+      vendor_id: merged.vendorId,
+      event_id: merged.eventId,
+      menu_id: merged.menuId,
+      item_id: merged.itemId,
+      qr_hash: merged.qrHash,
+    });
   }
 
   return { track };
