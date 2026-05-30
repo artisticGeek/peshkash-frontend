@@ -81,8 +81,8 @@
 
     <!-- Menu Categories -->
     <div v-if="filteredMenuItems && filteredMenuItems.length > 0" class="menu-list pk-reveal" data-anim="animate__fadeInUp" data-delay="100">
-      <MenuTree 
-        v-for="item in filteredMenuItems" 
+      <MenuTree
+        v-for="item in filteredMenuItems"
         :key="`${item.id}-${forceRenderKey}`"
         :item="item"
         :level="0"
@@ -90,6 +90,9 @@
         :menu-name="menuName"
         :search-query="searchQuery"
         :selected-filter="selectedFilter"
+        :analytics-vendor-id="menuData?.vendor?.id"
+        :analytics-event-id="menuData?.event?.id"
+        :analytics-menu-id="menuData?.menu?.id"
       />
     </div>
 
