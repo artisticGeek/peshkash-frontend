@@ -170,7 +170,7 @@
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table vendors-table">
-              <thead><tr><th>Vendor</th><th>Description</th><th>Events</th><th>Contact Card</th><th></th></tr></thead>
+              <thead><tr><th>Vendor</th><th>Description</th><th>Events</th><th>Contact Card</th><th>Login</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="vendor in vendors" :key="vendor.id" class="clickable-row" @click="openVendorEditor(vendor)">
                   <td>
@@ -183,13 +183,17 @@
                   <td>
                     <span :class="vendor.hasContactPage ? 'status-dot active' : 'status-dot'" :title="vendor.hasContactPage ? 'Contact card active' : 'No contact card'"></span>
                   </td>
+                  <td :title="vendor.loginPhone ?? 'No login set'">
+                    <span v-if="vendor.loginPhone" class="status-dot active" title="Vendor login set"></span>
+                    <span v-else class="status-dot" title="No login phone"></span>
+                  </td>
                   <td class="row-actions" @click.stop>
                     <button class="icon-btn" title="View analytics" @click.stop="openVendorAnalytics(vendor)"><i class="bi bi-bar-chart-line"></i></button>
                     <button class="icon-btn" title="Edit vendor" @click.stop="openVendorEditor(vendor)"><i class="bi bi-pencil"></i></button>
                     <button class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
-                <tr v-if="!vendors.length"><td colspan="5" class="muted">No vendors yet.</td></tr>
+                <tr v-if="!vendors.length"><td colspan="6" class="muted">No vendors yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -239,7 +243,7 @@
                 <div class="form-grid">
                   <label>Phone<input v-model.trim="vendorPhone" class="form-control" placeholder="+91 90000 00000" /></label>
                   <label>Email<input v-model.trim="vendorEmail" class="form-control" placeholder="events@example.com" /></label>
-                  <label>Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="example.com" /></label>
+                  <label class="wide">Website<input v-model.trim="vendorWebsite" class="form-control" placeholder="example.com" /></label>
                   <label class="wide">Address<input v-model.trim="vendorForm.address" class="form-control" /></label>
                 </div>
 
@@ -340,8 +344,35 @@
                   </button>
                 </div>
 
+                <!-- Section: Login & Access -->
+                <p class="form-section-label"><i class="bi bi-phone-lock"></i> Login &amp; Access</p>
+                <div class="form-grid">
+                  <label>
+                    Dashboard login phone
+                    <div class="handle-input-wrap">
+                      <span class="handle-prefix">+91</span>
+                      <input
+                        v-model.trim="vendorLoginPhone"
+                        class="form-control handle-input"
+                        placeholder="98765 43210"
+                        maxlength="10"
+                        inputmode="tel"
+                      />
+                    </div>
+                    <span class="input-hint">{{ vendorLoginPhone ? `+91${vendorLoginPhone} can sign in as this vendor` : 'Leave blank — no vendor login' }}</span>
+                  </label>
+                  <label class="product-toggle" :class="{ selected: vendorRequireLogin }">
+                    <input v-model="vendorRequireLogin" type="checkbox" />
+                    <i class="bi bi-lock-fill"></i>
+                    <span>
+                      <strong>Require login on public pages</strong>
+                      <small>Customers must sign in with OTP before viewing menus or event pages.</small>
+                    </span>
+                  </label>
+                </div>
+
                 <!-- Contact card product toggle -->
-                <div class="form-grid" style="margin-top:16px">
+                <div class="form-grid" style="margin-top:4px">
                   <label class="product-toggle wide" :class="{ selected: vendorForm.hasContactPage }">
                     <input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" />
                     <i class="bi bi-person-vcard"></i>
@@ -1721,7 +1752,7 @@ import { API_BASE_URL } from '../config';
 const authStore = useAuthStore();
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
-type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; createdAt?: string };
+type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
@@ -1878,6 +1909,8 @@ const vendorContactText = ref('');
 const vendorPhone = ref('');
 const vendorEmail = ref('');
 const vendorWebsite = ref('');
+const vendorLoginPhone = ref('');     // vendor.phone — the OTP login number (admin only)
+const vendorRequireLogin = ref(false); // vendor.require_login — gate public pages
 const vendorMapUrl = ref('');
 // Dynamic social rows — replaces 6 individual refs
 const SOCIAL_TYPES = [
@@ -2594,6 +2627,8 @@ function resetVendor() {
   vendorPhone.value = '';
   vendorEmail.value = '';
   vendorWebsite.value = '';
+  vendorLoginPhone.value = '';
+  vendorRequireLogin.value = false;
   vendorMapUrl.value = '';
   vendorSocials.value        = [];
   savedQrHash.value          = '';
@@ -2616,6 +2651,10 @@ function editVendor(vendor: Vendor) {
   Object.assign(vendorForm, vendor);
   vendorContactText.value = vendor.contact?.join(', ') ?? '';
   hydrateVendorContactFields(vendor.contact ?? []);
+  // Login phone: stored as +91XXXXXXXXXX — show just the 10-digit part
+  const lp = vendor.loginPhone ?? '';
+  vendorLoginPhone.value = lp.startsWith('+91') ? lp.slice(3) : lp;
+  vendorRequireLogin.value = vendor.requireLogin ?? false;
   selectedVendorId.value = vendor.id;
   showVendorEditor.value = true;
   activeSection.value = 'vendors';
@@ -2699,7 +2738,13 @@ async function saveVendor() {
   try {
     fillVendorSlug();
     requireSlug(vendorForm.name, 'Vendor slug');
-    const payload = { ...vendorForm, contact: vendorContactPayload() };
+    const rawLogin = vendorLoginPhone.value.replace(/\D/g, '');
+    const payload = {
+      ...vendorForm,
+      contact: vendorContactPayload(),
+      loginPhone: rawLogin.length === 10 ? `+91${rawLogin}` : (rawLogin ? `+${rawLogin}` : null),
+      requireLogin: vendorRequireLogin.value,
+    };
     const { data } = vendorForm.id
       ? await axios.put<Vendor>(adminUrl(`/vendors/${vendorForm.id}`), payload)
       : await axios.post<Vendor>(adminUrl('/vendors'), payload);
@@ -3591,6 +3636,11 @@ function onModalVisibility(val: boolean) {
 }
 
 function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
+  // Customers have no dashboard access — send them home
+  if (payload.role === 'customer') {
+    router.push('/');
+    return;
+  }
   // If vendor, lock workspace immediately before loadAll runs
   if (payload.role === 'vendor' && payload.vendorId) {
     selectedVendorId.value = payload.vendorId;
