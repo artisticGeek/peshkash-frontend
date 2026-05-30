@@ -1496,6 +1496,34 @@
             <span>New Vendor</span>
           </RouterLink>
         </div>
+
+        <!-- Admin users section -->
+        <div class="ws-admin-section">
+          <div class="ws-admin-header">
+            <span><i class="bi bi-shield-lock me-1"></i>Admin Phones</span>
+            <button class="icon-button small" title="Refresh" @click="loadAdminUsers"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div class="ws-admin-list">
+            <div v-for="au in adminUsers" :key="au.phone" class="ws-admin-row">
+              <span class="ws-admin-phone">{{ au.phone }}</span>
+              <span v-if="au.phone === authStore.phone" class="ws-admin-you">you</span>
+              <button v-else class="icon-button icon-btn--danger small" title="Remove admin" @click="removeAdminUser(au.phone)"><i class="bi bi-x"></i></button>
+            </div>
+            <div v-if="!adminUsers.length" class="ws-modal-empty">No admins.</div>
+          </div>
+          <div class="ws-admin-add-row">
+            <input
+              v-model="newAdminPhone"
+              type="tel"
+              class="form-control form-control-sm"
+              placeholder="+91 98765 43210"
+              @keyup.enter="addAdminUser"
+            />
+            <button class="btn btn-sm btn-primary" :disabled="!newAdminPhone.trim()" @click="addAdminUser">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </teleport>
@@ -3750,6 +3778,42 @@ const showWsModal = ref(false);
 const showItemPoolDrawer = ref(false);
 const showLinkEventModal = ref(false);
 
+// ── Admin user management ──────────────────────────────────────────────────────
+type AdminUser = { phone: string; created_at: string };
+const adminUsers = ref<AdminUser[]>([]);
+const newAdminPhone = ref('');
+
+async function loadAdminUsers() {
+  if (!authStore.isAdmin) return;
+  try {
+    const { data } = await axios.get<AdminUser[]>(adminUrl('/admin-users'));
+    adminUsers.value = data;
+  } catch { /* silent */ }
+}
+
+async function addAdminUser() {
+  const phone = newAdminPhone.value.trim();
+  if (!phone) return;
+  try {
+    await axios.post(adminUrl('/admin-users'), { phone });
+    newAdminPhone.value = '';
+    await loadAdminUsers();
+  } catch (err) { setError(err); }
+}
+
+async function removeAdminUser(phone: string) {
+  if (!window.confirm(`Remove admin access for ${phone}?`)) return;
+  try {
+    await axios.delete(adminUrl(`/admin-users/${encodeURIComponent(phone)}`));
+    await loadAdminUsers();
+  } catch (err) { setError(err); }
+}
+
+// Load admin users when workspace modal opens
+watch(showWsModal, (open) => {
+  if (open && authStore.isAdmin) loadAdminUsers();
+});
+
 function isMenuLinked(menuId: number): boolean {
   return events.value.some((ev) => eventMenus(ev.id).some((m) => m.id === menuId));
 }
@@ -4673,6 +4737,46 @@ label {
   width: 100%;
 }
 .ws-modal-new:hover { background: #f7efe3; color: #15191e; }
+
+/* Admin users section inside workspace modal */
+.ws-admin-section {
+  border-top: 1px solid #e8dccb;
+  padding: 10px 12px 12px;
+}
+.ws-admin-header {
+  align-items: center;
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  color: #7a542a;
+}
+.ws-admin-list { margin-bottom: 8px; }
+.ws-admin-row {
+  align-items: center;
+  display: flex;
+  font-size: 0.85rem;
+  gap: 6px;
+  padding: 4px 0;
+}
+.ws-admin-phone { flex: 1; font-family: monospace; font-size: 0.82rem; }
+.ws-admin-you {
+  background: #e8f4e8;
+  border-radius: 4px;
+  color: #2a7a2a;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+.ws-admin-add-row {
+  display: flex;
+  gap: 6px;
+}
+.ws-admin-add-row .form-control { flex: 1; font-size: 0.85rem; }
+.icon-button.small { font-size: 0.75rem; height: 24px; width: 24px; }
 
 
 /* Inline menu attach row */
