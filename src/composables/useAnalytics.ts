@@ -44,7 +44,7 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
    */
   function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): void {
     const merged = { ...ctx, ...extra };
-    const payload = { actionType, ...merged };
+    const payload = { actionType, ...merged, pageUrl: window.location.href };
 
     // ── 1. Backend (Postgres via Redis queue) ──────────────────────────
     const body = JSON.stringify(payload);

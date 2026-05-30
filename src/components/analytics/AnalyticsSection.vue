@@ -12,7 +12,6 @@
         </span>
       </div>
       <div class="d-flex gap-2 align-items-center flex-wrap">
-        <!-- Vendor filter -->
         <select
           v-if="vendors.length"
           v-model="selectedVendorId"
@@ -23,7 +22,6 @@
           <option :value="undefined">All Vendors</option>
           <option v-for="v in vendors" :key="v.id" :value="v.id">{{ v.displayName }}</option>
         </select>
-        <!-- Date range -->
         <div class="btn-group btn-group-sm" role="group">
           <button
             v-for="r in RANGES"
@@ -192,7 +190,7 @@
       </div>
 
       <!-- Top Items table -->
-      <div class="row g-3">
+      <div class="row g-3 mb-4">
         <div class="col-12">
           <div class="card border-0 shadow-sm">
             <div class="card-body">
@@ -205,26 +203,113 @@
     </template>
 
     <!-- Empty state (first-run — no rows at all) -->
-    <div v-else class="text-center py-5 text-muted">
+    <div v-else-if="!loading" class="text-center py-5 text-muted">
       <i class="bi bi-bar-chart-line fs-1 d-block mb-3 opacity-25"></i>
       <p class="mb-0">No analytics data yet. Start scanning QR codes to see data here.</p>
+    </div>
+
+    <!-- ── Resource Drill-down ───────────────────────────────────────────── -->
+    <div class="resource-drilldown mt-2">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h5 class="fw-bold mb-0">Drill Down by Resource</h5>
+          <p class="text-muted small mb-0">Click any event or contact card to see its detailed analytics</p>
+        </div>
+      </div>
+
+      <!-- Resource type tabs -->
+      <div class="drilldown-tabs mb-3">
+        <button
+          v-for="tab in resourceTabs"
+          :key="tab.key"
+          class="drilldown-tab-btn"
+          :class="{ active: resourceTab === tab.key }"
+          @click="resourceTab = tab.key; drilldownTarget = null"
+        >
+          <i :class="tab.icon"></i>
+          <span>{{ tab.label }}</span>
+          <span v-if="tab.count" class="drilldown-tab-count">{{ tab.count }}</span>
+        </button>
+      </div>
+
+      <!-- Resource grid -->
+      <div v-if="resourceTab === 'events'" class="resource-grid">
+        <div
+          v-for="event in drilldownEvents"
+          :key="event.id"
+          class="resource-card"
+          :class="{ active: drilldownTarget?.type === 'event' && drilldownTarget.id === event.id }"
+          @click="selectDrilldown('event', event.id, event.displayName)"
+        >
+          <div class="resource-card-icon"><i class="bi bi-calendar2-week"></i></div>
+          <div class="resource-card-body">
+            <div class="resource-card-name">{{ event.displayName }}</div>
+            <div class="resource-card-meta">
+              <span class="status-pill" :class="`status-${event.status}`">{{ event.status }}</span>
+            </div>
+          </div>
+          <i class="bi bi-chevron-right resource-card-arrow"></i>
+        </div>
+        <div v-if="!drilldownEvents.length" class="resource-empty">
+          <i class="bi bi-calendar2-x"></i>
+          <span>No events found.</span>
+        </div>
+      </div>
+
+      <div v-else-if="resourceTab === 'contacts'" class="resource-grid">
+        <div
+          v-for="vendor in drilldownVendors"
+          :key="vendor.id"
+          class="resource-card"
+          :class="{ active: drilldownTarget?.type === 'vendor' && drilldownTarget.id === vendor.id }"
+          @click="selectDrilldown('vendor', vendor.id, vendor.displayName)"
+        >
+          <div class="resource-card-icon"><i class="bi bi-person-vcard"></i></div>
+          <div class="resource-card-body">
+            <div class="resource-card-name">{{ vendor.displayName }}</div>
+            <div class="resource-card-meta"><code class="small text-muted">{{ vendor.name }}</code></div>
+          </div>
+          <i class="bi bi-chevron-right resource-card-arrow"></i>
+        </div>
+        <div v-if="!drilldownVendors.length" class="resource-empty">
+          <i class="bi bi-person-x"></i>
+          <span>No contact cards found.</span>
+        </div>
+      </div>
+
+      <!-- Inline analytics panel -->
+      <div v-if="drilldownTarget" class="drilldown-panel mt-3">
+        <EventAnalyticsPanel
+          v-if="drilldownTarget.type === 'event'"
+          :event-id="drilldownTarget.id"
+          :event-name="drilldownTarget.name"
+        />
+        <VendorAnalyticsPanel
+          v-else-if="drilldownTarget.type === 'vendor'"
+          :vendor-id="drilldownTarget.id"
+          :vendor-name="drilldownTarget.name"
+          @close="drilldownTarget = null"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import { gaEnabled } from '../../utils/ga';
 import KpiCard from './KpiCard.vue';
 import ScanChart from './ScanChart.vue';
-import TopTable from './TopTable.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
 import DeviceSplit from './DeviceSplit.vue';
 import TopItemsTable from './TopItemsTable.vue';
+import EventAnalyticsPanel from './EventAnalyticsPanel.vue';
+import VendorAnalyticsPanel from './VendorAnalyticsPanel.vue';
 
 interface Vendor { id: number; displayName: string; name: string }
+interface EventResource { id: number; displayName: string; name: string; status: string }
 interface QrDetail {
   qrHash: string;
   qrType: string;
@@ -260,17 +345,43 @@ const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(undefined);
 const range = ref<RangeValue>('30d');
 
-const topQrRows = computed(() =>
-  (summary.value?.topQrHashes ?? []).map(r => ({ label: r.qrHash, value: r.count }))
+// Drill-down state
+type ResourceTab = 'events' | 'contacts';
+const resourceTab = ref<ResourceTab>('events');
+const drilldownTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
+const allEvents = ref<EventResource[]>([]);
+const drilldownVendors = ref<Vendor[]>([]);
+
+const drilldownEvents = computed(() =>
+  selectedVendorId.value
+    ? allEvents.value.filter(e => (e as any).vendorId === selectedVendorId.value)
+    : allEvents.value
 );
+
+const resourceTabs = computed(() => [
+  { key: 'events' as ResourceTab, label: 'Events', icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
+  { key: 'contacts' as ResourceTab, label: 'Contact Cards', icon: 'bi bi-person-vcard', count: drilldownVendors.value.length },
+]);
+
+watch(selectedVendorId, () => {
+  drilldownTarget.value = null;
+});
+
+function selectDrilldown(type: 'event' | 'vendor', id: number, name: string) {
+  if (drilldownTarget.value?.type === type && drilldownTarget.value.id === id) {
+    drilldownTarget.value = null; // toggle off
+  } else {
+    drilldownTarget.value = { type, id, name };
+  }
+}
+
+const topQrDetails = computed(() => summary.value?.topQrDetails ?? []);
 
 const engagementRate = computed(() => {
   const scans = summary.value?.totalScans ?? 0;
   if (!scans) return 0;
   return Math.round(((summary.value?.totalActions ?? 0) / scans) * 100);
 });
-
-const topQrDetails = computed(() => summary.value?.topQrDetails ?? []);
 
 const ACTION_LABEL: Record<string, string> = {
   whatsapp_click: 'WhatsApp', call_click: 'Phone Call', email_click: 'Email',
@@ -365,13 +476,23 @@ async function loadVendors() {
   try {
     const res = await axios.get<Vendor[]>(`${API_BASE_URL}/admin/vendors`);
     vendors.value = res.data ?? [];
+    drilldownVendors.value = res.data ?? [];
   } catch {
-    // Non-critical — vendor filter just won't appear
+    // vendors list stays empty — non-critical
+  }
+}
+
+async function loadEvents() {
+  try {
+    const res = await axios.get<EventResource[]>(`${API_BASE_URL}/admin/events`);
+    allEvents.value = res.data ?? [];
+  } catch {
+    // Non-critical
   }
 }
 
 onMounted(async () => {
-  await Promise.all([loadVendors(), load()]);
+  await Promise.all([loadVendors(), load(), loadEvents()]);
 });
 </script>
 
@@ -389,4 +510,40 @@ onMounted(async () => {
 .qr-type-badge { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
 .qr-detail-table th { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .qr-detail-table td { font-size: 0.82rem; }
+.status-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: capitalize; }
+.status-active { background: #d1fae5; color: #065f46; }
+.status-inactive { background: #f3f4f6; color: #6b7280; }
+.status-draft { background: #fef3c7; color: #92400e; }
+
+/* Drill-down */
+.resource-drilldown { border-top: 1px solid var(--bs-border-color, #dee2e6); padding-top: 2rem; }
+.drilldown-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.drilldown-tab-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px; border: 1px solid var(--bs-border-color, #dee2e6);
+  background: transparent; font-size: 0.85rem; cursor: pointer; transition: all 0.15s;
+  color: var(--bs-secondary-color, #6c757d);
+}
+.drilldown-tab-btn:hover { background: var(--bs-light, #f8f9fa); }
+.drilldown-tab-btn.active { background: var(--bs-primary); color: #fff; border-color: var(--bs-primary); }
+.drilldown-tab-count { background: rgba(255,255,255,0.25); border-radius: 10px; padding: 1px 6px; font-size: 0.72rem; }
+.drilldown-tab-btn:not(.active) .drilldown-tab-count { background: var(--bs-light, #f0f0f0); color: var(--bs-secondary, #6c757d); }
+
+.resource-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.resource-card {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 1rem; border-radius: 10px;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  cursor: pointer; transition: all 0.15s;
+  background: var(--bs-body-bg, #fff);
+}
+.resource-card:hover { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, #f0f4ff); }
+.resource-card.active { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, #e8eeff); }
+.resource-card-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bs-light, #f8f9fa); display: flex; align-items: center; justify-content: center; font-size: 1rem; color: var(--bs-primary); flex-shrink: 0; }
+.resource-card-body { flex: 1; min-width: 0; }
+.resource-card-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resource-card-meta { margin-top: 2px; }
+.resource-card-arrow { color: var(--bs-secondary-color, #6c757d); font-size: 0.75rem; }
+.resource-empty { display: flex; align-items: center; gap: 0.5rem; color: var(--bs-secondary-color, #6c757d); font-size: 0.85rem; padding: 1.5rem; justify-content: center; }
+.drilldown-panel { border: 1px solid var(--bs-border-color, #dee2e6); border-radius: 12px; overflow: hidden; }
 </style>
