@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "peshkash-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "node_modules\\.bin\\vite.cmd",
+      "runtimeArgs": ["--port", "5177"],
       "port": 5177
     }
   ]

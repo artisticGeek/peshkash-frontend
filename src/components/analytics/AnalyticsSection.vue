@@ -277,22 +277,35 @@
         </div>
       </div>
 
-      <!-- Inline analytics panel -->
-      <div v-if="drilldownTarget" class="drilldown-panel mt-3">
-        <EventAnalyticsPanel
-          v-if="drilldownTarget.type === 'event'"
-          :event-id="drilldownTarget.id"
-          :event-name="drilldownTarget.name"
-        />
-        <VendorAnalyticsPanel
-          v-else-if="drilldownTarget.type === 'vendor'"
-          :vendor-id="drilldownTarget.id"
-          :vendor-name="drilldownTarget.name"
-          @close="drilldownTarget = null"
-        />
-      </div>
+      <!-- No inline panel: clicking opens a drawer -->
+      <p v-if="!drilldownEvents.length && !drilldownVendors.length" class="text-muted small text-center py-3">
+        No resources found for the selected filter.
+      </p>
     </div>
   </div>
+
+  <!-- ── Event detail drawer ─────────────────────────────────────────────── -->
+  <EventDetailDrawer
+    v-if="drawerTarget?.type === 'event'"
+    v-model="drawerOpen"
+    :event-id="drawerTarget.id"
+    :event-name="drawerTarget.name"
+  />
+
+  <!-- ── Vendor detail drawer ────────────────────────────────────────────── -->
+  <AnalyticsDrawer
+    v-if="drawerTarget?.type === 'vendor'"
+    v-model="drawerOpen"
+    icon="bi bi-person-vcard"
+    :title="drawerTarget.name"
+    subtitle="Contact Card Analytics"
+  >
+    <VendorAnalyticsPanel
+      :vendor-id="drawerTarget.id"
+      :vendor-name="drawerTarget.name"
+      @close="drawerOpen = false"
+    />
+  </AnalyticsDrawer>
 </template>
 
 <script setup lang="ts">
@@ -305,7 +318,8 @@ import ScanChart from './ScanChart.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
 import DeviceSplit from './DeviceSplit.vue';
 import TopItemsTable from './TopItemsTable.vue';
-import EventAnalyticsPanel from './EventAnalyticsPanel.vue';
+import EventDetailDrawer from './EventDetailDrawer.vue';
+import AnalyticsDrawer from './AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from './VendorAnalyticsPanel.vue';
 
 interface Vendor { id: number; displayName: string; name: string }
@@ -348,7 +362,10 @@ const range = ref<RangeValue>('30d');
 // Drill-down state
 type ResourceTab = 'events' | 'contacts';
 const resourceTab = ref<ResourceTab>('events');
+// drilldownTarget drives active-card highlight; drawerTarget/drawerOpen drive the drawer
 const drilldownTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
+const drawerTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
+const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
 const drilldownVendors = ref<Vendor[]>([]);
 
@@ -365,15 +382,19 @@ const resourceTabs = computed(() => [
 
 watch(selectedVendorId, () => {
   drilldownTarget.value = null;
+  drawerOpen.value = false;
 });
 
 function selectDrilldown(type: 'event' | 'vendor', id: number, name: string) {
-  if (drilldownTarget.value?.type === type && drilldownTarget.value.id === id) {
-    drilldownTarget.value = null; // toggle off
-  } else {
-    drilldownTarget.value = { type, id, name };
-  }
+  drilldownTarget.value = { type, id, name };
+  drawerTarget.value = { type, id, name };
+  drawerOpen.value = true;
 }
+
+// Clear active card when drawer is closed
+watch(drawerOpen, open => {
+  if (!open) drilldownTarget.value = null;
+});
 
 const topQrDetails = computed(() => summary.value?.topQrDetails ?? []);
 
@@ -545,5 +566,5 @@ onMounted(async () => {
 .resource-card-meta { margin-top: 2px; }
 .resource-card-arrow { color: var(--bs-secondary-color, #6c757d); font-size: 0.75rem; }
 .resource-empty { display: flex; align-items: center; gap: 0.5rem; color: var(--bs-secondary-color, #6c757d); font-size: 0.85rem; padding: 1.5rem; justify-content: center; }
-.drilldown-panel { border: 1px solid var(--bs-border-color, #dee2e6); border-radius: 12px; overflow: hidden; }
+/* .drilldown-panel removed — analytics now open in AnalyticsDrawer */
 </style>
