@@ -136,24 +136,25 @@ export const router = createRouter({
 })
 
 // Auth guard — for /dashboard/* routes, check localStorage for a valid session.
-// The LoginModal in AdminDashboard.vue is the primary UI gate;
-// unauthenticated users see the dashboard blurred with the modal on top.
+// The LoginModal in AdminDashboard.vue handles unauthenticated users (shows modal over blurred content).
+// Customers (role='customer') are redirected to / — the dashboard is admin/vendor only.
 router.beforeEach((to) => {
   if (!to.path.startsWith('/dashboard')) return true;
   const raw = localStorage.getItem('peshkash_auth_v1');
-  if (!raw) return true; // unauthenticated — let AdminDashboard show the login gate
+  if (!raw) return true; // unauthenticated — LoginModal will prompt them
   try {
     const auth = JSON.parse(raw);
     if (Date.now() > auth.expiresAt) {
       localStorage.removeItem('peshkash_auth_v1');
-      return true; // expired — let gate show
+      return true; // expired — LoginModal will prompt
     }
+    // Customers have no dashboard access — send them home
+    if (auth.role === 'customer') return '/';
     // Vendor users are locked to their own workspace
     if (auth.role === 'vendor' && auth.vendorId) {
       const path = to.path;
-      // Allow their own vendor workspace and all sub-routes EXCEPT /dashboard/vendors
       if (path.startsWith('/dashboard/vendors') && !path.startsWith(`/dashboard/vendors/${auth.vendorId}`)) {
-        return `/dashboard/home`;
+        return '/dashboard/home';
       }
     }
     return true;
