@@ -625,14 +625,6 @@
           </aside>
         </div>
 
-        <!-- Event analytics panel -->
-        <div v-if="selectedEventForItems" class="panel">
-          <EventAnalyticsPanel
-            :event-id="selectedEventForItems.id"
-            :event-name="selectedEventForItems.displayName"
-          />
-        </div>
-
         <div v-if="loading && !selectedEventForItems" class="panel empty-state">
           <p class="hint">Loading event…</p>
         </div>
@@ -1677,7 +1669,6 @@ import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
-import EventAnalyticsPanel from '../components/analytics/EventAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import { API_BASE_URL } from '../config';
 
