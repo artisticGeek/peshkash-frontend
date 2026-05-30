@@ -135,6 +135,33 @@ export const router = createRouter({
   routes,
 })
 
+// Auth guard — for /dashboard/* routes, check localStorage for a valid session.
+// The DashboardLogin gate in AdminDashboard.vue is the primary UI gate;
+// this guard stores the intended destination so we can redirect after login.
+router.beforeEach((to) => {
+  if (!to.path.startsWith('/dashboard')) return true;
+  const raw = localStorage.getItem('peshkash_auth_v1');
+  if (!raw) return true; // unauthenticated — let AdminDashboard show the login gate
+  try {
+    const auth = JSON.parse(raw);
+    if (Date.now() > auth.expiresAt) {
+      localStorage.removeItem('peshkash_auth_v1');
+      return true; // expired — let gate show
+    }
+    // Vendor users are locked to their own workspace
+    if (auth.role === 'vendor' && auth.vendorId) {
+      const path = to.path;
+      // Allow their own vendor workspace and all sub-routes EXCEPT /dashboard/vendors
+      if (path.startsWith('/dashboard/vendors') && !path.startsWith(`/dashboard/vendors/${auth.vendorId}`)) {
+        return `/dashboard/home`;
+      }
+    }
+    return true;
+  } catch {
+    return true;
+  }
+});
+
 // GA page view on every navigation
 router.afterEach((to) => {
   import('./utils/ga').then(({ gtagPageView }) => gtagPageView(to.fullPath));

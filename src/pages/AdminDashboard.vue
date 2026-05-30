@@ -1,5 +1,8 @@
 <template>
-  <div class="admin-shell" :data-sidebar="sidebarState">
+  <!-- Auth gate: shown when user is not logged in -->
+  <DashboardLogin v-if="!authStore.isLoggedIn" @success="onLoginSuccess" />
+
+  <div v-else class="admin-shell" :data-sidebar="sidebarState">
     <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
       <div class="sidebar-brand">
         <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
@@ -12,7 +15,7 @@
 
       <nav>
         <RouterLink
-          v-for="section in sections"
+          v-for="section in visibleSections"
           :key="section.key"
           :to="dashboardRouteBySection[section.key]"
           class="nav-button"
@@ -25,6 +28,15 @@
         </RouterLink>
       </nav>
       <div class="sidebar-footer">
+        <!-- Auth user info + logout -->
+        <div class="sidebar-user-row">
+          <span class="sidebar-user-phone">{{ authStore.phone }}</span>
+          <span class="sidebar-user-role">{{ authStore.role }}</span>
+        </div>
+        <button class="nav-button sidebar-logout-btn" type="button" title="Sign out" @click="handleLogout">
+          <i class="bi bi-box-arrow-left"></i>
+          <span class="nav-label">Sign out</span>
+        </button>
         <button class="nav-button sidebar-cycle-btn" type="button" :title="sidebarState === 'full' ? 'Compact' : 'Expand'" @click="cycleSidebar">
           <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
           <span class="nav-label">{{ sidebarState === 'full' ? 'Compact' : 'Expand' }}</span>
@@ -47,8 +59,8 @@
           <button class="refresh-btn" :disabled="loading" title="Refresh" aria-label="Refresh" @click="loadAll">
             <i class="bi bi-arrow-clockwise" :class="{ 'spin': loading }"></i>
           </button>
-          <!-- Workspace gear — home page only, opens modal -->
-          <button v-if="activeSection === 'home'" class="ws-gear-btn" type="button" @click="showWsModal = true" :title="selectedVendor?.displayName || 'Switch workspace'">
+          <!-- Workspace gear — home page only, admin only, opens modal -->
+          <button v-if="activeSection === 'home' && authStore.isAdmin" class="ws-gear-btn" type="button" @click="showWsModal = true" :title="selectedVendor?.displayName || 'Switch workspace'">
             <i class="bi bi-gear-fill"></i>
             <span class="ws-vendor-label">{{ selectedVendor?.displayName || 'Workspace' }}</span>
           </button>
@@ -1445,7 +1457,7 @@
 
   <!-- Mobile hamburger (fixed, outside any sticky container) -->
   <teleport to="body">
-    <button v-if="!sidebarOverlayOpen" class="mobile-hamburger" type="button" aria-label="Open navigation" @click="sidebarOverlayOpen = true">
+    <button v-if="authStore.isLoggedIn && !sidebarOverlayOpen" class="mobile-hamburger" type="button" aria-label="Open navigation" @click="sidebarOverlayOpen = true">
       <i class="bi bi-list"></i>
     </button>
   </teleport>
@@ -1670,7 +1682,11 @@ import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
+import DashboardLogin from '../components/auth/DashboardLogin.vue';
+import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
+
+const authStore = useAuthStore();
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; createdAt?: string };
@@ -1690,6 +1706,11 @@ const sections = [
   { key: 'qr-templates',  label: 'Print Templates',   icon: 'bi bi-layout-wtf' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
 ] as const;
+
+// Vendors section is only visible to admins
+const visibleSections = computed(() =>
+  authStore.isAdmin ? sections : sections.filter(s => s.key !== 'vendors')
+);
 
 const route = useRoute();
 const router = useRouter();
@@ -2309,7 +2330,12 @@ async function loadAll() {
     qrMappings.value = qrRes.data;
     previews.menus = previewRes.data.menus.map(normalizePreview);
     previews.items = previewRes.data.items.map(normalizePreview);
-    if (!selectedVendor.value && vendors.value.length) selectedVendorId.value = vendors.value[0].id;
+    // Vendor users are always locked to their own workspace; admins fall back to first vendor
+    if (authStore.isVendor && authStore.vendorId) {
+      selectedVendorId.value = authStore.vendorId;
+    } else if (!selectedVendor.value && vendors.value.length) {
+      selectedVendorId.value = vendors.value[0].id;
+    }
     await loadEventMenuLinks();
     hydrateRouteContext();
   } catch (err) {
@@ -3511,12 +3537,33 @@ watch(activeSection, (section) => {
 });
 
 onMounted(async () => {
+  // Vendor workspace lock: pin to their assigned vendorId
+  if (authStore.isVendor && authStore.vendorId) {
+    selectedVendorId.value = authStore.vendorId;
+  }
   await loadAll();
   selectedMenuIdForItems.value = vendorMenus.value[0]?.id ?? 0;
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
   hydrateRouteContext(); // must run last so URL params always win
   syncItemRows();
 });
+
+// ── Auth handlers ─────────────────────────────────────────────────────────────
+
+function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
+  // If vendor, lock workspace immediately before loadAll runs
+  if (payload.role === 'vendor' && payload.vendorId) {
+    selectedVendorId.value = payload.vendorId;
+  }
+  loadAll();
+}
+
+function handleLogout() {
+  authStore.logout();
+  // Reset to default state
+  selectedVendorId.value = 0;
+  router.push('/dashboard/home');
+}
 
 // ── Delete operations ─────────────────────────────────────────────────────────
 
@@ -3944,6 +3991,37 @@ async function deleteVendorById(id: number, name: string) {
   font-size: 0.8rem;
 }
 .sidebar-cycle-btn:hover { color: rgba(255,255,255,0.7); }
+
+/* Auth / user info in sidebar footer */
+.sidebar-user-row {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px 4px;
+  gap: 1px;
+  overflow: hidden;
+}
+.sidebar-user-phone {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-user-role {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.35);
+  text-transform: capitalize;
+  letter-spacing: 0.04em;
+}
+.sidebar-logout-btn {
+  width: 100%;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.8rem;
+}
+.sidebar-logout-btn:hover { color: #ff7b7b; }
+
+/* Hide user row in icons-only mode (no space) */
+.admin-shell[data-sidebar="icons"] .sidebar-user-row { display: none; }
 
 /* Icons-only state */
 .admin-shell[data-sidebar="icons"] .admin-sidebar { width: 56px; }
