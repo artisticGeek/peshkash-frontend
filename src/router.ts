@@ -136,8 +136,8 @@ export const router = createRouter({
 })
 
 // Auth guard — for /dashboard/* routes, check localStorage for a valid session.
-// The DashboardLogin gate in AdminDashboard.vue is the primary UI gate;
-// this guard stores the intended destination so we can redirect after login.
+// The LoginModal in AdminDashboard.vue is the primary UI gate;
+// unauthenticated users see the dashboard blurred with the modal on top.
 router.beforeEach((to) => {
   if (!to.path.startsWith('/dashboard')) return true;
   const raw = localStorage.getItem('peshkash_auth_v1');
