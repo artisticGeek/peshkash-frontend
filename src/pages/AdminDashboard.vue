@@ -1710,8 +1710,8 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   events:         '/dashboard/events',
   eventWorkspace: '/dashboard/events',
   qrSheet:        '/dashboard/events',
-  inventory:      '/dashboard/menus/studio',
-  analytics:      '/dashboard/menus/studio',
+  inventory:      '/dashboard/items',
+  analytics:      '/dashboard/items',
   designer:       '/dashboard/menus/studio',
   preview:        '/dashboard/menus/preview',
   publish:        '/dashboard/events',
@@ -1729,8 +1729,9 @@ function sectionFromPath(path: string): SectionKey {
   if (/^\/dashboard\/events\/\d+\/publish/.test(path)) return 'eventWorkspace';
   if (/^\/dashboard\/events\/\d+/.test(path)) return 'eventWorkspace';
   if (path === '/dashboard/events') return 'events';
-  // items routes merged into designer
-  if (path.startsWith('/dashboard/items')) return 'designer';
+  // /dashboard/items/:id → item analytics; /dashboard/items → inventory list
+  if (/^\/dashboard\/items\/\d+/.test(path)) return 'analytics';
+  if (path === '/dashboard/items') return 'inventory';
   if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
