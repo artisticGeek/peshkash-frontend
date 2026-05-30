@@ -1,8 +1,12 @@
 <template>
-  <!-- Auth gate: shown when user is not logged in -->
-  <DashboardLogin v-if="!authStore.isLoggedIn" @success="onLoginSuccess" />
+  <!-- Login modal — floats above the dashboard, closes → redirect to / -->
+  <LoginModal
+    :model-value="!authStore.isLoggedIn"
+    @update:model-value="onModalVisibility"
+    @success="onLoginSuccess"
+  />
 
-  <div v-else class="admin-shell" :data-sidebar="sidebarState">
+  <div class="admin-shell" :data-sidebar="sidebarState">
     <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
       <div class="sidebar-brand">
         <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
@@ -1710,7 +1714,7 @@ import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
-import DashboardLogin from '../components/auth/DashboardLogin.vue';
+import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
 
@@ -3577,6 +3581,14 @@ onMounted(async () => {
 });
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
+
+/** Called when the login modal emits update:modelValue = false (user closed it). */
+function onModalVisibility(val: boolean) {
+  // If the user closed the modal without logging in, send them to the landing page.
+  if (!val && !authStore.isLoggedIn) {
+    router.push('/');
+  }
+}
 
 function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
   // If vendor, lock workspace immediately before loadAll runs
