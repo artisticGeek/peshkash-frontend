@@ -35,6 +35,21 @@
         <button class="btn btn-sm btn-outline-primary" @click="load" :disabled="loading">
           <i class="bi bi-arrow-clockwise" :class="{ 'spin': loading }"></i>
         </button>
+        <!-- Export button: only shown when a specific vendor is selected -->
+        <button
+          v-if="selectedVendorId"
+          class="btn btn-sm btn-outline-success"
+          :disabled="exportLoading"
+          title="Export raw analytics for selected vendor"
+          @click="exportVendor(
+            selectedVendorId!,
+            vendors.find(v => v.id === selectedVendorId)?.displayName ?? 'vendor'
+          )"
+        >
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+          <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
+          <span v-else>Excel</span>
+        </button>
       </div>
     </div>
 
@@ -321,6 +336,7 @@ import TopItemsTable from './TopItemsTable.vue';
 import EventDetailDrawer from './EventDetailDrawer.vue';
 import AnalyticsDrawer from './AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from './VendorAnalyticsPanel.vue';
+import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 interface Vendor { id: number; displayName: string; name: string }
 interface EventResource { id: number; displayName: string; name: string; status: string }
@@ -357,6 +373,8 @@ const error = ref(false);
 const summary = ref<Summary | null>(null);
 const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(undefined);
+
+const { exportVendor, loading: exportLoading } = useAnalyticsExport();
 const range = ref<RangeValue>('30d');
 
 // Drill-down state

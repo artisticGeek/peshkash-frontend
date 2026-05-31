@@ -16,6 +16,16 @@
         <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading" title="Refresh">
           <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
         </button>
+        <button
+          class="btn btn-sm btn-outline-success"
+          :disabled="exportLoading"
+          title="Export raw analytics to Excel"
+          @click="exportVendor(props.vendorId, props.vendorName)"
+        >
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+          <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
+          <span v-else>Excel</span>
+        </button>
         <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')" title="Close analytics">
           <i class="bi bi-x-lg"></i>
         </button>
@@ -134,9 +144,12 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import KpiCard from './KpiCard.vue';
 import ScanChart from './ScanChart.vue';
+import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 const props = defineProps<{ vendorId: number; vendorName: string }>();
 defineEmits<{ (e: 'close'): void }>();
+
+const { exportVendor, loading: exportLoading } = useAnalyticsExport();
 
 const RANGES = [
   { label: '7D', value: '7d' }, { label: '30D', value: '30d' },
