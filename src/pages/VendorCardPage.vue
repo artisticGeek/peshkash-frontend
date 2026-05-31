@@ -15,15 +15,6 @@
     </div>
   </div>
 
-  <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in.
-       noDismiss: no close button, backdrop click shakes instead of closing.
-       Page content blurs behind the backdrop. No redirect on any outcome. -->
-  <LoginModal
-    v-model="loginModalOpen"
-    no-dismiss
-    @success="onLoginSuccess"
-  />
-
   <div v-else class="vendor-card-page">
 
     <div class="top-section">
@@ -149,6 +140,15 @@
       </div>
     </div>
   </div>
+
+  <!-- Login gate — Teleports to <body>, so placement here doesn't affect layout.
+       noDismiss: no close button, backdrop click shakes the card.
+       Page content blurs behind the backdrop. No redirect on any outcome. -->
+  <LoginModal
+    v-model="loginModalOpen"
+    no-dismiss
+    @success="onLoginSuccess"
+  />
 </template>
 
 <script lang="ts" setup>
