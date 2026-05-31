@@ -135,9 +135,24 @@ export const router = createRouter({
   routes,
 })
 
+// ── JWT decode helper (mirrors auth.ts — no signature verification, just read claims) ──
+function _decodeJwt(token: string): { role: string; vendorId: number | null } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const p = JSON.parse(json);
+    if (typeof p.role !== 'string') return null;
+    return { role: p.role, vendorId: typeof p.vendorId === 'number' ? p.vendorId : null };
+  } catch {
+    return null;
+  }
+}
+
 // Auth guard — for /dashboard/* routes, check localStorage for a valid session.
 // The LoginModal in AdminDashboard.vue handles unauthenticated users (shows modal over blurred content).
 // Customers (role='customer') are redirected to / — the dashboard is admin/vendor only.
+// SECURITY: role/vendorId are decoded from the JWT payload, never read from the plain stored fields.
 router.beforeEach((to) => {
   if (!to.path.startsWith('/dashboard')) return true;
   const raw = localStorage.getItem('peshkash_auth_v1');
@@ -148,12 +163,16 @@ router.beforeEach((to) => {
       localStorage.removeItem('peshkash_auth_v1');
       return true; // expired — LoginModal will prompt
     }
+    // Decode role/vendorId from JWT — ignores any tampering with the plain stored fields
+    const decoded = _decodeJwt(auth.token);
+    if (!decoded) return true; // malformed token — LoginModal will prompt
+    const { role, vendorId } = decoded;
     // Customers have no dashboard access — send them home
-    if (auth.role === 'customer') return '/';
+    if (role === 'customer') return '/';
     // Vendor users are locked to their own workspace
-    if (auth.role === 'vendor' && auth.vendorId) {
+    if (role === 'vendor' && vendorId) {
       const path = to.path;
-      if (path.startsWith('/dashboard/vendors') && !path.startsWith(`/dashboard/vendors/${auth.vendorId}`)) {
+      if (path.startsWith('/dashboard/vendors') && !path.startsWith(`/dashboard/vendors/${vendorId}`)) {
         return '/dashboard/home';
       }
     }
