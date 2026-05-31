@@ -24,7 +24,16 @@
         {{ truncatedDescription }}
       </div>
     </div>
-    
+
+    <!-- Thumbnail (shown when image URL is set) -->
+    <img
+      v-if="dish.image"
+      :src="dish.image"
+      :alt="dish.displayName || dish.name"
+      class="dish-thumb"
+      loading="lazy"
+    />
+
     <!-- Navigate Icon -->
     <i class="bi bi-chevron-right text-muted"></i>
   </div>
@@ -41,6 +50,7 @@ interface Dish {
   description?: string;
   itemType: string;
   isVeg?: boolean;
+  image?: string | null;
 }
 
 interface Props {
@@ -84,6 +94,16 @@ const navigateToDetail = () => {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  gap: 10px;
+}
+
+.dish-thumb {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(189, 148, 90, 0.18);
 }
 
 .dish-row:hover {
