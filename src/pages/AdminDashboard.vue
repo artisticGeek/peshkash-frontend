@@ -199,14 +199,6 @@
           </div>
         </div>
 
-        <!-- Vendor analytics panel — shown when bar-chart icon clicked -->
-        <div v-if="analyticsVendorId" class="panel">
-          <VendorAnalyticsPanel
-            :vendor-id="analyticsVendorId"
-            :vendor-name="analyticsVendorName"
-            @close="analyticsVendorId = null"
-          />
-        </div>
 
         <div v-if="showVendorEditor" class="modal-backdrop-custom" @click.self="closeVendorEditor">
           <form class="vendor-modal" @submit.prevent="saveVendor">
@@ -798,34 +790,6 @@
         </div>
       </section>
 
-      <section v-if="activeSection === 'analytics'" class="stack-layout">
-        <div class="panel">
-          <button class="btn btn-outline-secondary btn-sm mb-3" @click="activeSection = 'inventory'">
-            <i class="bi bi-arrow-left me-1"></i>Back to Item Library
-          </button>
-          <ItemAnalyticsPanel
-            v-if="selectedAnalyticsItem"
-            :item-id="selectedAnalyticsItem.id"
-            :item-name="itemLabel(selectedAnalyticsItem)"
-            :item-type="selectedAnalyticsItem.type"
-          />
-          <p v-else class="text-muted small">No item selected.</p>
-        </div>
-        <div class="panel">
-          <h3>Used In</h3>
-          <table class="table table-sm align-middle">
-            <thead><tr><th>Event</th><th>Menu</th><th>Public URL</th></tr></thead>
-            <tbody>
-              <tr v-for="usage in selectedAnalyticsUsage" :key="`${usage.event.id}-${usage.menu.id}`">
-                <td>{{ usage.event.displayName }}</td>
-                <td>{{ usage.menu.displayName }}</td>
-                <td><a :href="itemPathFor(usage.event, selectedAnalyticsItem!)" target="_blank" rel="noreferrer">Open</a></td>
-              </tr>
-              <tr v-if="!selectedAnalyticsUsage.length"><td colspan="3" class="muted">No event usage found yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <!-- ── Analytics Dashboard ─────────────────────────────────────── -->
       <section v-if="activeSection === 'insights'" class="panel" style="min-height: 80vh;">
@@ -1472,6 +1436,53 @@
     </main>
   </div>
 
+  <!-- ── Item analytics drawer (opens from items table row click) ──────────── -->
+  <AnalyticsDrawer
+    v-model="itemAnalyticsDrawerOpen"
+    icon="bi bi-graph-up"
+    :title="selectedAnalyticsItem ? itemLabel(selectedAnalyticsItem) : 'Item Analytics'"
+    subtitle="Scan &amp; engagement data"
+    @update:model-value="onItemDrawerClose"
+  >
+    <template v-if="selectedAnalyticsItem">
+      <ItemAnalyticsPanel
+        :item-id="selectedAnalyticsItem.id"
+        :item-name="itemLabel(selectedAnalyticsItem)"
+        :item-type="selectedAnalyticsItem.type"
+      />
+      <div v-if="selectedAnalyticsUsage.length" style="margin-top:1.25rem;">
+        <h6 class="fw-semibold mb-2 small text-uppercase text-muted">Used In</h6>
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Event</th><th>Menu</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="usage in selectedAnalyticsUsage" :key="`${usage.event.id}-${usage.menu.id}`">
+              <td class="small">{{ usage.event.displayName }}</td>
+              <td class="small">{{ usage.menu.displayName }}</td>
+              <td><a :href="itemPathFor(usage.event, selectedAnalyticsItem)" target="_blank" rel="noreferrer" class="small">Open</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+    <p v-else class="text-muted small">No item selected.</p>
+  </AnalyticsDrawer>
+
+  <!-- ── Vendor analytics drawer (opens from vendors table row click) ─────── -->
+  <AnalyticsDrawer
+    v-if="analyticsVendorId"
+    v-model="vendorAnalyticsDrawerOpen"
+    icon="bi bi-bar-chart-line"
+    :title="analyticsVendorName"
+    subtitle="Contact Card Analytics"
+    @update:model-value="onVendorDrawerClose"
+  >
+    <VendorAnalyticsPanel
+      :vendor-id="analyticsVendorId"
+      :vendor-name="analyticsVendorName"
+      @close="vendorAnalyticsDrawerOpen = false; analyticsVendorId = null"
+    />
+  </AnalyticsDrawer>
+
   <!-- Toast notifications -->
   <teleport to="body">
     <div class="toast-stack">
@@ -1743,6 +1754,7 @@ import MenuTree from '../components/MenuTree.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
+import AnalyticsDrawer from '../components/analytics/AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import LoginModal from '../components/auth/LoginModal.vue';
@@ -1751,7 +1763,7 @@ import { API_BASE_URL } from '../config';
 
 const authStore = useAuthStore();
 
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'analytics' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
+type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
@@ -1786,7 +1798,6 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   eventWorkspace: '/dashboard/events',
   qrSheet:        '/dashboard/events',
   inventory:      '/dashboard/items',
-  analytics:      '/dashboard/items',
   designer:       '/dashboard/menus/studio',
   preview:        '/dashboard/menus/preview',
   publish:        '/dashboard/events',
@@ -1804,9 +1815,8 @@ function sectionFromPath(path: string): SectionKey {
   if (/^\/dashboard\/events\/\d+\/publish/.test(path)) return 'eventWorkspace';
   if (/^\/dashboard\/events\/\d+/.test(path)) return 'eventWorkspace';
   if (path === '/dashboard/events') return 'events';
-  // /dashboard/items/:id → item analytics; /dashboard/items → inventory list
-  if (/^\/dashboard\/items\/\d+/.test(path)) return 'analytics';
-  if (path === '/dashboard/items') return 'inventory';
+  // /dashboard/items/:id opens item analytics drawer while staying on inventory
+  if (path.startsWith('/dashboard/items')) return 'inventory';
   if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
@@ -1863,11 +1873,26 @@ const showItemContextPicker = ref(false);
 const showVendorEditor = ref(false);
 const analyticsVendorId = ref<number | null>(null);
 const analyticsVendorName = ref('');
+const vendorAnalyticsDrawerOpen = ref(false);
+const itemAnalyticsDrawerOpen = ref(false);
 
 function openVendorAnalytics(vendor: { id: number; displayName: string }) {
   analyticsVendorId.value = vendor.id;
   analyticsVendorName.value = vendor.displayName;
   showVendorEditor.value = false;
+  vendorAnalyticsDrawerOpen.value = true;
+}
+
+function onVendorDrawerClose(val: boolean) {
+  if (!val) { vendorAnalyticsDrawerOpen.value = false; analyticsVendorId.value = null; }
+}
+
+function onItemDrawerClose(val: boolean) {
+  if (!val) {
+    itemAnalyticsDrawerOpen.value = false;
+    // If we navigated to /dashboard/items/:id, step back to the list
+    if (/^\/dashboard\/items\/\d+/.test(route.path)) router.replace('/dashboard/items');
+  }
 }
 const showEventEditor = ref(false);
 const showArrangeDrawer = ref(false);
@@ -2232,7 +2257,6 @@ const activeTitle = computed(() => {
     vendorWorkspace: selectedVendor.value?.displayName || 'Vendor Workspace',
     eventWorkspace: selectedEventForItems.value?.displayName || 'Event Workspace',
     qrSheet: selectedEventForItems.value ? `Print Studio — ${selectedEventForItems.value.displayName}` : 'Print Studio',
-    analytics: selectedAnalyticsItem.value ? itemLabel(selectedAnalyticsItem.value) : 'Item Analytics',
     preview: selectedMenuForItems.value ? `${selectedMenuForItems.value.displayName} Preview` : 'Menu Preview',
   };
   return contextual[activeSection.value] || sections.find((section) => section.key === activeSection.value)?.label || 'Admin';
@@ -2243,7 +2267,6 @@ const activeSubtitle = computed(() => {
     vendors:        'Create vendors, activate contact cards, and generate vendor QR mappings.',
     vendorWorkspace:'Manage vendor details, contact-card product, and reusable ownership context.',
     inventory:      'Items for the selected vendor across all menus.',
-    analytics:      'Inspect where an item is used across events and menus.',
     designer:       'Build and manage vendor menus. Items live here — not as a separate section.',
     preview:        'Review the menu as guests will see it before activating the event.',
     publish:        'Review event setup and activate when ready.',
@@ -2451,7 +2474,7 @@ function clearItemFilters() {
 function isNavActive(section: SectionKey) {
   if (activeSection.value === section) return true;
   // sub-sections roll up to their parent nav item
-  if ((activeSection.value === 'analytics' || activeSection.value === 'inventory') && section === 'designer') return true;
+  if (activeSection.value === 'inventory' && section === 'designer') return true;
   if ((activeSection.value === 'eventWorkspace' || activeSection.value === 'qrSheet') && section === 'events') return true;
   if (activeSection.value === 'vendorWorkspace' && section === 'vendors') return true;
   if (activeSection.value === 'preview' && section === 'designer') return true;
@@ -2464,7 +2487,6 @@ const BACK_DEST: Partial<Record<SectionKey, { label: string; path: string }>> = 
   qrSheet:         { label: 'Events',        path: '/dashboard/events' },
   publish:         { label: 'Events',        path: '/dashboard/events' },
   preview:         { label: 'Designer',      path: '/dashboard/menus/studio' },
-  analytics:       { label: 'Designer',      path: '/dashboard/menus/studio' },
   inventory:       { label: 'Designer',      path: '/dashboard/menus/studio' },
   items:           { label: 'Designer',      path: '/dashboard/menus/studio' },
   vendors:         { label: 'Dashboard',     path: '/dashboard/home' },
@@ -2579,6 +2601,7 @@ function hydrateRouteContext() {
   }
 
   selectedAnalyticsItemId.value = itemId || null;
+  if (itemId) itemAnalyticsDrawerOpen.value = true;
 }
 
 function fillVendorSlug() {
@@ -3203,7 +3226,7 @@ function itemUsageTitle(itemId?: number) {
 function openItemAnalytics(itemId?: number) {
   if (!itemId) return;
   selectedAnalyticsItemId.value = itemId;
-  router.push(`/dashboard/items/${itemId}`);
+  itemAnalyticsDrawerOpen.value = true;
 }
 
 function buildItemTree(flatItems: ItemRow[]) {
