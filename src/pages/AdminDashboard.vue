@@ -1632,6 +1632,18 @@
               <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
             </label>
             <label>
+              Image URL <small class="muted">(direct link to image, optional)</small>
+              <input
+                v-model.trim="itemDraft.image"
+                class="form-control"
+                type="url"
+                placeholder="https://example.com/photo.jpg"
+              />
+              <div v-if="itemDraft.image" class="image-preview mt-2">
+                <img :src="itemDraft.image" alt="Preview" class="item-img-preview" @error="($event.target as HTMLImageElement).style.display='none'" />
+              </div>
+            </label>
+            <label>
               Tag <small class="muted">(type freely, or tap a suggestion)</small>
               <div class="tag-combobox">
                 <input
@@ -6267,6 +6279,8 @@ td a {
 }
 .item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
 .item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
+.image-preview { line-height: 0; }
+.item-img-preview { border-radius: 8px; max-height: 120px; max-width: 100%; object-fit: cover; border: 1px solid #e6ddd2; }
 
 .tag-combobox {
   position: relative;
