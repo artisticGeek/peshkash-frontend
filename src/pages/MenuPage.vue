@@ -1,6 +1,13 @@
 <template>
   <Navbar />
-  
+
+  <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
+  <LoginModal
+    v-model="loginModalOpen"
+    no-dismiss
+    @success="onLoginSuccess"
+  />
+
   <!-- Loading State -->
   <div v-if="isLoading" class="container py-5">
     <div class="text-center">
@@ -116,12 +123,23 @@ import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import MenuTree from '../components/MenuTree.vue'
+import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
+
+// Auth & login gate
+const authStore = useAuthStore()
+const loginModalOpen = ref(false)
+const isLoggedIn = computed(() => authStore.isLoggedIn)
+
+function onLoginSuccess() {
+  loginModalOpen.value = false
+}
 
 const analytics = useAnalytics()
 
@@ -208,8 +226,12 @@ onMounted(async () => {
     
     const data = await res.json()
     menuData.value = data
-    console.log('Menu data loaded:', data)
-    // Track menu page view
+    // If the vendor requires login and the user isn't logged in, show the modal.
+    // No redirect — just gate the content; user stays on this page.
+    if (data?.vendor?.requireLogin && !isLoggedIn.value) {
+      loginModalOpen.value = true
+    }
+    // Track menu page view (fires regardless of login state)
     analytics.track('menu_view', {
       vendorId: data?.vendor?.id,
       eventId: data?.event?.id,

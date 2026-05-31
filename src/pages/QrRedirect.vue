@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { API_BASE_URL } from '../config';
 import { gtagEvent } from '../utils/ga';
@@ -17,17 +17,18 @@ const loading = ref(true);
 const error = ref(false);
 const errorMessage = ref('');
 
-onMounted(async () => {
-  const qrHash = route.params.qrHash as string;
-  if (!qrHash) {
-    errorMessage.value = 'QR hash not found in route.';
-    error.value = true;
-    loading.value = false;
-    return;
-  }
+async function resolveQr(qrHash: string) {
+  loading.value = true;
+  error.value = false;
+  errorMessage.value = '';
 
   try {
-    const apiResponse = await fetch(`${API_BASE_URL}/details/${qrHash}`);
+    // Add timestamp to bust any HTTP/CDN caching so every scan reaches the server
+    // (the server records a QR scan event on each request).
+    const apiResponse = await fetch(
+      `${API_BASE_URL}/details/${qrHash}?t=${Date.now()}`,
+      { cache: 'no-store' },
+    );
 
     if (apiResponse.ok) {
       const data = await apiResponse.json();
@@ -51,5 +52,25 @@ onMounted(async () => {
     error.value = true;
     loading.value = false;
   }
+}
+
+onMounted(() => {
+  const qrHash = route.params.qrHash as string;
+  if (!qrHash) {
+    errorMessage.value = 'QR hash not found in route.';
+    error.value = true;
+    loading.value = false;
+    return;
+  }
+  resolveQr(qrHash);
 });
+
+// Handle same-component re-use: if Vue Router reuses this instance
+// (e.g. navigating from one /:qrHash to another), re-fire the scan.
+watch(
+  () => route.params.qrHash,
+  (newHash, oldHash) => {
+    if (newHash && newHash !== oldHash) resolveQr(newHash as string);
+  },
+);
 </script>

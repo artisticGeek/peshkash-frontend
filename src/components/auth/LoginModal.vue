@@ -23,16 +23,17 @@
       <div
         v-if="modelValue"
         class="lm-backdrop"
-        @click.self="handleClose"
+        :class="{ 'lm-backdrop--nodismiss': noDismiss }"
+        @click.self="noDismiss ? shakeCard() : handleClose()"
         aria-modal="true"
         role="dialog"
         aria-label="Sign in"
       >
         <Transition name="lm-scale" appear>
-          <div v-if="modelValue" class="lm-card">
+          <div v-if="modelValue" class="lm-card" :class="{ 'lm-card--shaking': shaking }">
 
-            <!-- Close button -->
-            <button class="lm-close" @click="handleClose" aria-label="Close">
+            <!-- Close button (hidden when noDismiss) -->
+            <button v-if="!noDismiss" class="lm-close" @click="handleClose" aria-label="Close">
               <i class="bi bi-x-lg"></i>
             </button>
 
@@ -133,6 +134,8 @@ import type { Role } from '../../stores/auth';
 const props = defineProps<{
   modelValue: boolean;
   allowSkip?: boolean;
+  /** When true: hides close button, backdrop click shakes instead of closing */
+  noDismiss?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -146,6 +149,7 @@ const { step, phone, loading, error, sendOtp, verifyOtp, reset } = loginState;
 
 const phoneInputRef = ref<HTMLInputElement | null>(null);
 const otpInputRef   = ref<HTMLInputElement | null>(null);
+const shaking       = ref(false);
 
 // Strip +91 prefix from the composable's phone ref for display
 const rawPhone = computed({
@@ -182,6 +186,13 @@ function changeNumber() {
 
 function handleClose() {
   emit('update:modelValue', false);
+}
+
+/** Visual feedback when user taps backdrop on a non-dismissible modal */
+function shakeCard() {
+  if (shaking.value) return;
+  shaking.value = true;
+  setTimeout(() => { shaking.value = false; }, 500);
 }
 
 // Reset state and focus phone input when modal opens
@@ -442,4 +453,19 @@ watch(
 /* ── Spinner ────────────────────────────────────────────────────────────────── */
 .spin { animation: spin 0.8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Shake (noDismiss visual feedback) ─────────────────────────────────────── */
+.lm-card--shaking {
+  animation: lm-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes lm-shake {
+  10%, 90%  { transform: translateX(-2px); }
+  20%, 80%  { transform: translateX( 4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60%  { transform: translateX( 6px); }
+}
+
+/* Cursor hint: clicking a locked backdrop won't close */
+.lm-backdrop--nodismiss { cursor: not-allowed; }
+.lm-backdrop--nodismiss .lm-card { cursor: default; }
 </style>

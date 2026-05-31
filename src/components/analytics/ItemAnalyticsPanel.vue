@@ -10,9 +10,14 @@
         <p v-if="lastActivityLabel" class="text-muted small mb-0">Last activity: {{ lastActivityLabel }}</p>
         <p v-else class="text-muted small mb-0">No activity recorded yet</p>
       </div>
-      <div class="btn-group btn-group-sm">
-        <button v-for="r in RANGES" :key="r.value" type="button" class="btn btn-outline-secondary"
-          :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
+      <div class="d-flex gap-2 align-items-center">
+        <div class="btn-group btn-group-sm">
+          <button v-for="r in RANGES" :key="r.value" type="button" class="btn btn-outline-secondary"
+            :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading" title="Refresh">
+          <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
+        </button>
       </div>
     </div>
 
@@ -64,7 +69,8 @@
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="fw-semibold mb-2 small text-uppercase text-muted">Views Over Time</h6>
-              <ScanChart :data="data.viewsPerDay" label="Item Views" />
+              <!-- Teal accent to distinguish item-views line from QR-scan charts -->
+              <ScanChart :data="data.viewsPerDay" label="Item Views" accent-rgb="20, 184, 166" />
             </div>
           </div>
         </div>
@@ -190,4 +196,6 @@ onMounted(load);
 .item-analytics-panel { padding: 0.25rem 0; }
 .text-purple { color: #7c3aed; }
 .btn-group .btn.active { background-color: var(--bs-primary); color: #fff; border-color: var(--bs-primary); }
+.spin { animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

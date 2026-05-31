@@ -140,17 +140,41 @@
       </div>
     </div>
   </div>
+
+  <!-- Login gate — Teleports to <body>, so placement here doesn't affect layout.
+       noDismiss: no close button, backdrop click shakes the card.
+       Page content blurs behind the backdrop. No redirect on any outcome. -->
+  <LoginModal
+    v-model="loginModalOpen"
+    no-dismiss
+    @success="onLoginSuccess"
+  />
 </template>
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
+import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const vendorName = route.params.vendorName as string
+
+// Auth & login gate
+const authStore = useAuthStore()
+const loginModalOpen = ref(false)
+
+// Computed: true once logged in — authStore.login() is called by useOtpLogin internally
+const isLoggedIn = computed(() => authStore.isLoggedIn)
+
+// Called after successful OTP verification; auth store is already updated by then.
+// Modal closes itself — nothing extra needed here.
+function onLoginSuccess() {
+  loginModalOpen.value = false
+}
 
 // Analytics — context is filled after data loads
 const analytics = useAnalytics()
@@ -361,7 +385,12 @@ onMounted(async () => {
       throw new Error(`Failed to load vendor card: ${res.status}`)
     }
     vendorData.value = await res.json()
-    // Track vendor contact page view
+    // If the vendor requires login and the user isn't logged in, open the modal.
+    // We never redirect — just gate the content behind the modal.
+    if (vendorData.value?.requireLogin && !isLoggedIn.value) {
+      loginModalOpen.value = true
+    }
+    // Track vendor contact page view (fires regardless of login state)
     analytics.track('vendor_contact_view', { vendorId: vendorData.value?.id })
   } catch (err: any) {
     error.value = err.message || 'An error occurred while loading the vendor card'
