@@ -69,7 +69,8 @@
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="fw-semibold mb-2 small text-uppercase text-muted">Views Over Time</h6>
-              <ScanChart :data="data.viewsPerDay" label="Item Views" />
+              <!-- Teal accent to distinguish item-views line from QR-scan charts -->
+              <ScanChart :data="data.viewsPerDay" label="Item Views" accent-rgb="20, 184, 166" />
             </div>
           </div>
         </div>
