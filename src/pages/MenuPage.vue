@@ -151,16 +151,19 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const selectedFilter = ref('All')
 
-// Check if event is currently active
+// Check if event is currently active.
+// Rule: no start/end times = perpetually active (most menus are evergreen).
+// Only show "expired" when BOTH times are set AND the window has passed.
 const isEventActive = computed(() => {
-  if (!menuData.value?.event) return false
-  
+  if (!menuData.value?.event) return true // data not loaded yet — don't flash warning
+
   const now = new Date()
   const startTime = menuData.value.event.startTime ? new Date(menuData.value.event.startTime) : null
   const endTime = menuData.value.event.endTime ? new Date(menuData.value.event.endTime) : null
-  
-  if (!startTime || !endTime) return false
-  
+
+  // No time window configured → always active
+  if (!startTime || !endTime) return true
+
   return now >= startTime && now <= endTime
 })
 

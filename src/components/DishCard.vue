@@ -5,15 +5,15 @@
     role="button"
     tabindex="0"
   >
-    <div class="card-body d-flex align-items-center py-2 px-3">
+    <div class="card-body d-flex align-items-center py-2 px-3 gap-2">
       <!-- Veg/Non-veg Indicator -->
-      <i 
-        v-if="dish.isVeg !== undefined" 
-        class="bi bi-circle-fill me-2" 
+      <i
+        v-if="dish.isVeg !== undefined"
+        class="bi bi-circle-fill"
         :class="dish.isVeg ? 'text-success' : 'text-danger'"
         :aria-label="dish.isVeg ? 'Vegetarian' : 'Non-vegetarian'"
       ></i>
-      
+
       <!-- Dish Name and Description -->
       <div class="flex-grow-1">
         <div class="fw-bold">{{ dish.displayName || dish.name }}</div>
@@ -21,6 +21,15 @@
           {{ truncatedDescription }}
         </small>
       </div>
+
+      <!-- Thumbnail (shown when image URL is set) -->
+      <img
+        v-if="dish.image"
+        :src="dish.image"
+        :alt="dish.displayName || dish.name"
+        class="dish-card-thumb"
+        loading="lazy"
+      />
       
       <!-- Tags/Badges -->
       <span 
@@ -58,6 +67,7 @@ interface Dish {
   description?: string;
   itemType: string;
   isVeg?: boolean;
+  image?: string | null;
   tags?: string[];
   spiceLevel?: number;
 }
@@ -103,5 +113,14 @@ const navigateToDetail = () => {
 
 .text-truncate {
   max-width: 250px;
+}
+
+.dish-card-thumb {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.07);
 }
 </style>
