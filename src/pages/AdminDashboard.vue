@@ -1925,7 +1925,7 @@ const selectedAnalyticsItemId = ref<number | null>(null);
 const draggedLibraryItemId = ref<number | null>(null);
 const draggedDesignedItemId = ref<number | null>(null);
 const showItemDrawer = ref(false);
-const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', parentId: null as number | null });
+const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', image: '', parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
@@ -3096,7 +3096,7 @@ function uniqueDraftSlug(base: string) {
 
 function openItemDrawer(parentId: number | null) {
   if (!selectedMenuForItems.value) { setError(new Error('Select a working menu first')); return; }
-  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', parentId: parentId ?? null });
+  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', image: '', parentId: parentId ?? null });
   showItemDrawer.value = true;
 }
 
@@ -3113,6 +3113,7 @@ function saveItemFromDrawer() {
       type: itemDraft.type,
       enumType: itemDraft.type === 'item' ? itemDraft.enumType : '',
       description: itemDraft.type === 'item' ? itemDraft.description : '',
+      image: itemDraft.type === 'item' ? itemDraft.image : '',
       parentId: itemDraft.parentId ?? undefined,
       isActive: true,
     });
