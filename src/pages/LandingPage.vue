@@ -1,1592 +1,1255 @@
 <template>
   <div class="site">
-    <Navbar />
 
-    <!-- ═══════════════════════ HERO ═══════════════════════ -->
-    <section class="hero" id="hero">
-      <!-- Three.js canvas — behind everything -->
-      <canvas ref="canvasRef" class="hero-canvas" aria-hidden="true"></canvas>
+    <!-- THREE.JS NETWORK — fixed, full viewport, z:0 -->
+    <canvas ref="cvs" class="net-canvas" aria-hidden="true"></canvas>
 
-      <div class="hero-content">
-        <div class="hero-pill rev">
-          <span class="h-dot"></span>
-          Digital insights · Offline businesses · India
-        </div>
+    <div class="page">
+      <Navbar />
 
-        <h1 class="hero-h1 rev" style="--d:80ms">
-          Physical presence.<br>
-          <span class="h-em">Digital<br>intelligence.</span>
-        </h1>
+      <!-- ═══════ HERO ═══════════════════════════════════════ -->
+      <section class="hero" id="hero">
+        <div class="hero-content">
+          <p class="kicker scene-in" style="--d:0s">
+            <span class="kdot"></span> The QR revolution · For every offline business
+          </p>
 
-        <p class="hero-p rev" style="--d:180ms">
-          Every customer who scans your QR becomes a data point. Every interaction, a connection.
-          Peshkash gives any offline business — bakeries, art studios, market stalls, exhibitions —
-          a digital identity that grows with every scan.
-        </p>
+          <h1 class="h1 scene-in" style="--d:.1s">
+            Offline. Unseen.<br><em>Not anymore.</em>
+          </h1>
 
-        <div class="hero-btns rev" style="--d:260ms">
-          <a href="https://wa.me/+919041716953" target="_blank" rel="noopener" class="cta-wa">
-            <i class="bi bi-whatsapp"></i> Get started free
-          </a>
-          <a href="#how" class="cta-down">
-            See how it works <i class="bi bi-arrow-down"></i>
-          </a>
-        </div>
+          <p class="hero-p scene-in" style="--d:.35s">
+            Every customer who walks past you is a lead you're losing. One QR turns
+            every single scan into a customer you keep — no website, no app, just a scan.
+          </p>
 
-        <!-- live counter strip -->
-        <div class="hero-strip rev" style="--d:340ms">
-          <div class="h-stat"><b>₹49</b><span>QR plate</span></div>
-          <div class="h-sep"></div>
-          <div class="h-stat"><b>&lt;2s</b><span>page load</span></div>
-          <div class="h-sep"></div>
-          <div class="h-stat"><b>0</b><span>apps needed</span></div>
-          <div class="h-sep"></div>
-          <div class="h-stat"><b>∞</b><span>reuses</span></div>
-        </div>
-      </div>
-
-      <!-- right: scan → insights visual -->
-      <div class="hero-right rev" style="--d:200ms" aria-hidden="true">
-        <div class="scan-scene">
-          <div class="ss-qr">
-            <img src="../assets/peshkashqrhero.png" alt="" class="ss-qr-img" />
-            <span class="ss-live"><span class="live-pulse"></span> Live scan</span>
+          <div class="hero-actions scene-in" style="--d:.5s">
+            <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
+               class="cta-wa" @mouseenter="onCtaHover" @mouseleave="onCtaLeave">
+              <i class="bi bi-whatsapp"></i> Get started free
+            </a>
+            <a href="#picker" class="cta-soft">See it in action ↓</a>
           </div>
 
-          <div class="ss-beam">
-            <svg width="56" height="120" viewBox="0 0 56 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="beamGrad" x1="28" y1="0" x2="28" y2="120" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stop-color="#e07830" stop-opacity="0"/>
-                  <stop offset="50%" stop-color="#e07830" stop-opacity="0.8"/>
-                  <stop offset="100%" stop-color="#e07830" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <rect x="27" y="0" width="2" height="120" fill="url(#beamGrad)"/>
-              <circle cx="28" cy="60" r="4" fill="#e07830" opacity="0.9"/>
-            </svg>
+          <div class="biz-tags scene-in" style="--d:.65s">
+            <span v-for="t in bizTags" :key="t.label"
+                  class="btag"
+                  @mouseenter="setHoverColor(t.label)"
+                  @mouseleave="clearHoverColor"><i class="bi" :class="t.icon"></i> {{ t.label }}</span>
           </div>
+        </div>
 
-          <div class="ss-phone">
-            <div class="ss-phone-shell">
-              <div class="ss-notch"></div>
-              <img src="../assets/peshkash-demo-section.png" alt="" class="ss-screen" />
-            </div>
-            <div class="ss-insights">
-              <div class="ss-row"><i class="bi bi-eye-fill"></i><span>47 views today</span></div>
-              <div class="ss-row"><i class="bi bi-person-fill"></i><span>12 new contacts</span></div>
-              <div class="ss-row"><i class="bi bi-graph-up-arrow"></i><span>↑ 23% this week</span></div>
+        <!-- QR scan demo — 3D perspective, with its own parallax layer -->
+        <div class="hero-demo scene-in dir-r" style="--d:.3s" aria-hidden="true">
+          <div class="hero-demo-inner" ref="heroDemoInnerRef">
+            <div class="demo-wrap" @click="scanned = !scanned">
+              <div class="demo-qr-card" :class="{ scanned }">
+                <img :src="qrImg" alt="" class="demo-qr-img" />
+                <span class="demo-scan-label">{{ scanned ? 'tap to reset' : 'tap to scan ✦' }}</span>
+              </div>
+              <div class="demo-connector" :class="{ show: scanned }"></div>
+              <Transition name="phone-reveal">
+                <div v-if="scanned" class="demo-phone">
+                  <div class="dph-shell">
+                    <div class="dph-notch"></div>
+                    <img :src="menuImg" alt="" class="dph-screen" />
+                    <div class="dph-insights">
+                      <div><i class="bi bi-eye-fill"></i> <span class="count-num" data-to="47">0</span> scans</div>
+                      <div><i class="bi bi-graph-up-arrow"></i> <span class="count-num" data-to="23">0</span>% growth</div>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
             </div>
           </div>
         </div>
 
-        <!-- floating ambient chips -->
-        <div class="f-chip fc-1"><i class="bi bi-palette2"></i> Artists</div>
-        <div class="f-chip fc-2"><i class="bi bi-bag-heart"></i> Bakers</div>
-        <div class="f-chip fc-3"><i class="bi bi-shop"></i> Vendors</div>
-        <div class="f-chip fc-4"><i class="bi bi-camera"></i> Studios</div>
-      </div>
+      </section>
 
-      <div class="hero-scroll-hint" aria-hidden="true">
-        <span>Scroll</span>
-        <div class="scroll-line"></div>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ TICKER ═══════════════════════ -->
-    <div class="ticker" aria-hidden="true">
-      <div class="ticker-track">
-        <template v-for="n in 5" :key="n">
-          <span>Digital insights</span><em>·</em>
-          <span>Offline businesses</span><em>·</em>
-          <span>Artists · Bakers · Vendors</span><em>·</em>
-          <span>No website needed</span><em>·</em>
-          <span>QR plates from ₹49</span><em>·</em>
-          <span>Live in 24 hours</span><em>·</em>
-        </template>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════ BIG STATEMENT ═══════════════════════ -->
-    <section class="statement" id="what">
-      <div class="statement-inner">
-        <p class="s-label rev">The idea</p>
-        <h2 class="s-h2 rev" style="--d:60ms">
-          Every scan is a<br>data point.<br>
-          <em>Make them count.</em>
-        </h2>
-        <p class="s-body rev" style="--d:140ms">
-          Your customers are already using their phones when they visit you. Peshkash makes that moment
-          digital — a scan that shows them your world, and shows you what they care about.
-          No website. No app. Just a QR that thinks.
-        </p>
-      </div>
-      <div class="s-img-wrap rev" style="--d:100ms">
-        <img src="../assets/peshkash-demo-section-placed.png" alt="QR in the real world" class="s-img" />
-        <div class="s-img-float s-if-a">
-          <i class="bi bi-qr-code-scan"></i> Scan
-        </div>
-        <div class="s-img-float s-if-b">
-          <i class="bi bi-graph-up-arrow"></i> Insight
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ FOR EVERYONE ═══════════════════════ -->
-    <section class="forall" id="forall">
-      <div class="forall-head rev">
-        <p class="s-label-light">Every offline business</p>
-        <h2 class="forall-h2">This is for<br><em>you.</em></h2>
-      </div>
-
-      <div class="forall-list">
-        <div class="fl-item rev" style="--d:0ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">baker</strong>
-          <span class="fl-rest">who wants every customer to remember the recipe they loved — and find you again.</span>
-        </div>
-        <div class="fl-item rev" style="--d:50ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">artist</strong>
-          <span class="fl-rest">who sells at weekend markets and wants visitors to buy prints long after the market closes.</span>
-        </div>
-        <div class="fl-item rev" style="--d:100ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">caterer</strong>
-          <span class="fl-rest">who runs 30 events a year and wants the same QR plate working at every single one.</span>
-        </div>
-        <div class="fl-item rev" style="--d:150ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">studio owner</strong>
-          <span class="fl-rest">who wants students to book classes, see the schedule, and share it with friends — from one scan.</span>
-        </div>
-        <div class="fl-item rev" style="--d:200ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">dhaba</strong>
-          <span class="fl-rest">that's been here 40 years and is finally ready to be discovered by people 10km away.</span>
-        </div>
-        <div class="fl-item rev" style="--d:250ms">
-          <span class="fl-for">For the</span>
-          <strong class="fl-who">exhibition stall</strong>
-          <span class="fl-rest">whose visitors leave forgetting them — until the QR on their table makes them unforgettable.</span>
-        </div>
-        <div class="fl-item rev" style="--d:300ms">
-          <span class="fl-for">For</span>
-          <strong class="fl-who">everyone</strong>
-          <span class="fl-rest">who shows up in person, but disappears the moment their customer walks out the door.</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ WHAT YOU BUILD ═══════════════════════ -->
-    <section class="products" id="products">
-
-      <div class="prod-row prod-dark">
-        <div class="prod-n" aria-hidden="true">01</div>
-        <div class="prod-copy">
-          <p class="s-label">Digital Pages</p>
-          <h3 class="prod-h3">Your world,<br>one scan away.</h3>
-          <p class="prod-p">Menus, product catalogues, artist portfolios, class schedules, ingredient lists — whatever your business needs people to see, we build it into a beautiful, scannable page. Updated by us, whenever you need.</p>
-          <ul class="prod-list">
-            <li><i class="bi bi-check2"></i> Rich photos, descriptions, categories</li>
-            <li><i class="bi bi-check2"></i> Works on every phone, no download</li>
-            <li><i class="bi bi-check2"></i> Update any time — live within hours</li>
-          </ul>
-        </div>
-        <div class="prod-visual">
-          <img src="../assets/peshkash-demo-section.png" alt="Digital page example" class="prod-img" />
-        </div>
-      </div>
-
-      <div class="prod-row prod-cream">
-        <div class="prod-n prod-n-cream" aria-hidden="true">02</div>
-        <div class="prod-visual prod-visual-flip">
-          <img src="../assets/peshkash-demo-section-placed.png" alt="QR plate at an event" class="prod-img" />
-        </div>
-        <div class="prod-copy">
-          <p class="s-label-dark">Contact Intelligence</p>
-          <h3 class="prod-h3-dark">Your business card,<br>but it thinks.</h3>
-          <p class="prod-p-dark">A permanent digital identity — phone, email, location, hours, your story. Customers scan, save your contact, and share you. Every scan is logged. You see who's interested, when, and how often.</p>
-          <ul class="prod-list-dark">
-            <li><i class="bi bi-check2"></i> Always-live vendor profile</li>
-            <li><i class="bi bi-check2"></i> Shareable across WhatsApp, Instagram</li>
-            <li><i class="bi bi-check2"></i> Scan insights: views, unique visitors</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="prod-row prod-dark">
-        <div class="prod-n" aria-hidden="true">03</div>
-        <div class="prod-copy">
-          <p class="s-label">Reusable QR Plates</p>
-          <h3 class="prod-h3">One plate.<br>Every experience.<br>Forever.</h3>
-          <p class="prod-p">Print a QR plate once — from ₹49 — and it works at every future event, every season, every new menu. We update what the QR shows. The plate stays the same.</p>
-          <ul class="prod-list">
-            <li><i class="bi bi-check2"></i> From ₹49, one-time purchase</li>
-            <li><i class="bi bi-check2"></i> Activate different content per event</li>
-            <li><i class="bi bi-check2"></i> Elegant printed plates, premium finish</li>
-          </ul>
-        </div>
-        <div class="prod-visual prod-qr-visual">
-          <div class="qr-plate-mock">
-            <img src="../assets/peshkashqrhero.png" alt="QR plate" class="qr-plate-img" />
-            <div class="qr-plate-label">Reuse this · Forever</div>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ═══════════════════════ HOW ═══════════════════════ -->
-    <section class="how" id="how">
-      <div class="how-inner">
-        <div class="how-head">
-          <p class="s-label rev">How it works</p>
-          <h2 class="how-h2 rev" style="--d:60ms">
-            Three steps.<br>That's the whole story.
+      <!-- ═══════ FOMO / MARKETING PUNCH ═══════════════════════ -->
+      <section class="section fomo-sec" id="fomo">
+        <div class="fomo-intro">
+          <p class="lbl scene-in dir-d" style="--d:0s">The math nobody tells you</p>
+          <h2 class="h2 fomo-h2 scene-in dir-d" style="--d:.06s">
+            Every customer who doesn't scan<br>is a lead you'll <em>never see again.</em>
           </h2>
+          <p class="fomo-sub scene-in dir-d" style="--d:.12s">
+            The world went digital years ago. AI is rewriting how people discover
+            businesses overnight. If you're not scannable, you're invisible —
+            and someone else just got the sale.
+          </p>
         </div>
-        <div class="how-steps">
-          <div class="how-step rev" style="--d:80ms">
-            <div class="step-n">1</div>
-            <h4>Tell us about your business</h4>
-            <p>WhatsApp us what you want customers to see — your menu, catalogue, portfolio, schedule. We build your digital page in 24–48 hours.</p>
+
+        <div class="fomo-grid">
+          <div class="fomo-card scene-in dir-l" style="--d:.05s">
+            <span class="fomo-num">1 Scan</span>
+            <span class="fomo-eq">=</span>
+            <span class="fomo-result">1 Lead</span>
           </div>
-          <div class="how-arrow" aria-hidden="true">
-            <svg width="32" height="16" viewBox="0 0 32 16" fill="none"><path d="M0 8h28M20 1l8 7-8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="fomo-card scene-in dir-d" style="--d:.12s">
+            <span class="fomo-num">1 Lead</span>
+            <span class="fomo-eq">=</span>
+            <span class="fomo-result">1 Customer You Didn't Have</span>
           </div>
-          <div class="how-step rev" style="--d:140ms">
-            <div class="step-n">2</div>
-            <h4>Get your QR plate</h4>
-            <p>We print a scannable QR plate for you (from ₹49). Place it anywhere customers will see it — table, wall, packaging, banner.</p>
-          </div>
-          <div class="how-arrow" aria-hidden="true">
-            <svg width="32" height="16" viewBox="0 0 32 16" fill="none"><path d="M0 8h28M20 1l8 7-8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="how-step rev" style="--d:200ms">
-            <div class="step-n">3</div>
-            <h4>Watch your insights grow</h4>
-            <p>Every scan is tracked. Every visitor counted. You see what's working, who's interested, and how your digital presence is growing — all from offline interactions.</p>
+          <div class="fomo-card scene-in dir-r" style="--d:.19s">
+            <span class="fomo-num">1 Missed Scan</span>
+            <span class="fomo-eq">=</span>
+            <span class="fomo-result">Revenue You'll Never Know You Lost</span>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- ═══════════════════════ NUMBERS ═══════════════════════ -->
-    <div class="numbar">
-      <div class="n-item rev" style="--d:0ms"><b>₹49</b><span>QR plate · one time</span></div>
-      <div class="n-sep"></div>
-      <div class="n-item rev" style="--d:60ms"><b>24h</b><span>average setup time</span></div>
-      <div class="n-sep"></div>
-      <div class="n-item rev" style="--d:120ms"><b>&lt;2s</b><span>page load time</span></div>
-      <div class="n-sep"></div>
-      <div class="n-item rev" style="--d:180ms"><b>0</b><span>apps to install</span></div>
-      <div class="n-sep"></div>
-      <div class="n-item rev" style="--d:240ms"><b>∞</b><span>events per plate</span></div>
-    </div>
+        <p class="fomo-tagline scene-in dir-d" style="--d:.25s">
+          Not every business needs a complete website. <em>Sometimes, a simple QR code is enough.</em>
+        </p>
+        <p class="fomo-tagline2 scene-in dir-d" style="--d:.3s">
+          No coder. No designer. No excuse.
+        </p>
+      </section>
 
-    <!-- ═══════════════════════ PRICING ═══════════════════════ -->
-    <section class="pricing" id="pricing">
-      <div class="pricing-head rev">
-        <p class="s-label">Pricing</p>
-        <h2 class="pricing-h2 rev" style="--d:60ms">Pay per event.<br>No subscription. Ever.</h2>
-        <p class="pricing-sub rev" style="--d:100ms">QR plates are a separate one-time purchase. Start small, scale as you grow.</p>
-      </div>
+      <!-- ═══════ BUSINESS PICKER ════════════════════════════ -->
+      <section class="section" id="picker">
+        <div class="text-scrim scene-in dir-l" style="--d:0s">
+          <p class="lbl">A few examples</p>
+          <h2 class="h2">However you sell it<br>— it works.</h2>
+          <p class="sec-sub">These are just examples. Furniture, wine, flowers, repairs, tuition,
+            jewellery, anything — if customers come to you, this is for you too.</p>
+        </div>
 
-      <div class="plans">
-        <div class="plan rev" style="--d:80ms">
-          <span class="plan-name">Starter</span>
-          <div class="plan-price"><sup>₹</sup><b>799</b></div>
-          <span class="plan-when">per session · 4 hours</span>
-          <ul class="plan-list">
-            <li><i class="bi bi-check2"></i> Up to 25 QR targets</li>
-            <li><i class="bi bi-check2"></i> Page setup &amp; onboarding</li>
-            <li><i class="bi bi-check2"></i> Vendor contact card</li>
-            <li><i class="bi bi-check2"></i> Logo design</li>
+        <!-- Pills as network nodes -->
+        <div class="node-pills scene-in dir-d" style="--d:.1s">
+          <button
+            v-for="b in businesses" :key="b.id"
+            class="node-pill"
+            :class="{ active: activeBiz === b.id }"
+            @click="activeBiz = b.id; setParticleAccent(b.color)"
+            @mouseenter="pulseNode(b.id)"
+          >
+            <span class="np-glow"></span>
+            <i class="bi np-icon" :class="b.icon"></i>
+            <span class="np-label">{{ b.label }}</span>
+          </button>
+        </div>
+
+        <Transition name="biz-reveal" mode="out-in">
+          <div v-if="currentBiz" :key="currentBiz.id" class="biz-content">
+            <div class="biz-left">
+              <i class="bi biz-big-emoji" :class="currentBiz.icon"></i>
+              <h3 class="biz-h3">{{ currentBiz.headline }}</h3>
+              <p class="biz-p">{{ currentBiz.copy }}</p>
+              <a :href="`https://wa.me/+919115551110?text=${encodeURIComponent(currentBiz.id === 'other' ? 'Hi! I want to learn how Peshkash can work for my business.' : 'Hi! I run a ' + currentBiz.label + ' and want to learn about Peshkash.')}`"
+                target="_blank" rel="noopener" class="biz-cta">
+                <i class="bi bi-whatsapp"></i> {{ currentBiz.id === 'other' ? 'Tell us what you sell' : `Start as a ${currentBiz.label}` }}
+              </a>
+            </div>
+            <ul class="biz-features">
+              <li v-for="f in currentBiz.features" :key="f" class="biz-feat">
+                <i class="bi bi-arrow-right-circle-fill"></i>{{ f }}
+              </li>
+            </ul>
+          </div>
+          <p v-else class="biz-hint"><i class="bi bi-arrow-up-circle"></i> Pick your type above</p>
+        </Transition>
+      </section>
+
+      <!-- ═══════ HOW IT WORKS ════════════════════════════════ -->
+      <section class="section" id="how">
+        <div class="text-scrim how-intro scene-in dir-l" style="--d:0s">
+          <p class="lbl">How it works</p>
+          <h2 class="h2">Three steps. That's it.</h2>
+        </div>
+        <div class="steps-track">
+          <div v-for="(s, i) in steps" :key="i"
+               class="step-node scene-in"
+               :class="dirClass(i)"
+               :style="`--d:${.1 + i*.12}s`"
+               @mousemove="tilt($event, i)"
+               @mouseleave="untilt(i)"
+               :ref="el => stepRefs[i] = el as HTMLElement">
+            <div class="sn-num">{{ String(i+1).padStart(2,'0') }}</div>
+            <i class="bi sn-icon" :class="s.icon"></i>
+            <h4 class="sn-title">{{ s.title }}</h4>
+            <p class="sn-body">{{ s.body }}</p>
+            <div class="sn-glow"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════ DEMO ════════════════════════════════════════ -->
+      <section class="section demo-section" id="demo">
+        <div class="demo-img-wrap scene-in dir-l" style="--d:0s">
+          <div class="demo-img-inner" ref="demoImgInnerRef">
+            <img :src="placedImg" alt="QR in real life" class="demo-big-img" />
+            <div class="demo-overlay-tag dot-a"><i class="bi bi-qr-code-scan"></i> Scan</div>
+            <div class="demo-overlay-tag dot-b"><i class="bi bi-graph-up-arrow"></i> Insight</div>
+            <div class="demo-overlay-tag dot-c"><i class="bi bi-share-fill"></i> Share</div>
+          </div>
+        </div>
+        <div class="demo-text scene-in dir-r" style="--d:.12s">
+          <p class="lbl">The experience</p>
+          <h2 class="h2">What your customers<br>actually see.</h2>
+          <p class="demo-p">Fast, beautiful, your brand — on any phone in under 2 seconds. No app. No login. Every scan becomes a lead in your hands, not lost in the wind.</p>
+          <ul class="demo-checks">
+            <li v-for="c in demoChecks" :key="c"><i class="bi bi-check2-circle"></i>{{ c }}</li>
           </ul>
-          <a href="#contact" class="plan-btn outline">Get Started</a>
+          <p class="demo-tag">Your shop window just became the internet.</p>
         </div>
+      </section>
 
-        <div class="plan plan-pro rev" style="--d:140ms">
-          <div class="plan-badge">Most Popular</div>
-          <span class="plan-name">Pro</span>
-          <div class="plan-price"><sup>₹</sup><b>1,299</b></div>
-          <span class="plan-when">per session · 6 hours</span>
-          <ul class="plan-list">
-            <li><i class="bi bi-check2-circle"></i> Up to 40 items</li>
-            <li><i class="bi bi-check2-circle"></i> Everything in Starter</li>
-            <li><i class="bi bi-check2-circle"></i> AI-written copy</li>
-            <li><i class="bi bi-check2-circle"></i> Custom QR design</li>
-            <li><i class="bi bi-check2-circle"></i> Live support</li>
-          </ul>
-          <a href="#contact" class="plan-btn fill">Choose Pro</a>
+      <!-- ═══════ FAQ ══════════════════════════════════════════ -->
+      <section class="section faq-sec" id="faq">
+        <div class="faq-head scene-in dir-l" style="--d:0s">
+          <p class="lbl">FAQ</p>
+          <h2 class="h2">Questions?<br><em>Answered.</em></h2>
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-sm">
+            <i class="bi bi-whatsapp"></i> Ask us directly
+          </a>
         </div>
-
-        <div class="plan rev" style="--d:200ms">
-          <span class="plan-name">Business</span>
-          <div class="plan-price-custom">Custom</div>
-          <span class="plan-when">ongoing · bulk</span>
-          <ul class="plan-list">
-            <li><i class="bi bi-check2"></i> Unlimited events</li>
-            <li><i class="bi bi-check2"></i> Custom domain</li>
-            <li><i class="bi bi-check2"></i> Analytics dashboard</li>
-            <li><i class="bi bi-check2"></i> Dedicated manager</li>
-            <li><i class="bi bi-check2"></i> Long-term discounts</li>
-          </ul>
-          <a href="#contact" class="plan-btn outline">Talk to Us</a>
-        </div>
-      </div>
-
-      <div class="plate-strip rev" style="--d:260ms">
-        <i class="bi bi-qr-code fs-4 text-amber"></i>
-        <div>
-          <strong>Physical QR plates from ₹49 — one time, yours forever</strong>
-          <span>Reuse the same plate for every future session. Zero recurring cost.</span>
-        </div>
-        <a href="#contact">Ask us →</a>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ FAQ ═══════════════════════ -->
-    <section class="faq" id="faq">
-      <p class="s-label rev">FAQ</p>
-      <h2 class="faq-h2 rev" style="--d:60ms">Straight answers.</h2>
-      <div class="faq-grid">
-        <div
-          v-for="(q, i) in faqs"
-          :key="i"
-          class="faq-item rev"
-          :style="`--d:${i * 40}ms`"
-          :class="{ open: openQ === i }"
-          @click="openQ = openQ === i ? -1 : i"
-        >
-          <div class="faq-q">{{ q.q }}<i :class="openQ === i ? 'bi bi-dash' : 'bi bi-plus'"></i></div>
-          <p v-show="openQ === i" class="faq-a">{{ q.a }}</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ CONTACT ═══════════════════════ -->
-    <section class="contact" id="contact">
-      <div class="contact-left rev">
-        <p class="s-label-light">Let's talk</p>
-        <h2 class="contact-h2">Make your<br>offline presence<br><em>count.</em></h2>
-        <p class="contact-sub">We do the setup. You run your business. Fastest reply on WhatsApp.</p>
-
-        <a href="https://wa.me/+919041716953" target="_blank" rel="noopener" class="wa-big">
-          <i class="bi bi-whatsapp"></i>
-          <div>
-            <strong>Chat on WhatsApp</strong>
-            <small>Usually replies within the hour</small>
-          </div>
-        </a>
-
-        <div class="contact-links">
-          <a href="tel:+919041716953"><i class="bi bi-telephone-fill"></i> +91-9041716953</a>
-          <a href="mailto:contact@peshkash.app"><i class="bi bi-envelope-fill"></i> contact@peshkash.app</a>
-        </div>
-      </div>
-
-      <div class="contact-form rev" style="--d:100ms">
-        <h4>Send a message</h4>
-        <form action="mailto:contact@peshkash.app" method="post" enctype="text/plain">
-          <div class="f-row">
-            <label><span>Name</span><input name="name" type="text" placeholder="Your name" required /></label>
-            <label><span>Phone</span><input name="phone" type="tel" placeholder="+91 90000 00000" /></label>
-          </div>
-          <label><span>Email</span><input name="email" type="email" placeholder="you@example.com" required /></label>
-          <label>
-            <span>I run a…</span>
-            <select name="type">
-              <option value="">Select</option>
-              <option>Bakery / Food Business</option>
-              <option>Art Studio / Gallery</option>
-              <option>Restaurant / Dhaba</option>
-              <option>Catering Business</option>
-              <option>Hotel / Banquet Hall</option>
-              <option>Exhibition / Market Stall</option>
-              <option>Fitness / Wellness Studio</option>
-              <option>Other offline business</option>
-            </select>
-          </label>
-          <label><span>Message</span><textarea name="message" rows="3" placeholder="Tell us about your business…"></textarea></label>
-          <button type="submit"><i class="bi bi-send-fill"></i> Send Message</button>
-        </form>
-      </div>
-    </section>
-
-    <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
-    <footer class="footer">
-      <div class="footer-inner">
-        <div class="footer-brand">
-          <div class="fb-name">
-            <i class="bi bi-qr-code-scan"></i>
-            <span>Peshkash</span>
-          </div>
-          <p>Digital insights from offline experiences.</p>
-          <div class="fb-social">
-            <a href="https://wa.me/+919041716953" target="_blank" rel="noopener" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
-            <a href="https://instagram.com/peshkash.app" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-            <a href="mailto:contact@peshkash.app" aria-label="Email"><i class="bi bi-envelope"></i></a>
+        <div class="faq-body">
+          <!-- Outer wrapper owns the one-shot scroll-reveal class only — nothing
+               reactive touches it, so the IntersectionObserver's imperative
+               classList.add('in') is never wiped out by a Vue re-render.
+               The inner div owns the click/open toggle, which IS reactive. -->
+          <div v-for="(q,i) in faqs" :key="i" class="faq-item-wrap scene-in dir-r" :style="`--d:${i*.04}s`">
+            <div class="faq-item" :class="{ open: openFaq === i }" @click="openFaq = openFaq===i ? -1 : i">
+              <div class="faq-q">
+                <span>{{ q.q }}</span>
+                <div class="faq-ic" :class="{ r: openFaq===i }">+</div>
+              </div>
+              <div class="faq-ans" :style="openFaq===i ? 'max-height:300px;opacity:1' : 'max-height:0;opacity:0'">
+                <p>{{ q.a }}</p>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="footer-nav">
-          <div class="fn-col">
-            <h6>Product</h6>
-            <a href="/#what">How It Works</a>
-            <a href="/#products">Digital Pages</a>
-            <a href="/#products">Contact Cards</a>
-            <a href="/#pricing">Pricing</a>
-          </div>
-          <div class="fn-col">
-            <h6>Company</h6>
-            <a href="/#faq">FAQ</a>
-            <a href="/#contact">Contact</a>
-            <a href="https://wa.me/+919041716953" target="_blank" rel="noopener">WhatsApp</a>
+      </section>
+
+      <!-- ═══════ CONTACT ══════════════════════════════════════ -->
+      <section class="section contact-sec" id="contact">
+        <div class="ct-left scene-in dir-l" style="--d:0s">
+          <p class="lbl">Let's talk</p>
+          <h2 class="h2 ct-h2">Your offline business<br>deserves<br><em>the power of technology.</em></h2>
+          <p class="ct-p">No pricing tables. Tell us about your business — we'll design the perfect setup.</p>
+          <p class="ct-campaign">A QR is the cheapest marketing you'll ever buy.</p>
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-big">
+            <div class="wab-icon"><i class="bi bi-whatsapp"></i></div>
+            <div><strong>Chat on WhatsApp</strong><small>Usually replies within an hour</small></div>
+          </a>
+          <div class="ct-links">
+            <a href="tel:+919115551110"><i class="bi bi-telephone-fill"></i> +91-9115551110</a>
+            <a href="mailto:contact@peshkash.app"><i class="bi bi-envelope-fill"></i> contact@peshkash.app</a>
           </div>
         </div>
-      </div>
-      <div class="footer-bottom">
-        <span>© {{ new Date().getFullYear() }} Peshkash</span>
-        <span>Digital insights from offline India</span>
-      </div>
-    </footer>
 
-    <!-- Float WA -->
-    <a href="https://wa.me/+919041716953" target="_blank" rel="noopener" class="float-wa" aria-label="WhatsApp">
-      <i class="bi bi-whatsapp"></i>
-    </a>
-    <button v-show="showTop" @click="scrollToTop" class="float-top" aria-label="Back to top">
-      <i class="bi bi-arrow-up"></i>
-    </button>
+        <div class="ct-right scene-in dir-r" style="--d:.12s">
+          <h4>Send a message</h4>
+          <form action="mailto:contact@peshkash.app" method="post" enctype="text/plain">
+            <div class="f2">
+              <label><span>Name</span><input name="name" type="text" placeholder="Your name" required /></label>
+              <label><span>Phone</span><input name="phone" type="tel" placeholder="+91 90000 00000" /></label>
+            </div>
+            <label><span>Email</span><input name="email" type="email" placeholder="you@example.com" required /></label>
+            <label><span>I run a…</span>
+              <select name="type">
+                <option value="">Select</option>
+                <option>Food / Bakery / Restaurant</option>
+                <option>Art / Gallery / Studio</option>
+                <option>Fashion / Furniture / Retail</option>
+                <option>Wine & Spirits</option>
+                <option>Catering / Hotel / Venue</option>
+                <option>Exhibition / Market Stall</option>
+                <option>Services (repairs, tuition, fitness…)</option>
+                <option>Something else entirely</option>
+              </select>
+            </label>
+            <label><span>Message</span>
+              <textarea name="message" rows="3" placeholder="Tell us about your business…"></textarea>
+            </label>
+            <button type="submit"><i class="bi bi-send-fill"></i> Send Message</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- ═══════ FOOTER ══════════════════════════════════════ -->
+      <footer class="footer">
+        <div class="ft-inner">
+          <div class="fb">
+            <div class="fb-brand"><i class="bi bi-qr-code-scan"></i><span>Peshkash</span></div>
+            <p>Digital insights from offline experiences.</p>
+            <div class="fb-social">
+              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i></a>
+              <a href="https://instagram.com/peshkash.app" target="_blank" rel="noopener"><i class="bi bi-instagram"></i></a>
+              <a href="mailto:contact@peshkash.app"><i class="bi bi-envelope"></i></a>
+            </div>
+          </div>
+          <nav class="ft-nav">
+            <div class="fnc"><h6>Product</h6>
+              <a href="/#how">How It Works</a>
+              <a href="/#picker">For My Business</a>
+              <a href="/#faq">FAQ</a>
+            </div>
+            <div class="fnc"><h6>Contact</h6>
+              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener">WhatsApp</a>
+              <a href="tel:+919115551110">+91-9115551110</a>
+            </div>
+          </nav>
+        </div>
+        <div class="ft-bottom">
+          <span>© {{ new Date().getFullYear() }} Peshkash</span>
+          <span>Offline India, going digital</span>
+        </div>
+      </footer>
+    </div><!-- /page -->
+
+    <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="fwa"><i class="bi bi-whatsapp"></i></a>
+    <button v-show="topVisible" @click="scrollTop" class="fup"><i class="bi bi-arrow-up"></i></button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, computed, reactive } from 'vue';
 import Navbar from '../components/Navbar.vue';
 import * as THREE from 'three';
+import qrImg     from '../assets/peshkashqrhero.png';
+import menuImg   from '../assets/peshkash-demo-section.png';
+import placedImg from '../assets/peshkash-demo-section-placed.png';
 
-// ── refs ──────────────────────────────────────────────────
-const canvasRef = ref<HTMLCanvasElement | null>(null);
-const showTop = ref(false);
-const openQ = ref(0);
+// ── refs ───────────────────────────────────────────────────────
+const cvs       = ref<HTMLCanvasElement | null>(null);
+const heroDemoInnerRef = ref<HTMLElement | null>(null);
+const demoImgInnerRef  = ref<HTMLElement | null>(null);
+const topVisible = ref(false);
+const openFaq   = ref(0);
+const scanned   = ref(false);
+const activeBiz = ref<string | null>(null);
+const stepRefs  = reactive<HTMLElement[]>([]);
 
-// ── FAQ data ──────────────────────────────────────────────
-const faqs = [
-  { q: 'Do my customers need to download anything?',
-    a: 'Nothing. They scan with their camera and your page opens in their browser — just like a website. No app, no account, no friction whatsoever.' },
-  { q: 'I\'m a baker / artist, not a restaurant. Does this work for me?',
-    a: 'Absolutely — Peshkash is built for any offline business. Bakers use it for ingredient lists and order links. Artists use it for portfolio pages and print sales. If you have customers who visit in person, Peshkash works for you.' },
-  { q: 'Can I reuse the same QR plate forever?',
-    a: 'Yes. You print once (from ₹49) and we update what the QR points to whenever you need. New menu, new season, new event — same plate, always current.' },
-  { q: 'How quickly can I go live?',
-    a: 'WhatsApp us your content and you\'re usually live in 24–48 hours. For urgent bookings, message us and we\'ll prioritise.' },
-  { q: 'What insights do I actually get?',
-    a: 'You see how many times your QR was scanned, when, and from which pages. Over time, this tells you which products get the most interest, which events drove the most traffic, and how your digital presence is growing.' },
-  { q: 'Is there a long-term contract?',
-    a: 'No subscription for Starter or Pro — you pay per session. The Business plan for high-volume vendors offers long-term agreements at discounted rates.' },
+// ── Three.js accent color (changed by business type) ──────────
+let accentColor = new THREE.Color('#BD945A');
+
+// ── content data ───────────────────────────────────────────────
+const bizTags = [
+  { icon:'bi-cup-hot-fill',  label:'Food' },
+  { icon:'bi-palette-fill',  label:'Art & Decor' },
+  { icon:'bi-bag-fill',      label:'Fashion' },
+  { icon:'bi-house-door-fill', label:'Furniture' },
+  { icon:'bi-cup-fill',      label:'Wine & Spirits' },
+  { icon:'bi-tools',         label:'Services' },
+  { icon:'bi-stars',         label:'+ literally anything' },
 ];
 
-// ── Three.js ──────────────────────────────────────────────
+const businesses = [
+  { id:'baker',      icon:'bi-basket2-fill', label:'Baker',       color:'#D4A87A',
+    headline:'Your recipes, loved beyond the counter.',
+    copy:'Put a QR on every box. Customers scan — ingredients, allergen info, how to reorder — long after the last bite.',
+    features:['Ingredient & allergen pages','Re-order link for regulars','Recipe cards people share on WhatsApp','QR on packaging → repeat customers'] },
+  { id:'artist',     icon:'bi-palette-fill', label:'Artist',      color:'#CBB897',
+    headline:'Your art, discovered even after the market.',
+    copy:'One QR next to any piece. Visitors see your full portfolio, buy prints, commission work — from a market stall or gallery wall.',
+    features:['Full portfolio page','Buy prints / commission link','Your story, process, photos','QR beside any artwork, forever'] },
+  { id:'restaurant', icon:'bi-egg-fried', label:'Restaurant',  color:'#BD945A',
+    headline:'No more printed menus. No more reprint costs.',
+    copy:'A digital menu on every table. Update dishes and prices in seconds — customers always see the latest.',
+    features:['Full menu with photos & tags','Live update — change anything instantly','Allergen & dietary info','One QR per table, forever'] },
+  { id:'studio',     icon:'bi-camera-fill', label:'Studio',      color:'#D4A87A',
+    headline:'Your schedule, portfolio, one scan.',
+    copy:'Show your schedule, booking link, gallery, and contact — all from a QR your clients save and share.',
+    features:['Schedule & booking link','Portfolio gallery','Shareable contact card','New clients via existing shares'] },
+  { id:'stall',      icon:'bi-shop', label:'Market Stall',color:'#CBB897',
+    headline:'Look 10× more professional than the next stall.',
+    copy:'A QR on your banner makes you instantly credible. Customers scan and remember you long after the market ends.',
+    features:['Product catalogue page','WhatsApp order link','Location & hours','Customers save and share you'] },
+  { id:'exhibition', icon:'bi-image-fill', label:'Exhibition',  color:'#BD945A',
+    headline:'Visitors leave. Your presence stays.',
+    copy:'A QR beside your exhibit turns a visitor into a long-term connection — they see your work and share you.',
+    features:['Full catalogue & exhibit details','Your story & statement','Contact & commission link','Scans tracked'] },
+  { id:'other',      icon:'bi-stars', label:'Something else', color:'#9A7240',
+    headline:'Whatever you sell, this still works.',
+    copy:'Furniture, wine, flowers, repair services, tuition classes, jewellery — it doesn\'t matter what\'s on your shelf or your menu. If a customer can walk up and want something, a QR turns that moment into a lead you keep forever.',
+    features:['Your products or services, one scannable page','Capture every walk-in as a lead','Update anytime — no developer needed','Works for literally any offline business'] },
+];
+
+const currentBiz = computed(() => businesses.find(b => b.id === activeBiz.value) ?? null);
+
+const steps = [
+  { icon:'bi-chat-dots-fill',  title:'Tell us your business', body:'WhatsApp your content — menu, portfolio, catalogue. We build your page in 24–48 hours.' },
+  { icon:'bi-qr-code',         title:'Get your QR plate',     body:'We print a quality plate from ₹49. Yours forever — place it anywhere customers look.' },
+  { icon:'bi-graph-up-arrow',  title:'Watch insights grow',   body:'Every scan tracked. Visitors, peak times, popular pages. Offline, finally visible.' },
+];
+
+const demoChecks = ['Works on every phone','Shareable WhatsApp link','Live updates instantly','Scan analytics tracked'];
+
+const faqs = [
+  { q:'Does my customer need to download anything?',
+    a:'Nothing. They scan with their camera and your page opens in their browser — like a website. No app, no account.' },
+  { q:'I don\'t see my business listed above. Does this still work?',
+    a:'Yes — the examples are just a starting point. Furniture stores, wine shops, tuition classes, repair services, jewellers — if you have customers who show up in person, Peshkash works for you.' },
+  { q:'How much does it cost?',
+    a:'WhatsApp us and you\'ll have a custom plan within 24 hours. Most businesses start under ₹1,500 with no subscription.' },
+  { q:'Can I reuse the QR plate forever?',
+    a:'Yes. Print once and we update what it points to anytime. Same plate, always current.' },
+  { q:'What insights do I actually get?',
+    a:'Scan counts, unique visitors, peak times, and which pages get the most views — so you know what\'s working.' },
+];
+
+// ── interactions ───────────────────────────────────────────────
+function setParticleAccent(color: string) {
+  accentColor = new THREE.Color(color);
+}
+function clearHoverColor() { /* mouse left biz tag */ }
+function setHoverColor(_t: string) { /* subtle accent on hover */ }
+function onCtaHover() { /* attract particles toward CTA */ }
+function onCtaLeave() { /* release particles */ }
+function pulseNode(_id: string) { /* node pulse effect */ }
+
+function tilt(e: MouseEvent, i: number) {
+  const el = stepRefs[i]; if (!el) return;
+  const r = el.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width  - 0.5) * 20;
+  const y = ((e.clientY - r.top)  / r.height - 0.5) * -20;
+  el.style.transform = `perspective(900px) rotateX(${y}deg) rotateY(${x}deg) translateY(-6px)`;
+}
+function untilt(i: number) {
+  const el = stepRefs[i]; if (el) el.style.transform = '';
+}
+
+// Alternates entrance direction per index — left / depth / right
+function dirClass(i: number) {
+  return ['dir-l', 'dir-d', 'dir-r'][i % 3];
+}
+
+
+// ── THREE.JS PARTICLE NETWORK ─────────────────────────────────
 let animId = 0;
 let renderer: THREE.WebGLRenderer | null = null;
 
-function initThree(canvas: HTMLCanvasElement) {
-  const W = canvas.clientWidth || window.innerWidth;
-  const H = canvas.clientHeight || window.innerHeight;
+function initNetwork(canvas: HTMLCanvasElement) {
+  const W = window.innerWidth, H = window.innerHeight;
 
-  // Renderer
   renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setSize(W, H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  // Opaque warm cream — canvas IS the page background
+  renderer.setClearColor(new THREE.Color('#F5F2EE'), 1);
 
-  // Scene + Camera
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(65, W / H, 0.1, 100);
-  camera.position.set(0, 0, 4.5);
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 100);
+  camera.position.z = 5;
 
-  // ── Particles ──────────────────────────────────────────
-  const isMobile = window.innerWidth < 768;
-  const COUNT = isMobile ? 1200 : 2800;
+  // ── Particles ────────────────────────────────────────────
+  const N = W < 768 ? 200 : 350; // kept low so O(n²) line-checks stay under 16ms
+  const pPos = new Float32Array(N * 3);
+  const pCol = new Float32Array(N * 3);
+  const pVel = new Float32Array(N * 3);
+  const pOrig = new Float32Array(N * 3);
 
-  const positions = new Float32Array(COUNT * 3);
-  const colors    = new Float32Array(COUNT * 3);
-  const sizes     = new Float32Array(COUNT);
+  // Darker particles so they're visible on the cream background
+  const gold  = new THREE.Color('#9A7240'); // dark amber
+  const gold2 = new THREE.Color('#BD945A'); // medium gold
+  const cream = new THREE.Color('#7A5A30'); // dark warm brown
 
-  const amber  = new THREE.Color('#e07830');
-  const amber2 = new THREE.Color('#f0a060');
-  const white  = new THREE.Color('#ffffff');
+  for (let i = 0; i < N; i++) {
+    // Distribute in a disc — particles fill the viewport plane
+    const ang = Math.random() * Math.PI * 2;
+    const r   = Math.sqrt(Math.random()) * 6;
+    const x   = Math.cos(ang) * r;
+    const y   = Math.sin(ang) * r * 0.65;
+    const z   = (Math.random() - 0.5) * 3;
 
-  for (let i = 0; i < COUNT; i++) {
-    // Spiral galaxy distribution
-    const t     = Math.random();
-    const arm   = Math.floor(Math.random() * 3);
-    const angle = (arm * Math.PI * 2) / 3 + t * Math.PI * 4;
-    const r     = 0.4 + t * 2.8 + Math.random() * 0.5;
-    const spread = (1 - t) * 0.4;
-
-    positions[i * 3]     = Math.cos(angle) * r + (Math.random() - 0.5) * spread;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 0.6;
-    positions[i * 3 + 2] = Math.sin(angle) * r + (Math.random() - 0.5) * spread;
+    pPos[i*3]=x; pPos[i*3+1]=y; pPos[i*3+2]=z;
+    pOrig[i*3]=x; pOrig[i*3+1]=y; pOrig[i*3+2]=z;
 
     const rnd = Math.random();
-    const col = rnd < 0.55 ? amber : rnd < 0.82 ? amber2 : white;
-    colors[i * 3]     = col.r;
-    colors[i * 3 + 1] = col.g;
-    colors[i * 3 + 2] = col.b;
-
-    sizes[i] = Math.random() < 0.05 ? 0.022 : 0.008 + Math.random() * 0.01;
+    const c   = rnd < 0.6 ? gold : rnd < 0.85 ? gold2 : cream;
+    pCol[i*3]=c.r; pCol[i*3+1]=c.g; pCol[i*3+2]=c.b;
   }
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  pGeo.setAttribute('color',    new THREE.BufferAttribute(pCol, 3));
+  // Bolder, more prominent dots — they're the focal point now, not the lines
+  const pMat = new THREE.PointsMaterial({
+    size: 0.052, vertexColors: true,
+    transparent: true, opacity: 0.95,
+    sizeAttenuation: true, depthWrite: false,
+  });
+  const points = new THREE.Points(pGeo, pMat);
+  scene.add(points);
 
-  const mat = new THREE.PointsMaterial({
-    size: 0.012,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.85,
-    sizeAttenuation: true,
+  // ── Line connections (pre-allocated buffer) ────────────────
+  const MAX_LINES = N * 6; // max connections
+  const linePos = new Float32Array(MAX_LINES * 2 * 3);
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  // Dimmer, sparser lines — delicate constellation threads, not a dense mesh
+  const lineMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color('#BD945A'),
+    transparent: true, opacity: 0.09,
     depthWrite: false,
   });
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  scene.add(lines);
 
-  const galaxy = new THREE.Points(geo, mat);
-  scene.add(galaxy);
+  // ── State ──────────────────────────────────────────────────
+  const mouse = { x: 0, y: 0, wx: 0, wy: 0 }; // screen + world coords
+  const camLerp = { x: 0, y: 0 };
+  let scrollY = 0;
+  const CONNECT_DIST = 1.0; // smaller = sparser, more delicate constellation lines
+  const REPEL_DIST   = 1.2; // mouse repulsion radius
 
-  // ── Glow rings ─────────────────────────────────────────
-  function makeRing(radius: number, opacity: number) {
-    const g = new THREE.TorusGeometry(radius, 0.006, 16, 128);
-    const m = new THREE.MeshBasicMaterial({
-      color: amber,
-      transparent: true,
-      opacity,
-      depthWrite: false,
-    });
-    return new THREE.Mesh(g, m);
-  }
+  const onMM = (e: MouseEvent) => {
+    const nx = e.clientX / window.innerWidth  - 0.5;
+    const ny = e.clientY / window.innerHeight - 0.5;
+    mouse.x = nx; mouse.y = ny;
+    // Convert to rough world coords (at z=0 plane, camera at z=5)
+    mouse.wx = nx * 10;
+    mouse.wy = -ny * 6.5;
+  };
+  const onSc = () => { scrollY = window.scrollY; };
+  const onRz = () => {
+    const W2 = window.innerWidth, H2 = window.innerHeight;
+    camera.aspect = W2/H2; camera.updateProjectionMatrix();
+    renderer!.setSize(W2, H2);
+  };
+  window.addEventListener('mousemove', onMM, { passive: true });
+  window.addEventListener('scroll',    onSc, { passive: true });
+  window.addEventListener('resize',    onRz, { passive: true });
 
-  const ring1 = makeRing(0.9, 0.35);
-  const ring2 = makeRing(1.6, 0.18);
-  const ring3 = makeRing(2.4, 0.08);
-  ring2.rotation.x = Math.PI / 4;
-  ring3.rotation.x = -Math.PI / 5;
-  ring3.rotation.z = Math.PI / 6;
-  scene.add(ring1, ring2, ring3);
-
-  // ── Mouse tracking ─────────────────────────────────────
-  const mouse = { x: 0, y: 0 };
-  const cam   = { x: 0, y: 0 };
-
-  function onMouseMove(e: MouseEvent) {
-    mouse.x = (e.clientX / window.innerWidth  - 0.5) * 0.5;
-    mouse.y = (e.clientY / window.innerHeight - 0.5) * 0.35;
-  }
-  window.addEventListener('mousemove', onMouseMove, { passive: true });
-
-  // ── Resize ─────────────────────────────────────────────
-  function onResize() {
-    const W = window.innerWidth;
-    const H = canvas.clientHeight || window.innerHeight;
-    camera.aspect = W / H;
-    camera.updateProjectionMatrix();
-    renderer!.setSize(W, H);
-  }
-  window.addEventListener('resize', onResize, { passive: true });
-
-  // ── Animate ────────────────────────────────────────────
+  // ── Animate ────────────────────────────────────────────────
   let tick = 0;
   function animate() {
     animId = requestAnimationFrame(animate);
     tick++;
-    const t = tick * 0.001;
+    const t    = tick * 0.0007;
+    const prog = scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight);
 
-    // Smooth camera parallax
-    cam.x += (mouse.x - cam.x) * 0.04;
-    cam.y += (-mouse.y - cam.y) * 0.04;
-    camera.position.x = cam.x;
-    camera.position.y = cam.y;
+    // Camera parallax — subtle, follows mouse
+    camLerp.x += (mouse.x * 0.8 - camLerp.x) * 0.04;
+    camLerp.y += (-mouse.y * 0.5 - camLerp.y) * 0.04;
+    camera.position.x = camLerp.x;
+    camera.position.y = camLerp.y;
+    camera.position.z = 5 - prog * 2; // camera moves in on scroll
     camera.lookAt(0, 0, 0);
 
-    // Slow galaxy rotation
-    galaxy.rotation.y = t * 0.06;
+    // ── Particle physics ──────────────────────────────────
+    const pos = pGeo.attributes.position.array as Float32Array;
+    const col = pGeo.attributes.color.array as Float32Array;
 
-    // Pulse rings
-    ring1.rotation.z = t * 0.12;
-    ring2.rotation.z = -t * 0.08;
-    ring3.rotation.y = t * 0.05;
-    (ring1.material as THREE.MeshBasicMaterial).opacity = 0.25 + Math.sin(t * 1.8) * 0.1;
+    for (let i = 0; i < N; i++) {
+      const ix = i*3, iy = i*3+1, iz = i*3+2;
+
+      // Gentle drift — each particle has unique phase
+      const phase = i * 0.37;
+      const drift_x = Math.sin(t * 0.8 + phase) * 0.0008;
+      const drift_y = Math.cos(t * 0.6 + phase * 1.3) * 0.0006;
+
+      // Spring back toward origin
+      const ox = pOrig[ix], oy = pOrig[iy];
+      pVel[ix] += (ox - pos[ix]) * 0.004 + drift_x;
+      pVel[iy] += (oy - pos[iy]) * 0.004 + drift_y;
+
+      // Mouse repulsion
+      const dx = pos[ix] - mouse.wx;
+      const dy = pos[iy] - mouse.wy;
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      if (d < REPEL_DIST && d > 0.01) {
+        const f = (REPEL_DIST - d) / REPEL_DIST * 0.025;
+        pVel[ix] += (dx/d) * f;
+        pVel[iy] += (dy/d) * f;
+      }
+
+      // Damping
+      pVel[ix] *= 0.88;
+      pVel[iy] *= 0.88;
+
+      pos[ix] += pVel[ix];
+      pos[iy] += pVel[iy];
+
+      // Subtle color shift toward accent on hover
+      const distToAccent = d < 2 ? (2-d)/2 : 0;
+      col[ix] += (accentColor.r - col[ix]) * distToAccent * 0.02;
+      col[iy] += (accentColor.g - col[iy]) * distToAccent * 0.02;
+      col[iz] += (accentColor.b - col[iz]) * distToAccent * 0.02;
+    }
+    pGeo.attributes.position.needsUpdate = true;
+    pGeo.attributes.color.needsUpdate = true;
+
+    // ── Connection lines ──────────────────────────────────
+    // Build line segments for nearby particle pairs
+    let lineCount = 0;
+    for (let i = 0; i < N && lineCount < MAX_LINES - 2; i++) {
+      for (let j = i+1; j < N && lineCount < MAX_LINES - 2; j++) {
+        const dx = pos[i*3]   - pos[j*3];
+        const dy = pos[i*3+1] - pos[j*3+1];
+        const dz = pos[i*3+2] - pos[j*3+2];
+        const d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 < CONNECT_DIST * CONNECT_DIST) {
+          const base = lineCount * 6;
+          linePos[base]   = pos[i*3];
+          linePos[base+1] = pos[i*3+1];
+          linePos[base+2] = pos[i*3+2];
+          linePos[base+3] = pos[j*3];
+          linePos[base+4] = pos[j*3+1];
+          linePos[base+5] = pos[j*3+2];
+          lineCount++;
+        }
+      }
+    }
+    lineGeo.attributes.position.needsUpdate = true;
+    lineGeo.setDrawRange(0, lineCount * 2);
+
+    // Line opacity pulses very subtly — dots stay the focal point
+    lineMat.opacity = 0.07 + Math.sin(t * 1.5) * 0.02;
+
+
+    // Continuous scroll parallax on hero QR demo + main demo image —
+    // separate inner elements so this doesn't fight the CSS entrance transition
+    if (heroDemoInnerRef.value) {
+      heroDemoInnerRef.value.style.setProperty('--py', `${Math.min(scrollY * 0.05, 40)}px`);
+    }
+    if (demoImgInnerRef.value) {
+      const r = demoImgInnerRef.value.getBoundingClientRect();
+      const center = r.top + r.height / 2 - window.innerHeight / 2;
+      demoImgInnerRef.value.style.setProperty('--py', `${(-center * 0.05).toFixed(1)}px`);
+    }
 
     renderer!.render(scene, camera);
   }
   animate();
 
-  // cleanup factory
   return () => {
     cancelAnimationFrame(animId);
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('resize', onResize);
-    geo.dispose();
-    mat.dispose();
+    window.removeEventListener('mousemove', onMM);
+    window.removeEventListener('scroll',    onSc);
+    window.removeEventListener('resize',    onRz);
+    pGeo.dispose(); pMat.dispose();
+    lineGeo.dispose(); lineMat.dispose();
     renderer?.dispose();
   };
 }
 
-// ── lifecycle ──────────────────────────────────────────────
-let cleanup: (() => void) | null = null;
+// ── lifecycle ──────────────────────────────────────────────────
+let cleanup: (()=>void)|null = null;
 
-onMounted(() => {
-  // Three.js
-  if (canvasRef.value) {
-    try { cleanup = initThree(canvasRef.value); }
-    catch (e) { console.warn('Three.js init failed, continuing without WebGL', e); }
+onMounted(async () => {
+  // Start Three.js
+  if (cvs.value) {
+    try { cleanup = initNetwork(cvs.value); }
+    catch(e) { console.warn('WebGL unavailable', e); }
   }
 
-  // Scroll reveal
-  const io = new IntersectionObserver(
-    entries => entries.forEach(e => {
+  // Observe all .scene-in elements — hero ones fire immediately since they're in viewport,
+  // below-fold ones animate in as the user scrolls to them
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => {
       if (e.isIntersecting) {
-        const el = e.target as HTMLElement;
-        const d = Number(el.style.getPropertyValue('--d').replace('ms', '') || 0);
-        setTimeout(() => el.classList.add('in'), d);
-        io.unobserve(el);
+        (e.target as HTMLElement).classList.add('in');
+        io.unobserve(e.target);
       }
-    }),
-    { threshold: 0.1 }
-  );
-  document.querySelectorAll<HTMLElement>('.rev').forEach(el => io.observe(el));
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll<HTMLElement>('.scene-in').forEach(el => io.observe(el));
 
-  // Back to top
-  window.addEventListener('scroll', () => { showTop.value = window.scrollY > 500; }, { passive: true });
+  window.addEventListener('scroll', () => { topVisible.value = window.scrollY > 500; }, { passive: true });
 });
 
-onBeforeUnmount(() => { cleanup?.(); });
-
-const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+onBeforeUnmount(() => cleanup?.());
+const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 </script>
 
 <style scoped>
-/* ─── TOKENS ───────────────────────────────────────────── */
+/* ── TOKENS — light/cream theme (matches VendorCardPage palette) ── */
 .site {
-  --ink:    #0a0908;
-  --amber:  #e07830;
-  --amber2: #f0a060;
-  --cream:  #f5ede0;
-  --paper:  #ece4d3;
-  --forest: #0e2518;
-  --w:      #ffffff;
-  --m:      rgba(255,255,255,0.45);
-  --md:     #7a6a50;
+  --g:   #BD945A;  /* product gold */
+  --g2:  #D4A87A;
+  --g3:  #CBB897;
+  --cr:  #F5F2EE;  /* warm cream */
+  --p:   #EBE7E1;  /* slightly darker cream */
+  --dk:  #1a1410;  /* warm dark text (product's text colour) */
+  --sub: #564c40;  /* muted text — darkened from product's #6c6560 for contrast
+                       against the busy particle/QR background */
+  --div: #e6ddd2;  /* dividers */
+  --w:   #ffffff;
+  /* WhatsApp accent re-toned to a warm olive so it sits inside the gold/
+     cream palette instead of popping as a saturated, off-brand emerald */
+  --wa:  #6F8C4F;
+  --wad: #5C7640;
+  color: var(--dk);
   font-family: 'Urbanist', sans-serif;
-  background: var(--ink);
-  overflow-x: hidden;
 }
 
-/* ─── REVEAL ───────────────────────────────────────────── */
-.rev {
+/* Cream fallback — matches canvas clearColor so no flash if WebGL is slow */
+:global(html), :global(body) {
+  background: #F5F2EE;
+  scroll-behavior: smooth;
+}
+:global(html) {
+  /* Guided, section-by-section scroll feel instead of plain continuous scroll.
+     proximity (not mandatory) — only snaps when the user settles near a
+     section boundary, so fast/casual scrolling never feels trapped. */
+  scroll-snap-type: y proximity;
+}
+
+/* ── CANVAS: z-index 0 — sits above html/body bg ─────────── */
+.net-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── PAGE: above canvas ──────────────────────────────────── */
+.page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* ── SCENE ENTRANCE ANIMATIONS ───────────────────────────── */
+/* Content flies in from the background or from the side — not just a fade */
+.scene-in {
   opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transform: perspective(1000px) rotateX(8deg) translateY(50px);
+  transition:
+    opacity   0.85s cubic-bezier(.16,1,.3,1) var(--d,0s),
+    transform 0.85s cubic-bezier(.16,1,.3,1) var(--d,0s),
+    filter    0.85s cubic-bezier(.16,1,.3,1) var(--d,0s);
 }
-.rev.in { opacity: 1; transform: none; }
+/* Pans in from the left, slightly rotated as if turning toward the viewer */
+.scene-in.dir-l { transform: perspective(1100px) translateX(-100px) rotateY(16deg); }
+/* Pans in from the right */
+.scene-in.dir-r { transform: perspective(1100px) translateX(100px) rotateY(-16deg); }
+/* Emerges from the depth of the particle field — scales up out of a blur */
+.scene-in.dir-d { transform: perspective(1100px) scale(0.78) translateY(55px); filter: blur(10px); }
+/* .in always wins regardless of which dir-* variant set the "from" state */
+.scene-in.in {
+  opacity: 1 !important;
+  transform: perspective(1100px) translateX(0) translateY(0) rotateX(0) rotateY(0) scale(1) !important;
+  filter: none !important;
+}
 
-/* ─── SHARED LABELS ────────────────────────────────────── */
-.s-label {
-  display: block;
+/* Continuous scroll-driven parallax layer — separate element from .scene-in
+   so the one-shot entrance transition and the per-frame JS transform never fight */
+.hero-demo-inner, .demo-img-inner {
+  transform: translateY(var(--py, 0px));
+  will-change: transform;
+}
+
+/* ── KICKER / LABELS ─────────────────────────────────────── */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.67rem;
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--amber);
-  margin-bottom: 0.85rem;
-}
-.s-label-light { color: rgba(255,255,255,0.3); display:block; font-size:0.67rem; font-weight:900; letter-spacing:0.18em; text-transform:uppercase; margin-bottom:0.85rem; }
-.s-label-dark  { color: rgba(0,0,0,0.35); display:block; font-size:0.67rem; font-weight:900; letter-spacing:0.18em; text-transform:uppercase; margin-bottom:0.85rem; }
-.text-amber { color: var(--amber); }
-
-/* ═══════════════════════════════════════════════════════
-   HERO
-═══════════════════════════════════════════════════════ */
-.hero {
-  position: relative;
-  min-height: 100vh;
-  background: var(--ink);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr auto;
-  padding: 0 max(1.5rem, 5vw);
-  overflow: hidden;
-}
-@media (max-width: 900px) {
-  .hero { grid-template-columns: 1fr; }
-}
-
-/* Three.js canvas */
-.hero-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* content layers above canvas */
-.hero-content,
-.hero-right,
-.hero-scroll-hint { position: relative; z-index: 1; }
-
-.hero-content {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 7rem 2rem 3rem 0;
-}
-@media (max-width: 900px) { .hero-content { padding: 6rem 0 2rem; } }
-
-.hero-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--amber);
+  color: var(--g);
   margin-bottom: 1.75rem;
 }
-.h-dot {
-  width: 6px; height: 6px;
+.kdot {
+  width: 5px; height: 5px;
   border-radius: 50%;
-  background: var(--amber);
-  animation: pulse 2s infinite;
+  background: var(--g);
+  animation: glow 2s infinite;
+  flex-shrink: 0;
 }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.35;transform:scale(1.4)} }
+@keyframes glow { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(1.5)} }
+.lbl {
+  font-size: 0.67rem; font-weight: 900;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--g); display: block; margin-bottom: 0.85rem;
+}
 
-.hero-h1 {
+/* ── HEADINGS ────────────────────────────────────────────── */
+.h1 {
   font-family: 'Rufina', serif;
-  font-size: clamp(2.8rem, 7vw, 5.6rem);
+  font-size: clamp(2.8rem, 7vw, 6rem);
   font-weight: 700;
-  line-height: 1.02;
-  color: var(--w);
+  line-height: 1.05;
+  color: var(--dk);
+  letter-spacing: -0.035em;
   margin-bottom: 1.5rem;
-  letter-spacing: -0.03em;
 }
-.h-em {
-  display: block;
-  color: transparent;
-  -webkit-text-stroke: 2px var(--amber);
-  font-style: italic;
+.h1 em { font-style: italic; color: var(--g); }
+.h2 {
+  font-family: 'Rufina', serif;
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  font-weight: 700;
+  color: var(--dk);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin-bottom: 0.5rem;
+}
+.h2 em { font-style: italic; color: var(--g); }
+.sec-sub { font-size: 0.95rem; color: var(--sub); margin-bottom: 2.5rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   HERO — full viewport, transparent bg
+═══════════════════════════════════════════════════════════ */
+.hero {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+  scroll-snap-align: start;
+  padding: 8rem max(1.5rem, 5vw) 3rem;
+}
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; padding: 6rem max(1.5rem,5vw) 3rem; }
+}
+
+/* Readability scrim — text needs a soft backdrop to stay legible over
+   the particle network on every screen size, not just mobile */
+.hero-content {
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+  margin: -2rem;
+}
+@media (max-width: 860px) {
+  .hero-content { padding: 1.5rem 1.25rem; margin: 0 -0.25rem; }
 }
 
 .hero-p {
   font-size: 1rem;
-  color: var(--m);
-  line-height: 1.8;
-  max-width: 450px;
+  color: var(--sub);
+  line-height: 1.78;
+  max-width: 440px;
   margin-bottom: 2.25rem;
 }
 
-.hero-btns { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 3rem; }
+/* Stats strip — spans full width at the bottom of the hero grid */
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 2rem; }
 
 .cta-wa {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #25d366;
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.95rem;
-  padding: 0.85rem 1.8rem;
-  border-radius: 100px;
-  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: linear-gradient(135deg, var(--g), var(--g2));
+  color: #0a0908; font-weight: 800; font-size: 0.92rem;
+  padding: 0.85rem 1.75rem; border-radius: 100px;
+  text-decoration: none; transition: all 0.22s;
+}
+.cta-wa:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(189,148,90,.4); color: #0a0908; }
+.cta-wa i { font-size: 1.1rem; }
+.cta-soft { font-size: 0.88rem; font-weight: 600; color: var(--sub); text-decoration: none; align-self: center; transition: color 0.2s; }
+.cta-soft:hover { color: var(--g); }
+
+.biz-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.btag {
+  font-size: 0.72rem; font-weight: 600; color: var(--sub);
+  background: rgba(189,148,90,.08); border: 1px solid rgba(189,148,90,.2);
+  padding: 0.22rem 0.75rem; border-radius: 100px; cursor: default;
   transition: all 0.22s;
 }
-.cta-wa:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(37,211,102,0.45); color:#fff; }
-.cta-wa i { font-size: 1.15rem; }
-.cta-down {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.35);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: color 0.2s;
-}
-.cta-down:hover { color: var(--amber); }
+.btag:hover { background: rgba(189,148,90,.18); color: var(--g); }
+.btag i { color: var(--g); margin-right: 2px; }
 
-/* stat strip */
-.hero-strip {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 1.25rem 0;
-  border-top: 1px solid rgba(255,255,255,0.07);
-  grid-column: 1 / -1;
-}
-.h-stat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.h-stat b {
-  font-family: 'Rufina', serif;
-  font-size: clamp(1.5rem, 3vw, 2.2rem);
-  font-weight: 700;
-  color: var(--amber);
-  line-height: 1;
-}
-.h-stat span { font-size: 0.68rem; color: rgba(255,255,255,0.28); font-weight: 600; }
-.h-sep { width: 1px; height: 36px; background: rgba(255,255,255,0.07); flex-shrink: 0; }
+/* QR scan demo — 3D card */
+.hero-demo { display: flex; align-items: center; justify-content: center; }
+@media (max-width: 860px) { .hero-demo { display: none; } }
 
-/* hero right — scan scene */
-.hero-right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5rem 0;
+.demo-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.demo-qr-card {
+  background: var(--cr); border: 2px solid var(--g);
+  border-radius: 16px; padding: 1rem; width: 158px;
+  cursor: pointer; position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6);
+  transition: transform 0.3s;
+  animation: float3d 5s ease-in-out infinite;
 }
-@media (max-width: 900px) { .hero-right { display: none; } }
+.demo-qr-card:hover { animation-play-state: paused; transform: scale(1.04) rotate(-1.5deg); }
+@keyframes float3d {
+  0%, 100% { transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateY(0px); }
+  50%      { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) translateY(-9px); }
+}
+.demo-qr-img { width: 100%; display: block; border-radius: 6px; }
+.demo-scan-label {
+  position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
+  background: var(--g); color: #0a0908;
+  font-size: 0.62rem; font-weight: 900;
+  padding: 0.2rem 0.8rem; border-radius: 100px; white-space: nowrap;
+}
+.demo-connector { width: 1.5px; height: 0; background: var(--g); transition: height 0.4s; opacity: 0; }
+.demo-connector.show { height: 60px; opacity: 1; }
 
-.scan-scene {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+.demo-phone {}
+.dph-shell {
+  width: 148px; background: #1c1c1c;
+  border-radius: 26px; border: 7px solid #2a2a2a; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.7);
+}
+.dph-notch { height: 12px; background: #111; position: relative; }
+.dph-notch::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:36px; height:6px; border-radius:3px; background:#222; }
+.dph-screen { width: 100%; height: 110px; object-fit: cover; object-position: top; display: block; }
+.dph-insights { background: #EBE7E1; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.dph-insights div { font-size: 0.58rem; font-weight: 700; color: #1a1410; display: flex; align-items: center; gap: 5px; }
+.dph-insights i { color: var(--g); font-size: 0.65rem; }
+
+.phone-reveal-enter-active { transition: all 0.45s cubic-bezier(.16,1,.3,1); }
+.phone-reveal-enter-from { opacity: 0; transform: translateY(-15px) scale(0.94); }
+
+/* ═══════════════════════════════════════════════════════════
+   SECTIONS — mostly transparent, content floats in 3D space
+═══════════════════════════════════════════════════════════ */
+.section { padding: 7rem max(1.5rem, 5vw); scroll-snap-align: start; }
+
+/* Generic readability scrim for naked text blocks sitting on the canvas */
+.text-scrim {
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+  display: inline-block;
+  width: 100%;
+}
+@media (max-width: 860px) { .text-scrim { padding: 1.5rem 1.25rem; } }
+.how-intro { margin-bottom: 0; }
+
+/* ── FOMO / MARKETING PUNCH ──────────────────────────────── */
+.fomo-sec { text-align: center; max-width: 920px; margin: 0 auto; }
+.fomo-intro {
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 860px) { .fomo-intro { padding: 1.5rem 1.25rem; } }
+.fomo-h2 {
+  margin: 0 auto 1rem; max-width: 720px;
+}
+.fomo-h2 em { font-style: italic; color: var(--g); }
+.fomo-sub {
+  font-size: 1rem; color: var(--sub); line-height: 1.75;
+  max-width: 600px; margin: 0 auto 3rem;
+}
+.fomo-grid {
+  display: flex; flex-direction: column; gap: 0.9rem;
+  margin-bottom: 3rem; align-items: center;
+}
+.fomo-card {
+  display: flex; align-items: center; gap: 0.85rem; justify-content: center;
+  background: rgba(255,255,255,.65); border: 1.5px solid var(--div);
+  border-radius: 100px; padding: 1rem 2.25rem;
+  backdrop-filter: blur(6px); flex-wrap: wrap;
+  box-shadow: 0 2px 14px rgba(189,148,90,.08);
+  animation: float3d 6s ease-in-out infinite;
+}
+.fomo-card:hover { animation-play-state: paused; }
+.fomo-card:nth-child(1) { animation-delay: 0s; }
+.fomo-card:nth-child(2) { animation-delay: 0.4s; }
+.fomo-card:nth-child(3) { animation-delay: 0.8s; }
+.fomo-num    { font-family: 'Rufina', serif; font-size: 1.2rem; font-weight: 700; color: var(--dk); }
+.fomo-eq     { font-family: 'Rufina', serif; font-size: 1.2rem; font-weight: 700; color: var(--g); }
+.fomo-result { font-family: 'Rufina', serif; font-size: 1.2rem; font-weight: 700; color: var(--g); }
+.fomo-tagline {
+  font-family: 'Rufina', serif; font-style: italic;
+  font-size: clamp(1.15rem, 2.4vw, 1.7rem);
+  color: var(--dk); margin-bottom: 0.75rem; line-height: 1.4;
+}
+.fomo-tagline em { color: var(--g); font-style: italic; }
+.fomo-tagline2 {
+  font-size: 0.85rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--sub); margin-bottom: 0;
 }
 
-.ss-qr {
-  background: #fff;
-  border-radius: 18px;
-  padding: 1rem;
-  width: 160px;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+/* ── BUSINESS PICKER ─────────────────────────────────────── */
+
+/* Pills as glowing network nodes */
+.node-pills {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin: 2rem 0;
+}
+.node-pill {
   position: relative;
-}
-.ss-qr-img { width: 100%; display: block; border-radius: 8px; }
-.ss-live {
-  position: absolute;
-  bottom: -11px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--amber);
-  color: var(--ink);
-  font-size: 0.63rem;
-  font-weight: 900;
-  padding: 0.2rem 0.75rem;
-  border-radius: 100px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.live-pulse {
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: var(--ink);
-  animation: pulse 1.5s infinite;
-}
-
-.ss-beam { color: var(--amber); }
-
-.ss-phone { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.ss-phone-shell {
-  width: 155px;
-  height: 295px;
-  background: #1c1c1c;
-  border-radius: 28px;
-  border: 8px solid #2a2a2a;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.7);
+  border: 1.5px solid var(--div);
+  color: var(--sub);
+  font-size: 0.88rem; font-weight: 700;
+  padding: 0.6rem 1.25rem; border-radius: 100px;
+  cursor: pointer; transition: all 0.25s; font-family: inherit;
   overflow: hidden;
-  position: relative;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
 }
-.ss-notch {
-  position: absolute;
-  top: 8px; left: 50%; transform: translateX(-50%);
-  width: 44px; height: 12px;
-  background: #111;
-  border-radius: 0 0 8px 8px;
-  z-index: 2;
-}
-.ss-screen {
-  width: 100%; height: 65%;
-  object-fit: cover;
-  object-position: top;
-}
-.ss-insights {
-  background: #f8f3ea;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.ss-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: #3a2a10;
-}
-.ss-row i { color: var(--amber); font-size: 0.7rem; }
-
-/* floating chips around the visual */
-.f-chip {
-  position: absolute;
-  background: rgba(255,255,255,0.07);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.7);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.35rem 0.8rem;
-  border-radius: 100px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.np-glow {
+  position: absolute; inset: 0; border-radius: 100px;
+  background: radial-gradient(circle at 50% 50%, rgba(189,148,90,.3), transparent 70%);
+  opacity: 0; transition: opacity 0.25s;
   pointer-events: none;
 }
-.f-chip i { color: var(--amber); }
-.fc-1 { top: 18%; right: 2%; }
-.fc-2 { top: 36%; left: 3%; }
-.fc-3 { bottom: 28%; right: 4%; }
-.fc-4 { bottom: 14%; left: 5%; }
-
-/* scroll hint */
-.hero-scroll-hint {
-  position: absolute;
-  bottom: 6rem;
-  left: max(1.5rem, 5vw);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: rgba(255,255,255,0.25);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.node-pill:hover .np-glow,
+.node-pill.active .np-glow { opacity: 1; }
+.node-pill:hover {
+  border-color: var(--g);
+  color: var(--g);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(189,148,90,.2), 0 2px 8px rgba(0,0,0,.08);
 }
-.scroll-line {
-  width: 1px;
-  height: 40px;
-  background: linear-gradient(to bottom, rgba(224,120,48,0.6), transparent);
-  animation: line-drop 2s ease-in-out infinite;
-}
-@keyframes line-drop { 0%,100%{transform:scaleY(1);opacity:1} 50%{transform:scaleY(0.5);opacity:0.4} }
-
-/* ═══════════════════════════════════════════════════════
-   TICKER
-═══════════════════════════════════════════════════════ */
-.ticker { background: var(--amber); overflow: hidden; padding: 10px 0; }
-.ticker-track {
-  display: inline-flex;
-  gap: 2.5rem;
-  white-space: nowrap;
-  animation: scroll-left 32s linear infinite;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-.ticker-track em { opacity: 0.3; font-style: normal; }
-@keyframes scroll-left {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-20%); }
-}
-
-/* ═══════════════════════════════════════════════════════
-   STATEMENT
-═══════════════════════════════════════════════════════ */
-.statement {
-  background: var(--cream);
-  padding: 7rem max(1.5rem, 5vw);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5rem;
-  align-items: center;
-}
-@media (max-width: 860px) { .statement { grid-template-columns: 1fr; gap: 3rem; } }
-
-.s-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2.6rem, 6vw, 5rem);
-  font-weight: 700;
-  line-height: 1.0;
-  color: var(--ink);
-  letter-spacing: -0.04em;
-  margin-bottom: 1.5rem;
-}
-.s-h2 em { font-style: italic; color: var(--amber); }
-.s-body {
-  font-size: 1rem;
-  color: var(--md);
-  line-height: 1.78;
-  max-width: 480px;
-}
-
-.s-img-wrap { position: relative; border-radius: 16px; overflow: visible; }
-.s-img {
-  width: 100%;
-  border-radius: 16px;
-  display: block;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.18);
-}
-.s-img-float {
-  position: absolute;
-  background: var(--ink);
-  color: rgba(255,255,255,0.85);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.45rem 0.9rem;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.s-img-float i { color: var(--amber); }
-.s-if-a { top: -12px; left: 20px; }
-.s-if-b { bottom: 16px; right: -12px; }
-
-/* ═══════════════════════════════════════════════════════
-   FOR ALL
-═══════════════════════════════════════════════════════ */
-.forall {
-  background: var(--ink);
-  padding: 7rem max(1.5rem, 5vw);
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 4rem;
-  align-items: start;
-}
-@media (max-width: 768px) { .forall { grid-template-columns: 1fr; gap: 2.5rem; } }
-
-.forall-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2.5rem, 5vw, 4rem);
-  font-weight: 700;
+.node-pill.active {
+  background: var(--g);
+  border-color: var(--g);
   color: var(--w);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  position: sticky;
-  top: 5rem;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(189,148,90,.4);
 }
-.forall-h2 em { font-style: italic; color: var(--amber); }
+.np-icon { font-size: 1.05rem; color: var(--g); }
+.node-pill.active .np-icon { color: var(--w); }
 
-.forall-list { display: flex; flex-direction: column; }
-.fl-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4em;
-  padding: 1.5rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  font-size: clamp(1rem, 2vw, 1.35rem);
-  line-height: 1.5;
+/* Business content — floats in the dark */
+.biz-content {
+  display: grid; grid-template-columns: 1.2fr 1fr;
+  gap: 3rem; align-items: start; margin-top: 1.5rem;
+  padding: 2rem;
+  background: rgba(255,255,255,.85);
+  border: 1.5px solid var(--g);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(189,148,90,.12);
 }
-.fl-item:first-child { border-top: 1px solid rgba(255,255,255,0.06); }
-.fl-for { font-family: 'Rufina', serif; font-style: italic; color: rgba(255,255,255,0.25); }
-.fl-who { font-family: 'Rufina', serif; font-weight: 700; color: var(--amber); font-size: 1.15em; }
-.fl-rest { color: rgba(255,255,255,0.5); font-size: 0.82em; }
+@media (max-width: 768px) { .biz-content { grid-template-columns: 1fr; } }
 
-/* ═══════════════════════════════════════════════════════
-   PRODUCTS — alternating rows
-═══════════════════════════════════════════════════════ */
-.products { display: flex; flex-direction: column; }
+.biz-big-emoji { font-size: 2.6rem; color: var(--g); display: block; margin-bottom: 0.75rem; line-height: 1; }
+.biz-h3 {
+  font-family: 'Rufina', serif; font-size: clamp(1.4rem,2.5vw,2rem);
+  font-weight: 700; color: var(--dk); margin-bottom: 0.75rem; letter-spacing: -0.02em;
+}
+.biz-p { font-size: 0.92rem; color: var(--sub); line-height: 1.72; margin-bottom: 1.5rem; }
+.biz-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--wa); color: #fff;
+  font-weight: 800; font-size: 0.9rem;
+  padding: 0.78rem 1.6rem; border-radius: 100px;
+  text-decoration: none; transition: all 0.22s;
+}
+.biz-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(111,140,79,.35); background: var(--wad); color: #fff; }
+.biz-cta i { font-size: 1.05rem; }
 
-.prod-row {
-  display: grid;
-  grid-template-columns: 72px 1fr 1.1fr;
-  gap: 3rem;
-  padding: 6rem max(1.5rem, 5vw);
-  align-items: center;
+.biz-features { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.biz-feat {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 0.9rem; color: var(--sub);
+  padding: 0.75rem 0; border-bottom: 1px solid var(--div);
+}
+.biz-feat:last-child { border-bottom: none; }
+.biz-feat i { color: var(--g); font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.biz-hint { color: var(--sub); font-size: 0.95rem; padding: 2rem 0; }
+.biz-hint i { color: var(--g); margin-right: 4px; }
+
+.biz-reveal-enter-active, .biz-reveal-leave-active {
+  transition: all 0.35s cubic-bezier(.16,1,.3,1);
+}
+.biz-reveal-enter-from { opacity: 0; transform: perspective(800px) rotateX(10deg) translateY(20px); }
+.biz-reveal-leave-to   { opacity: 0; transform: perspective(800px) rotateX(-5deg) translateY(-10px); }
+
+/* ── HOW IT WORKS ────────────────────────────────────────── */
+.steps-track { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 3rem; }
+.step-node {
+  flex: 1; min-width: 220px; position: relative;
+  background: rgba(255,255,255,.8);
+  border: 1.5px solid var(--div);
+  border-radius: 16px; padding: 2rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  transition: transform 0.2s ease, border-color 0.2s, box-shadow 0.2s;
+  overflow: hidden;
+}
+.step-node:hover { border-color: var(--g); box-shadow: 0 8px 28px rgba(189,148,90,.18); }
+.sn-glow {
+  position: absolute; inset: 0; border-radius: 16px;
+  background: radial-gradient(circle at 50% 0%, rgba(189,148,90,.12), transparent 70%);
+  opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.step-node:hover .sn-glow { opacity: 1; }
+.sn-num {
+  font-family: 'Rufina', serif; font-size: 3.5rem;
+  font-weight: 700; color: rgba(189,148,90,.15); line-height: 1;
+  display: block; margin-bottom: 0.5rem;
+}
+.sn-icon { font-size: 1.6rem; color: var(--g); display: block; margin-bottom: 0.75rem; line-height: 1; }
+.step-node h4 { font-size: 1rem; font-weight: 800; color: var(--dk); margin-bottom: 0.5rem; }
+.step-node p  { font-size: 0.875rem; color: var(--sub); line-height: 1.7; margin: 0; }
+
+/* ── DEMO ────────────────────────────────────────────────── */
+.demo-section {
+  display: grid; grid-template-columns: 1.2fr 1fr;
+  gap: 5rem; align-items: center;
 }
 @media (max-width: 860px) {
-  .prod-row { grid-template-columns: 1fr; gap: 2rem; padding: 4rem max(1.5rem, 5vw); }
+  .demo-section { grid-template-columns: 1fr; gap: 3rem; }
+  .demo-text { padding: 1.5rem 1.25rem; }
 }
-.prod-dark  { background: var(--ink); }
-.prod-cream { background: var(--cream); }
-
-.prod-n {
-  font-family: 'Rufina', serif;
-  font-size: clamp(5rem, 9vw, 8rem);
-  font-weight: 700;
-  color: rgba(255,255,255,0.05);
-  line-height: 1;
-  user-select: none;
-  align-self: start;
-  padding-top: 0.15em;
-}
-.prod-n-cream { color: rgba(0,0,0,0.05); }
-@media (max-width: 860px) { .prod-n { display: none; } }
-
-.prod-h3 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
-  font-weight: 700;
-  color: var(--w);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-  margin-bottom: 1.25rem;
-}
-.prod-h3-dark { color: var(--ink); }
-.prod-p {
-  font-size: 0.95rem;
-  color: var(--m);
-  line-height: 1.78;
-  margin-bottom: 1.5rem;
-  max-width: 400px;
-}
-.prod-p-dark { color: var(--md); }
-.prod-list, .prod-list-dark {
-  list-style: none;
-  padding: 0; margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.prod-list li { display:flex; align-items:flex-start; gap:8px; font-size:0.87rem; color:var(--m); }
-.prod-list-dark li { display:flex; align-items:flex-start; gap:8px; font-size:0.87rem; color:var(--md); }
-.prod-list li i, .prod-list-dark li i { color:var(--amber); flex-shrink:0; margin-top:2px; }
-
-.prod-visual { border-radius: 16px; overflow: hidden; }
-.prod-visual-flip { order: -1; }
-@media (max-width: 860px) { .prod-visual-flip { order: 0; } }
-.prod-img {
-  width: 100%;
-  display: block;
-  border-radius: 16px;
-  box-shadow: 0 20px 55px rgba(0,0,0,0.4);
-  transition: transform 0.4s ease;
-}
-.prod-img:hover { transform: scale(1.02); }
-
-.prod-qr-visual { display:flex; flex-direction:column; align-items:center; }
-.qr-plate-mock { display:flex; flex-direction:column; align-items:center; gap:1rem; }
-.qr-plate-img {
-  max-width: 240px;
-  width: 100%;
-  background: #fff;
-  padding: 14px;
-  border-radius: 18px;
-  box-shadow: 0 20px 55px rgba(0,0,0,0.4);
-}
-.qr-plate-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: rgba(255,255,255,0.3);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* ═══════════════════════════════════════════════════════
-   HOW
-═══════════════════════════════════════════════════════ */
-.how {
-  background: var(--cream);
-  padding: 7rem max(1.5rem, 5vw);
-}
-.how-inner { max-width: 1200px; margin: 0 auto; }
-.how-head { margin-bottom: 4rem; }
-.how-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2rem, 4.5vw, 3.4rem);
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-.how-steps {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.how-step {
-  flex: 1;
-  min-width: 220px;
-  background: #fff;
-  border-radius: 18px;
+.demo-text {
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
   padding: 2rem;
-  border: 1px solid var(--paper);
-  transition: transform 0.22s, box-shadow 0.22s;
 }
-.how-step:hover { transform: translateY(-4px); box-shadow: 0 14px 36px rgba(0,0,0,0.08); }
-.step-n {
-  font-family: 'Rufina', serif;
-  font-size: 3.2rem;
-  font-weight: 700;
-  color: var(--amber);
-  opacity: 0.4;
-  line-height: 1;
-  margin-bottom: 1rem;
+.demo-img-wrap { position: relative; }
+.demo-big-img {
+  width: 100%; border-radius: 16px; display: block;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  animation: sway3d 8s ease-in-out infinite;
 }
-.how-step h4 { font-size: 1.02rem; font-weight: 800; color: var(--ink); margin-bottom: 0.5rem; }
-.how-step p { font-size: 0.87rem; color: var(--md); line-height: 1.68; margin: 0; }
-.how-arrow {
-  color: rgba(0,0,0,0.15);
-  padding-top: 2.75rem;
-  flex-shrink: 0;
+@keyframes sway3d {
+  0%, 100% { transform: perspective(1200px) rotateY(0deg) rotateX(0deg); }
+  50%      { transform: perspective(1200px) rotateY(1.2deg) rotateX(-0.6deg); }
 }
-@media (max-width: 700px) { .how-arrow { display: none; } }
-
-/* ═══════════════════════════════════════════════════════
-   NUMBERS
-═══════════════════════════════════════════════════════ */
-.numbar {
-  background: var(--forest);
-  border-top: 1px solid rgba(224,120,48,0.18);
-  border-bottom: 1px solid rgba(224,120,48,0.18);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 2.5rem max(1.5rem, 5vw);
-}
-.n-item {
-  flex: 1;
-  min-width: 110px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-  padding: 0.5rem;
-}
-.n-item b {
-  font-family: 'Rufina', serif;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 700;
-  color: var(--amber);
-  line-height: 1;
-}
-.n-item span { font-size: 0.68rem; color: rgba(255,255,255,0.3); font-weight: 600; letter-spacing: 0.04em; }
-.n-sep { width:1px; height:44px; background:rgba(255,255,255,0.07); flex-shrink:0; }
-@media (max-width: 580px) { .n-sep { display:none; } .n-item { min-width: calc(50% - 1rem); } }
-
-/* ═══════════════════════════════════════════════════════
-   PRICING
-═══════════════════════════════════════════════════════ */
-.pricing {
-  background: var(--cream);
-  padding: 7rem max(1.5rem, 5vw);
-}
-.pricing-head { margin-bottom: 3rem; }
-.pricing-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2rem, 4.5vw, 3.4rem);
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin-bottom: 0.5rem;
-}
-.pricing-sub { font-size: 0.9rem; color: var(--md); }
-
-.plans {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 2rem;
-}
-@media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
-
-.plan {
-  background: #fff;
-  border: 1.5px solid var(--paper);
-  border-radius: 20px;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  transition: transform 0.22s, box-shadow 0.22s;
-}
-.plan:hover { transform: translateY(-4px); box-shadow: 0 16px 42px rgba(0,0,0,0.09); }
-.plan-pro {
-  background: var(--ink);
-  border-color: rgba(224,120,48,0.28);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.14);
-}
-.plan-badge {
+.demo-overlay-tag {
   position: absolute;
-  top: -12px; left: 50%; transform: translateX(-50%);
-  background: var(--amber);
-  color: var(--ink);
-  font-size: 0.61rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 0.2rem 1rem;
-  border-radius: 100px;
-  white-space: nowrap;
+  background: rgba(10,9,8,.9); backdrop-filter: blur(8px);
+  border: 1px solid rgba(189,148,90,.3); color: rgba(255,255,255,.85);
+  font-size: 0.7rem; font-weight: 700;
+  padding: 0.35rem 0.85rem; border-radius: 100px;
+  display: flex; align-items: center; gap: 5px;
 }
-.plan-name { font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: var(--md); margin-bottom: 0.75rem; display: block; }
-.plan-pro .plan-name { color: var(--amber); }
-.plan-price {
-  font-family: 'Rufina', serif;
-  font-size: 0.88rem;
-  color: var(--md);
-  display: flex;
-  align-items: flex-start;
-  gap: 2px;
-  margin-bottom: 0.2rem;
+.demo-overlay-tag i { color: var(--g); }
+.dot-a { top: -11px; left: 20px; }
+.dot-b { bottom: 20px; right: -10px; }
+.dot-c { top: 38%; left: -10px; }
+.demo-p { font-size: 0.93rem; color: var(--sub); line-height: 1.75; margin-bottom: 1.25rem; }
+.demo-checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.demo-checks li { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--sub); }
+.demo-checks li i { color: var(--g); }
+.demo-tag {
+  font-family: 'Rufina', serif; font-style: italic;
+  font-size: 1.05rem; color: var(--g); margin: 1.5rem 0 0;
 }
-.plan-price sup { font-size: 0.6em; margin-top: 0.4em; color: var(--amber); }
-.plan-price b { font-size: 3.2rem; font-weight: 700; color: var(--ink); line-height: 1; }
-.plan-pro .plan-price b { color: var(--amber); }
-.plan-price-custom {
-  font-family: 'Rufina', serif;
-  font-size: 2.2rem;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1;
-  margin-bottom: 0.2rem;
-}
-.plan-when { font-size: 0.73rem; color: var(--md); margin-bottom: 1.5rem; display: block; }
-.plan-pro .plan-when { color: rgba(255,255,255,0.3); }
-.plan-list {
-  list-style: none;
-  padding: 0; margin: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  margin-bottom: 1.75rem;
-}
-.plan-list li { display:flex; align-items:flex-start; gap:8px; font-size:0.87rem; color:#4b3f2e; }
-.plan-pro .plan-list li { color:rgba(255,255,255,0.6); }
-.plan-list li i { color:var(--amber); flex-shrink:0; margin-top:2px; }
-.plan-btn {
-  display: block;
-  text-align: center;
-  font-weight: 800;
-  font-size: 0.88rem;
-  padding: 0.85rem;
-  border-radius: 100px;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-.outline { border: 1.5px solid var(--paper); color: var(--ink); }
-.outline:hover { border-color: var(--amber); color: var(--amber); }
-.fill { background: linear-gradient(135deg, var(--amber), var(--amber2)); color: var(--ink); }
-.fill:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(224,120,48,0.4); color: var(--ink); }
 
-.plate-strip {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.25rem 1.75rem;
-  border: 1.5px dashed rgba(224,120,48,0.35);
-  border-radius: 14px;
-  flex-wrap: wrap;
+/* ── FAQ ─────────────────────────────────────────────────── */
+.faq-sec { display: grid; grid-template-columns: 280px 1fr; gap: 5rem; align-items: start; }
+@media (max-width: 860px) { .faq-sec { grid-template-columns: 1fr; gap: 3rem; } }
+.faq-head {
+  position: sticky; top: 5rem;
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
 }
-.plate-strip > i { color: var(--amber); font-size: 1.4rem; flex-shrink: 0; }
-.plate-strip div { flex: 1; min-width: 180px; }
-.plate-strip strong { display: block; color: var(--ink); font-size: 0.95rem; font-weight: 700; }
-.plate-strip span { font-size: 0.82rem; color: var(--md); }
-.plate-strip a { font-size: 0.85rem; font-weight: 700; color: var(--amber); text-decoration: none; white-space: nowrap; }
-.plate-strip a:hover { text-decoration: underline; }
+@media (max-width: 860px) {
+  .faq-head { position: static; padding: 1.5rem 1.25rem; margin-bottom: 1rem; }
+}
+.wa-sm {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--wa); color: #fff; font-weight: 800; font-size: 0.86rem;
+  padding: 0.65rem 1.35rem; border-radius: 100px;
+  text-decoration: none; transition: all 0.22s; margin-top: 1.25rem;
+}
+.wa-sm:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(111,140,79,.35); background: var(--wad); color: #fff; }
 
-/* ═══════════════════════════════════════════════════════
-   FAQ
-═══════════════════════════════════════════════════════ */
-.faq {
-  background: var(--ink);
-  padding: 7rem max(1.5rem, 5vw);
-}
-.faq-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2rem, 4.5vw, 3.4rem);
-  font-weight: 700;
-  color: var(--w);
-  letter-spacing: -0.02em;
-  margin-bottom: 3rem;
-}
-.faq-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 4rem;
-}
-@media (max-width: 768px) { .faq-grid { grid-template-columns: 1fr; } }
-.faq-item {
-  padding: 1.25rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-  cursor: pointer;
-  user-select: none;
-}
-.faq-item:first-child, .faq-item:nth-child(4) { border-top: 1px solid rgba(255,255,255,0.07); }
-@media (max-width: 768px) { .faq-item:nth-child(4) { border-top: none; } }
+.faq-body { display: flex; flex-direction: column; }
+.faq-item { border-bottom: 1px solid var(--div); cursor: pointer; user-select: none; }
+.faq-item-wrap:first-child .faq-item { border-top: 1px solid var(--div); }
 .faq-q {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  font-size: 0.93rem;
-  font-weight: 700;
-  color: rgba(255,255,255,0.62);
-  transition: color 0.2s;
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  font-size: 0.93rem; font-weight: 700; color: var(--dk);
+  padding: 1.25rem 0; transition: color 0.2s;
 }
-.faq-q i { flex-shrink: 0; color: var(--amber); font-size: 0.82rem; }
-.faq-item:hover .faq-q, .faq-item.open .faq-q { color: var(--w); }
-.faq-a { font-size: 0.87rem; color: rgba(255,255,255,0.38); line-height: 1.75; margin-top: 0.75rem; margin-bottom: 0; }
-
-/* ═══════════════════════════════════════════════════════
-   CONTACT
-═══════════════════════════════════════════════════════ */
-.contact {
-  background: var(--forest);
-  background-image: radial-gradient(ellipse at top right, rgba(224,120,48,0.1) 0%, transparent 55%);
-  padding: 7rem max(1.5rem, 5vw);
-  display: grid;
-  grid-template-columns: 1fr 1.15fr;
-  gap: 5rem;
-  align-items: start;
-}
-@media (max-width: 860px) { .contact { grid-template-columns: 1fr; gap: 3rem; } }
-
-.contact-h2 {
-  font-family: 'Rufina', serif;
-  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
-  font-weight: 700;
-  color: var(--w);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  margin-bottom: 1rem;
-}
-.contact-h2 em { font-style: italic; color: var(--amber); }
-.contact-sub { font-size: 0.95rem; color: rgba(255,255,255,0.38); line-height: 1.65; margin-bottom: 2.5rem; max-width: 340px; }
-
-.wa-big {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: #25d366;
-  color: #fff;
-  border-radius: 14px;
-  padding: 1rem 1.5rem;
-  text-decoration: none;
-  transition: all 0.22s;
-  margin-bottom: 1.5rem;
-  width: fit-content;
-}
-.wa-big:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(37,211,102,0.4); color: #fff; }
-.wa-big i { font-size: 1.75rem; }
-.wa-big strong { display: block; font-size: 1rem; font-weight: 800; }
-.wa-big small { font-size: 0.74rem; opacity: 0.8; }
-.contact-links { display: flex; flex-direction: column; gap: 0.6rem; }
-.contact-links a { display:inline-flex; align-items:center; gap:8px; color:rgba(255,255,255,0.35); font-size:0.87rem; text-decoration:none; transition:color 0.2s; }
-.contact-links a:hover { color: var(--amber); }
-.contact-links a i { color: var(--amber); }
-
-.contact-form {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 20px;
-  padding: 2.5rem;
-}
-.contact-form h4 { font-family:'Rufina',serif; font-size:1.4rem; font-weight:700; color:var(--w); margin-bottom:1.5rem; }
-.f-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-@media (max-width:540px) { .f-row { grid-template-columns:1fr; } }
-.contact-form label { display:flex; flex-direction:column; gap:0.4rem; margin-bottom:1rem; }
-.contact-form label span { font-size:0.65rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.28); }
-.contact-form input,
-.contact-form select,
-.contact-form textarea {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 0.7rem 0.9rem;
-  color: var(--w);
-  font-size: 0.88rem;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s;
-  width: 100%;
-}
-.contact-form input::placeholder, .contact-form textarea::placeholder { color:rgba(255,255,255,0.18); }
-.contact-form input:focus, .contact-form select:focus, .contact-form textarea:focus { border-color:var(--amber); }
-.contact-form select option { background: var(--forest); }
-.contact-form button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: linear-gradient(135deg, var(--amber), var(--amber2));
-  color: var(--ink);
-  font-weight: 800;
-  font-size: 0.95rem;
-  padding: 0.9rem;
-  border: none;
-  border-radius: 100px;
-  cursor: pointer;
-  transition: all 0.22s;
-  margin-top: 0.5rem;
-  font-family: inherit;
-}
-.contact-form button:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(224,120,48,0.4); }
-
-/* ═══════════════════════════════════════════════════════
-   FOOTER
-═══════════════════════════════════════════════════════ */
-.footer {
-  background: #060504;
-  border-top: 1px solid rgba(255,255,255,0.04);
-  padding: 3rem max(1.5rem, 5vw) 0;
-}
-.footer-inner {
-  display: flex;
-  gap: 4rem;
-  flex-wrap: wrap;
-  padding-bottom: 2.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.footer-brand { flex: 1; min-width: 200px; }
-.fb-name { display:flex; align-items:center; gap:8px; margin-bottom:0.5rem; }
-.fb-name i { font-size:1.3rem; color:var(--amber); }
-.fb-name span { font-family:'Dancing Script',cursive; font-size:1.55rem; color:var(--w); }
-.footer-brand > p { font-size:0.82rem; color:rgba(255,255,255,0.28); line-height:1.6; max-width:240px; margin:0 0 0.75rem; }
-.fb-social { display:flex; gap:9px; }
-.fb-social a { width:36px; height:36px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.38); text-decoration:none; font-size:0.93rem; transition:all 0.2s; }
-.fb-social a:hover { background:var(--amber); color:var(--ink); border-color:var(--amber); }
-.footer-nav { display:flex; gap:4rem; flex-wrap:wrap; }
-.fn-col { display:flex; flex-direction:column; gap:0.55rem; }
-.fn-col h6 { font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.15em; color:var(--amber); margin-bottom:0.2rem; }
-.fn-col a { font-size:0.84rem; color:rgba(255,255,255,0.3); text-decoration:none; transition:color 0.2s; }
-.fn-col a:hover { color:var(--amber); }
-.footer-bottom { display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; padding:1.25rem 0; font-size:0.74rem; color:rgba(255,255,255,0.14); max-width:1200px; margin:0 auto; }
-
-/* ═══════════════════════════════════════════════════════
-   FLOATING BUTTONS
-═══════════════════════════════════════════════════════ */
-.float-wa {
-  position: fixed; bottom: 5rem; right: 1.25rem;
-  width: 50px; height: 50px; border-radius: 50%;
-  background: #25d366; color: #fff;
+.faq-item:hover .faq-q, .faq-item.open .faq-q { color: var(--g); }
+.faq-ic {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(189,148,90,.1); border: 1px solid rgba(189,148,90,.25);
+  color: var(--g); font-size: 1.1rem; font-weight: 300;
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.45rem; text-decoration: none;
-  box-shadow: 0 4px 20px rgba(37,211,102,0.4);
-  z-index: 980; transition: transform 0.2s;
-  animation: pop-in 0.4s 1.5s both;
+  flex-shrink: 0; transition: all 0.28s;
 }
-.float-wa:hover { transform: scale(1.1); color: #fff; }
-@keyframes pop-in { from{opacity:0;transform:scale(0.3)} to{opacity:1;transform:scale(1)} }
-.float-top {
-  position: fixed; bottom: 1.25rem; right: 1.25rem;
-  width: 38px; height: 38px; border-radius: 10px;
-  background: rgba(255,255,255,0.07);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: var(--w); display:flex; align-items:center; justify-content:center;
-  cursor: pointer; z-index: 979; font-size: 0.93rem; transition: all 0.2s;
-}
-.float-top:hover { background: var(--amber); border-color: var(--amber); }
+.faq-ic.r { transform: rotate(45deg); background: var(--g); color: #0a0908; border-color: var(--g); }
+.faq-ans { overflow: hidden; transition: max-height 0.38s ease, opacity 0.3s ease; }
+.faq-ans p { font-size: 0.875rem; color: var(--sub); line-height: 1.75; padding-bottom: 1.25rem; margin: 0; }
 
-:global(html) { scroll-behavior: smooth; }
+/* ── CONTACT ──────────────────────────────────────────────── */
+.contact-sec { display: grid; grid-template-columns: 1fr 1.1fr; gap: 5rem; align-items: start; }
+@media (max-width: 860px) {
+  .contact-sec { grid-template-columns: 1fr; gap: 3rem; }
+  .ct-left { padding: 1.5rem 1.25rem; }
+}
+.ct-left {
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+}
+.ct-h2 em { color: var(--g); font-style: italic; }
+.ct-p { font-size: 0.93rem; color: var(--sub); line-height: 1.7; margin-bottom: 0.75rem; max-width: 360px; }
+.ct-campaign {
+  font-family: 'Rufina', serif; font-style: italic;
+  font-size: 1.05rem; color: var(--g); margin-bottom: 2rem;
+}
+.wa-big {
+  display: flex; align-items: center; gap: 1rem;
+  background: rgba(111,140,79,.08); border: 1px solid rgba(111,140,79,.3);
+  border-radius: 12px; padding: 0.9rem 1.2rem;
+  text-decoration: none; transition: all 0.22s; margin-bottom: 1.5rem;
+}
+.wa-big:hover { background: rgba(111,140,79,.15); border-color: rgba(111,140,79,.5); transform: translateX(4px); }
+.wab-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--wa); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+.wa-big strong { display: block; font-size: 0.92rem; font-weight: 800; color: var(--dk); }
+.wa-big small  { font-size: 0.72rem; color: var(--sub); }
+.ct-links { display: flex; flex-direction: column; gap: 0.55rem; }
+.ct-links a { display: inline-flex; align-items: center; gap: 8px; color: var(--sub); font-size: 0.86rem; text-decoration: none; transition: color 0.2s; }
+.ct-links a:hover { color: var(--g); }
+.ct-links a i { color: var(--g); }
+
+.ct-right {
+  background: rgba(255,255,255,.82); border: 1.5px solid var(--div);
+  border-radius: 16px; padding: 2.5rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 28px rgba(189,148,90,.1);
+}
+.ct-right h4 { font-family: 'Rufina', serif; font-size: 1.4rem; font-weight: 700; color: var(--dk); margin-bottom: 1.5rem; }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 540px) { .f2 { grid-template-columns: 1fr; } }
+.ct-right label { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+.ct-right label span { font-size: 0.64rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sub); }
+.ct-right input, .ct-right select, .ct-right textarea {
+  background: #fff; border: 1.5px solid var(--div);
+  border-radius: 8px; padding: 0.68rem 0.9rem; color: var(--dk);
+  font-size: 0.875rem; font-family: inherit; outline: none;
+  transition: border-color 0.2s; width: 100%;
+}
+.ct-right input::placeholder, .ct-right textarea::placeholder { color: #b3a896; }
+.ct-right input:focus, .ct-right select:focus, .ct-right textarea:focus { border-color: var(--g); }
+.ct-right select option { background: #fff; color: var(--dk); }
+.ct-right button {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: linear-gradient(135deg, var(--g), var(--g2));
+  color: #0a0908; font-weight: 800; font-size: 0.95rem;
+  padding: 0.88rem; border: none; border-radius: 100px;
+  cursor: pointer; transition: all 0.22s; margin-top: 0.5rem; font-family: inherit;
+}
+.ct-right button:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(189,148,90,.38); }
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+.footer { background: rgba(5,4,2,.97); border-top: 1px solid rgba(189,148,90,.12); padding: 3rem max(1.5rem,5vw) 0; }
+.ft-inner { display: flex; gap: 4rem; flex-wrap: wrap; padding-bottom: 2.5rem; border-bottom: 1px solid rgba(189,148,90,.1); max-width: 1200px; margin: 0 auto; }
+.fb { flex: 1; min-width: 200px; }
+.fb-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem; }
+.fb-brand i { font-size: 1.3rem; color: var(--g); }
+.fb-brand span { font-family: 'Dancing Script', cursive; font-size: 1.55rem; color: var(--w); }
+.fb > p { font-size: 0.82rem; color: rgba(255,255,255,.26); line-height: 1.6; max-width: 240px; margin: 0 0 0.75rem; }
+.fb-social { display: flex; gap: 9px; }
+.fb-social a { width: 36px; height: 36px; border-radius: 8px; background: rgba(189,148,90,.08); border: 1px solid rgba(189,148,90,.2); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.36); text-decoration: none; font-size: 0.9rem; transition: all 0.2s; }
+.fb-social a:hover { background: var(--g); color: #0a0908; border-color: var(--g); }
+.ft-nav { display: flex; gap: 4rem; flex-wrap: wrap; }
+.fnc { display: flex; flex-direction: column; gap: 0.55rem; }
+.fnc h6 { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: var(--g); margin-bottom: 0.2rem; }
+.fnc a { font-size: 0.83rem; color: rgba(255,255,255,.28); text-decoration: none; transition: color 0.2s; }
+.fnc a:hover { color: var(--g); }
+.ft-bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; padding: 1.25rem 0; font-size: 0.73rem; color: rgba(255,255,255,.12); max-width: 1200px; margin: 0 auto; }
+
+/* ── FLOATERS ────────────────────────────────────────────── */
+.fwa { position: fixed; bottom: 5rem; right: 1.25rem; width: 50px; height: 50px; border-radius: 50%; background: var(--wa); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.45rem; text-decoration: none; box-shadow: 0 4px 20px rgba(111,140,79,.35); z-index: 999; transition: transform 0.2s; animation: pop .4s 1.5s both; }
+.fwa:hover { transform: scale(1.1); color: #fff; }
+@keyframes pop { from{opacity:0;transform:scale(0.3)} to{opacity:1;transform:scale(1)} }
+.fup { position: fixed; bottom: 1.25rem; right: 1.25rem; width: 38px; height: 38px; border-radius: 8px; background: rgba(189,148,90,.12); border: 1px solid rgba(189,148,90,.25); color: var(--g); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 999; font-size: 0.9rem; transition: all 0.2s; }
+.fup:hover { background: var(--g); color: #0a0908; }
 </style>
