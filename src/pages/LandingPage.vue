@@ -26,7 +26,7 @@
           <div class="hero-actions scene-in" style="--d:.5s">
             <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
                class="cta-wa" @mouseenter="onCtaHover" @mouseleave="onCtaLeave">
-              <i class="bi bi-whatsapp"></i> Get started free
+              <i class="bi bi-whatsapp"></i> Chat on WhatsApp
             </a>
             <a href="#picker" class="cta-soft">See it in action ↓</a>
           </div>
@@ -675,18 +675,16 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   --wad: #5C7640;
   color: var(--dk);
   font-family: 'Urbanist', sans-serif;
+  overflow-x: hidden;
 }
 
 /* Cream fallback — matches canvas clearColor so no flash if WebGL is slow */
 :global(html), :global(body) {
   background: #F5F2EE;
   scroll-behavior: smooth;
-}
-:global(html) {
-  /* Guided, section-by-section scroll feel instead of plain continuous scroll.
-     proximity (not mandatory) — only snaps when the user settles near a
-     section boundary, so fast/casual scrolling never feels trapped. */
-  scroll-snap-type: y proximity;
+  /* scroll-snap was removed — it made scroll position jump/settle on its
+     own mid-gesture, which felt broken rather than guided */
+  overflow-x: hidden;
 }
 
 /* ── CANVAS: z-index 0 — sits above html/body bg ─────────── */
@@ -794,7 +792,6 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   grid-template-columns: 1fr 1fr;
   gap: 4rem;
   align-items: center;
-  scroll-snap-align: start;
   padding: 8rem max(1.5rem, 5vw) 3rem;
 }
 @media (max-width: 860px) {
@@ -809,10 +806,11 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   -webkit-backdrop-filter: blur(12px);
   border-radius: 24px;
   padding: 2rem;
-  margin: -2rem;
+  /* No negative margin — that was the source of the horizontal
+     overflow on mobile (a bleed effect isn't worth a broken viewport) */
 }
 @media (max-width: 860px) {
-  .hero-content { padding: 1.5rem 1.25rem; margin: 0 -0.25rem; }
+  .hero-content { padding: 1.5rem 1.25rem; }
 }
 
 .hero-p {
@@ -895,7 +893,7 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 /* ═══════════════════════════════════════════════════════════
    SECTIONS — mostly transparent, content floats in 3D space
 ═══════════════════════════════════════════════════════════ */
-.section { padding: 7rem max(1.5rem, 5vw); scroll-snap-align: start; }
+.section { padding: 7rem max(1.5rem, 5vw); }
 
 /* Generic readability scrim for naked text blocks sitting on the canvas */
 .text-scrim {
