@@ -9,8 +9,8 @@
     <!-- Desktop inline nav -->
     <div class="d-none d-lg-flex align-items-center gap-1 me-3">
       <a class="nav-link-inline" href="/#how">How It Works</a>
-      <a class="nav-link-inline" href="/#vendors">For Vendors</a>
-      <a class="nav-link-inline" href="/#pricing">Pricing</a>
+      <a class="nav-link-inline" href="/#picker">For Vendors</a>
+      <a class="nav-link-inline" href="/#contact">Pricing</a>
       <a class="nav-link-inline" href="/#contact">Contact</a>
     </div>
     <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2">
@@ -45,12 +45,12 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#vendors" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="/#picker" data-bs-dismiss="offcanvas">
               <i class="bi bi-shop me-2 text-gold"></i>For Vendors
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#pricing" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="/#contact" data-bs-dismiss="offcanvas">
               <i class="bi bi-tag me-2 text-gold"></i>Pricing
             </a>
           </li>
