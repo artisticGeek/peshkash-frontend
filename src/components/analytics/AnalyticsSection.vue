@@ -40,14 +40,15 @@
           v-if="selectedVendorId"
           class="btn btn-sm btn-outline-success"
           :disabled="exportLoading"
-          title="Export raw analytics for selected vendor"
+          :title="exportError ?? 'Export raw analytics for selected vendor'"
           @click="exportVendor(
             selectedVendorId!,
             vendors.find(v => v.id === selectedVendorId)?.displayName ?? 'vendor'
           )"
         >
-          <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+          <i :class="exportError ? 'bi bi-exclamation-triangle me-1 text-warning' : 'bi bi-file-earmark-spreadsheet me-1'"></i>
           <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
+          <span v-else-if="exportError" class="text-warning">No data</span>
           <span v-else>Excel</span>
         </button>
       </div>
@@ -378,7 +379,7 @@ const summary = ref<Summary | null>(null);
 const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(undefined);
 
-const { exportVendor, loading: exportLoading } = useAnalyticsExport();
+const { exportVendor, loading: exportLoading, error: exportError } = useAnalyticsExport();
 const range = ref<RangeValue>('30d');
 
 // Drill-down state
