@@ -2153,7 +2153,7 @@ const vendorQrMappings = computed(() => {
       const event = events.value.find((e) => e.name === eventSlug);
       return event?.vendorId === selectedVendorId.value;
     }
-    return true; // custom paths shown in all vendor contexts
+    return false; // unclassified paths hidden in vendor-scoped views
   }).map(withMeta);
 });
 const eventQrMapping = computed(() =>
