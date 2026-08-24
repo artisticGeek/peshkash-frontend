@@ -84,10 +84,16 @@
                 </div>
               </div>
 
+              <!-- Address -->
+              <div v-if="vendorData?.address" class="contact-row">
+                <i class="bi bi-geo-alt-fill row-icon"></i>
+                <span class="row-value">{{ vendorData.address }}</span>
+              </div>
+
             </div>
           </div>
 
-          <!-- Map — themed, read-only -->
+          <!-- Map — only when Google Maps contact field is explicitly set -->
           <div v-if="mapQuery" class="map-section">
             <div class="map-frame-wrap">
               <iframe
@@ -240,6 +246,11 @@ const CONTACT_FIELD_MAP: Record<string, ContactMeta> = {
     hrefFn: (v) => v.startsWith('http') ? v : `https://youtube.com/@${v.replace(/^@/, '')}`,
     isSocial: true, socialIcon: 'bi-youtube', socialLabel: 'YouTube', socialKey: 'youtube',
   },
+  'Google Review': {
+    icon: 'bi bi-google',
+    hrefFn: (v) => v,
+    isSocial: true, socialIcon: 'bi-google', socialLabel: 'Review Us', socialKey: 'google-review',
+  },
 }
 
 // ── Raw parsed contact list (used for vCard + field lookups) ──────────────────
@@ -273,19 +284,18 @@ const websiteDomain = computed(() => {
 })
 
 // ── Map section ───────────────────────────────────────────────────────────────
-// Prefer explicit Google Maps field; extract query if it's a full URL; else fall back to address.
+// Only renders when a Google Maps contact field is explicitly set.
+// Address is shown as plain text in the contact list independently.
 const mapQuery = computed(() => {
   const gmaps = parsedContact.value.find(f => f.prefix === 'Google Maps')
-  if (gmaps) {
-    if (gmaps.value.startsWith('http')) {
-      try {
-        const u = new URL(gmaps.value)
-        return u.searchParams.get('q') || u.searchParams.get('daddr') || gmaps.value
-      } catch { return gmaps.value }
-    }
-    return gmaps.value
+  if (!gmaps) return null
+  if (gmaps.value.startsWith('http')) {
+    try {
+      const u = new URL(gmaps.value)
+      return u.searchParams.get('q') || u.searchParams.get('daddr') || gmaps.value
+    } catch { return gmaps.value }
   }
-  return vendorData.value?.address ?? null
+  return gmaps.value
 })
 
 const mapsUrl = computed(() => {

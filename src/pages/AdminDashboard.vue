@@ -1956,7 +1956,8 @@ const SOCIAL_TYPES = [
   { key: 'Facebook',  icon: 'bi-facebook',  label: 'Facebook',   prefix: null,  hint: 'page name or facebook.com/…' },
   { key: 'LinkedIn',  icon: 'bi-linkedin',  label: 'LinkedIn',   prefix: 'in/', hint: 'profile or linkedin.com/…' },
   { key: 'Twitter',   icon: 'bi-twitter-x', label: 'Twitter / X',prefix: '@',   hint: 'handle or x.com/…' },
-  { key: 'YouTube',   icon: 'bi-youtube',   label: 'YouTube',    prefix: '@',   hint: 'channel or youtube.com/…' },
+  { key: 'YouTube',       icon: 'bi-youtube',   label: 'YouTube',       prefix: '@',   hint: 'channel or youtube.com/…' },
+  { key: 'Google Review', icon: 'bi-google',    label: 'Google Review', prefix: null,  hint: 'Google review link URL' },
 ] as const;
 type SocialKey = (typeof SOCIAL_TYPES)[number]['key'];
 
