@@ -1,31 +1,28 @@
 <template>
   <div class="scoped-analytics-panel">
-    <!-- Header -->
-    <div class="d-flex align-items-start justify-content-between gap-2 mb-4">
-      <div>
-        <h6 class="fw-bold mb-0">
-          <i class="bi bi-bar-chart-line me-2 text-primary"></i>{{ vendorName }}
-        </h6>
-        <p v-if="lastActivityLabel" class="text-muted small mb-0 mt-1">Last scan: {{ lastActivityLabel }}</p>
+
+    <!-- Toolbar: last-scan label + range + controls -->
+    <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+      <span v-if="lastActivityLabel" class="text-muted small me-auto">
+        <i class="bi bi-clock me-1"></i>Last scan: {{ lastActivityLabel }}
+      </span>
+      <span v-else class="me-auto" />
+      <div class="btn-group btn-group-sm">
+        <button v-for="r in RANGES" :key="r.value" type="button" class="btn btn-outline-secondary"
+          :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
       </div>
-      <div class="d-flex gap-2 align-items-center flex-wrap justify-content-end">
-        <div class="btn-group btn-group-sm">
-          <button v-for="r in RANGES" :key="r.value" type="button" class="btn btn-outline-secondary"
-            :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading" title="Refresh">
-          <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-success" :disabled="exportLoading"
-          title="Export raw analytics to Excel" @click="exportVendor(props.vendorId, props.vendorName)">
-          <i class="bi bi-file-earmark-spreadsheet me-1"></i>
-          <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
-          <span v-else>Excel</span>
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')" title="Close analytics">
-          <i class="bi bi-x-lg"></i>
-        </button>
-      </div>
+      <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading" title="Refresh">
+        <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-success" :disabled="exportLoading"
+        title="Export raw analytics to Excel" @click="exportVendor(props.vendorId, props.vendorName)">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+        <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
+        <span v-else>Excel</span>
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')" title="Close analytics">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
 
     <!-- Loading skeleton -->
@@ -51,17 +48,18 @@
 
     <!-- Data -->
     <template v-else-if="summary">
-      <!-- 3 KPI cards -->
+
+      <!-- KPI cards -->
       <div class="row g-3 mb-3">
-        <div class="col-4">
-          <KpiCard label="Total Scans" :value="summary.totalScans"
+        <div :class="hasActions ? 'col-4' : 'col-6'">
+          <KpiCard label="Scans" :value="summary.totalScans"
             icon="bi-qr-code-scan" icon-class="text-primary" />
         </div>
-        <div class="col-4">
-          <KpiCard label="Actions Taken" :value="summary.totalActions"
+        <div :class="hasActions ? 'col-4' : 'col-6'">
+          <KpiCard label="Actions" :value="summary.totalActions"
             icon="bi-cursor-fill" icon-class="text-success" />
         </div>
-        <div class="col-4">
+        <div v-if="hasActions" class="col-4">
           <div class="kpi-card card border-0 shadow-sm h-100">
             <div class="card-body d-flex flex-column justify-content-between p-3">
               <div class="d-flex align-items-center justify-content-between mb-2">
@@ -77,9 +75,9 @@
         </div>
       </div>
 
-      <!-- Scans chart + Action breakdown -->
+      <!-- Scans chart + Action breakdown (breakdown only when there are actions) -->
       <div class="row g-3 mb-3">
-        <div class="col-12 col-md-7">
+        <div :class="hasActions ? 'col-12 col-md-7' : 'col-12'">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="section-label">Scans Over Time</h6>
@@ -87,7 +85,7 @@
             </div>
           </div>
         </div>
-        <div class="col-12 col-md-5">
+        <div v-if="hasActions" class="col-12 col-md-5">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="section-label">Action Breakdown</h6>
@@ -97,7 +95,7 @@
         </div>
       </div>
 
-      <!-- Top QR Codes (only if more than one or has data) -->
+      <!-- QR Codes -->
       <div v-if="summary.topQrDetails.length" class="card border-0 shadow-sm">
         <div class="card-body">
           <h6 class="section-label">QR Codes</h6>
@@ -117,7 +115,7 @@
                   <td class="text-center">{{ row.scans }}</td>
                   <td class="text-center">{{ row.actions }}</td>
                   <td class="text-center">
-                    <span :class="row.scans ? 'text-success fw-medium' : 'text-muted'">
+                    <span :class="row.actions > 0 ? 'text-success fw-medium' : 'text-muted'">
                       {{ row.scans ? Math.round((row.actions / row.scans) * 100) + '%' : '—' }}
                     </span>
                   </td>
@@ -127,6 +125,7 @@
           </div>
         </div>
       </div>
+
     </template>
   </div>
 </template>
@@ -164,6 +163,8 @@ const loading = ref(false);
 const error = ref(false);
 const summary = ref<Summary | null>(null);
 const range = ref<RangeValue>('30d');
+
+const hasActions = computed(() => (summary.value?.totalActions ?? 0) > 0);
 
 const engagementRate = computed(() => {
   const s = summary.value?.totalScans ?? 0;
@@ -206,7 +207,14 @@ onMounted(load);
 .scoped-analytics-panel { padding: 1rem; background: var(--bs-body-bg, #fff); }
 .kpi-card { border-radius: 12px; transition: box-shadow 0.2s; }
 .kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.10) !important; }
-.section-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bs-secondary-color, #6c757d); margin-bottom: 0.75rem; }
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bs-secondary-color, #6c757d);
+  margin-bottom: 0.75rem;
+}
 .text-purple { color: #7c3aed; }
 .spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
