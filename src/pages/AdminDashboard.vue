@@ -4040,13 +4040,14 @@ async function deleteVendorById(id: number, name: string) {
 
 /* ── Shell & sidebar layout ─────────────────────────────────────────────────── */
 .admin-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 260px 1fr;
   background: #f7f2ea;
   color: #2f2a24;
   font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   transition: grid-template-columns 0.22s ease;
+  overflow: hidden;
 }
 .admin-shell[data-sidebar="icons"] { grid-template-columns: 64px 1fr; }
 .admin-shell[data-sidebar="hidden"] { grid-template-columns: 0px 1fr; }
@@ -4301,7 +4302,8 @@ async function deleteVendorById(id: number, name: string) {
 
 .admin-main {
   min-width: 0;
-  overflow: auto;
+  height: 100vh;
+  overflow-y: auto;
   padding: 0 20px 16px;
 }
 
