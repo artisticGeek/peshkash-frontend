@@ -106,7 +106,7 @@
           <RouterLink class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-boxes"></i></span>
             <div>
-              <strong class="metric-value">{{ items.length }}</strong>
+              <strong class="metric-value">{{ vendorItems.length }}</strong>
               <span class="metric-label">Items</span>
             </div>
             <span class="metric-tile-sub">across all menus</span>
