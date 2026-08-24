@@ -284,18 +284,20 @@ const websiteDomain = computed(() => {
 })
 
 // ── Map section ───────────────────────────────────────────────────────────────
-// Only renders when a Google Maps contact field is explicitly set.
-// Address is shown as plain text in the contact list independently.
+// Google Maps contact field takes precedence; falls back to address field.
+// Address text is shown separately in the contact list regardless.
 const mapQuery = computed(() => {
   const gmaps = parsedContact.value.find(f => f.prefix === 'Google Maps')
-  if (!gmaps) return null
-  if (gmaps.value.startsWith('http')) {
-    try {
-      const u = new URL(gmaps.value)
-      return u.searchParams.get('q') || u.searchParams.get('daddr') || gmaps.value
-    } catch { return gmaps.value }
+  if (gmaps) {
+    if (gmaps.value.startsWith('http')) {
+      try {
+        const u = new URL(gmaps.value)
+        return u.searchParams.get('q') || u.searchParams.get('daddr') || gmaps.value
+      } catch { return gmaps.value }
+    }
+    return gmaps.value
   }
-  return gmaps.value
+  return vendorData.value?.address ?? null
 })
 
 const mapsUrl = computed(() => {
