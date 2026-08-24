@@ -13,7 +13,7 @@
       </div>
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <select
-          v-if="vendors.length"
+          v-if="vendors.length && !isVendorRole"
           v-model="selectedVendorId"
           class="form-select form-select-sm"
           style="max-width: 180px;"
@@ -328,6 +328,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import { gaEnabled } from '../../utils/ga';
+import { useAuthStore } from '../../stores/auth';
 import KpiCard from './KpiCard.vue';
 import ScanChart from './ScanChart.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
@@ -368,6 +369,9 @@ const RANGES = [
 
 type RangeValue = typeof RANGES[number]['value'];
 
+const authStore = useAuthStore();
+const isVendorRole = computed(() => authStore.role === 'vendor');
+
 const loading = ref(false);
 const error = ref(false);
 const summary = ref<Summary | null>(null);
@@ -385,7 +389,11 @@ const drilldownTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string
 const drawerTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
 const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
-const drilldownVendors = ref<Vendor[]>([]);
+const drilldownVendors = computed(() =>
+  selectedVendorId.value
+    ? vendors.value.filter(v => v.id === selectedVendorId.value)
+    : vendors.value
+);
 
 const drilldownEvents = computed(() =>
   selectedVendorId.value
@@ -515,7 +523,6 @@ async function loadVendors() {
   try {
     const res = await axios.get<Vendor[]>(`${API_BASE_URL}/admin/vendors`);
     vendors.value = res.data ?? [];
-    drilldownVendors.value = res.data ?? [];
   } catch {
     // vendors list stays empty — non-critical
   }
@@ -531,6 +538,9 @@ async function loadEvents() {
 }
 
 onMounted(async () => {
+  if (isVendorRole.value && authStore.vendorId) {
+    selectedVendorId.value = authStore.vendorId;
+  }
   await Promise.all([loadVendors(), load(), loadEvents()]);
 });
 </script>

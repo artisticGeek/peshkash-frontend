@@ -975,7 +975,7 @@
         <PrintStudio
           :event="selectedEventForItems ?? null"
           :targets="selectedEventForItems ? eventQrTargets(selectedEventForItems) : []"
-          :qr-mappings="qrMappings"
+          :qr-mappings="vendorQrMappings"
         />
       </section>
 
@@ -1062,7 +1062,7 @@
         <div class="adhoc-box">
           <h4>Import From Existing Menu</h4>
           <div class="form-grid">
-            <label>Import From Menu<select v-model.number="importForm.menuId" class="form-select"><option :value="0">Select menu</option><option v-for="menu in menus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
+            <label>Import From Menu<select v-model.number="importForm.menuId" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
             <label>Item<select v-model.number="importForm.itemId" class="form-select"><option :value="0">Select item</option><option v-for="item in importMenuItems" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option></select></label>
             <label>Custom Menu Name<input v-model.trim="importForm.customMenuDisplayName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
             <label>Destination<select v-model="importForm.destination" class="form-select"><option value="source">Selected source menu</option><option value="adhoc">Adhoc/custom menu</option><option value="both">Both</option></select></label>
