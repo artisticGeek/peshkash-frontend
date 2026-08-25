@@ -12,6 +12,11 @@
       </div>
     </div>
 
+    <!-- Error -->
+    <div v-else-if="fetchError" class="alert alert-warning py-2 small mb-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>{{ fetchError }}
+    </div>
+
     <!-- Empty -->
     <div v-else-if="!rows.length" class="el-empty text-muted small text-center py-4">
       <i class="bi bi-list-ul d-block fs-2 mb-2 opacity-25"></i>
@@ -89,10 +94,11 @@ const props = defineProps<{
 }>();
 
 const PAGE = 50;
-const rows    = ref<EventRow[]>([]);
-const total   = ref(0);
-const loading = ref(false);
-const hasMore = ref(false);
+const rows       = ref<EventRow[]>([]);
+const total      = ref(0);
+const loading    = ref(false);
+const hasMore    = ref(false);
+const fetchError = ref<string | null>(null);
 
 const ACTION_LABELS: Record<string, string> = {
   vendor_contact_view: 'Contact page opened',
@@ -183,6 +189,7 @@ function absTime(iso: string): string {
 
 async function fetchRows(offset = 0) {
   loading.value = true;
+  fetchError.value = null;
   try {
     const { data } = await axios.get<{ rows: EventRow[]; total: number }>(
       `${API_BASE_URL}/analytics/event-log`,
@@ -192,6 +199,10 @@ async function fetchRows(offset = 0) {
     else rows.value.push(...data.rows);
     total.value = data.total;
     hasMore.value = rows.value.length < data.total;
+  } catch (err: any) {
+    const msg = err?.response?.data?.error ?? err?.message ?? 'Failed to load events';
+    fetchError.value = msg;
+    console.error('[EventLog] fetch failed:', err?.response?.status, msg, err);
   } finally {
     loading.value = false;
   }
