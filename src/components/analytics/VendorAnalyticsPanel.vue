@@ -80,6 +80,16 @@
         </div>
       </div>
 
+      <!-- Event trace log -->
+      <div class="va-card mb-3">
+        <div class="va-section-label">Event Log</div>
+        <EventLog
+          :vendor-id="props.vendorId"
+          :from="dateRange.from"
+          :to="dateRange.to"
+        />
+      </div>
+
       <!-- QR table — only when there are multiple QR codes -->
       <div v-if="summary.topQrDetails.length > 1" class="va-card">
         <div class="va-section-label">QR Codes</div>
@@ -119,6 +129,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import ContactActionsChart from './ContactActionsChart.vue';
 import DateRangePicker, { type DateRange } from './DateRangePicker.vue';
+import EventLog from './EventLog.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 const CONTACT_ACTIONS = [
