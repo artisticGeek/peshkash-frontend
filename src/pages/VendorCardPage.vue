@@ -41,7 +41,7 @@
               <!-- Phone -->
               <div v-if="phoneField" class="contact-row">
                 <i class="bi bi-telephone-fill row-icon"></i>
-                <a :href="'tel:' + phoneField.value" class="row-value">{{ phoneField.value }}</a>
+                <a :href="'tel:' + phoneField.value" class="row-value" @click="analytics.track('call_click', { vendorId: vid() })">{{ phoneField.value }}</a>
                 <button
                   class="copy-btn"
                   :class="{ copied: copiedKey === 'phone' }"
@@ -56,7 +56,7 @@
               <!-- Email -->
               <div v-if="emailField" class="contact-row">
                 <i class="bi bi-envelope-fill row-icon"></i>
-                <a :href="'mailto:' + emailField.value" class="row-value">{{ emailField.value }}</a>
+                <a :href="'mailto:' + emailField.value" class="row-value" @click="analytics.track('email_click', { vendorId: vid() })">{{ emailField.value }}</a>
                 <button
                   class="copy-btn"
                   :class="{ copied: copiedKey === 'email' }"
@@ -120,6 +120,7 @@
                 :title="action.label"
                 target="_blank"
                 rel="noreferrer"
+                @click="trackSocial(action)"
               >
                 <i :class="'bi ' + action.icon"></i>
                 <span>{{ action.label }}</span>
@@ -346,9 +347,21 @@ const socialActions = computed((): SocialAction[] => {
   return actions
 })
 
+// ── Analytics helpers ─────────────────────────────────────────────────────────
+function vid() { return vendorData.value?.id as number | undefined }
+
+function trackSocial(action: SocialAction) {
+  const TYPE_MAP: Record<string, string> = {
+    whatsapp: 'whatsapp_click',
+    directions: 'directions_click',
+  }
+  analytics.track((TYPE_MAP[action.key] ?? 'social_click') as any, { vendorId: vid() })
+}
+
 // ── vCard download ────────────────────────────────────────────────────────────
 function downloadVCard() {
   if (!vendorData.value) return
+  analytics.track('save_contact', { vendorId: vid() })
   const vCard = [
     'BEGIN:VCARD',
     'VERSION:3.0',
@@ -375,6 +388,7 @@ function downloadVCard() {
 // ── Share ─────────────────────────────────────────────────────────────────────
 async function shareCard() {
   if (!vendorData.value) return
+  analytics.track('share_click', { vendorId: vid() })
   const shareData = {
     title: vendorData.value.displayName,
     text: vendorData.value.description || `Contact information for ${vendorData.value.displayName}`,
