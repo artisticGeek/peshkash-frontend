@@ -59,7 +59,7 @@
         </div>
         <div class="va-divider" />
         <div class="va-stat">
-          <div class="va-stat-value">{{ summary.totalActions }}</div>
+          <div class="va-stat-value">{{ totalContactActions }}</div>
           <div class="va-stat-label">Actions</div>
         </div>
         <template v-if="hasActions">
@@ -165,15 +165,23 @@ const error = ref(false);
 const summary = ref<Summary | null>(null);
 const range = ref<RangeValue>('30d');
 
-const hasActions = computed(() => (summary.value?.totalActions ?? 0) > 0);
+const CONTACT_ACTION_KEYS = new Set(CONTACT_ACTIONS.map(a => a.key));
 
 function actionCount(key: string): number {
   return summary.value?.actionBreakdown.find(a => a.actionType === key)?.count ?? 0;
 }
 
+// Sum only the 5 contact CTA types — excludes vendor_contact_view and other
+// internal events so the KPI matches what the tiles display.
+const totalContactActions = computed(() =>
+  CONTACT_ACTIONS.reduce((sum, a) => sum + actionCount(a.key), 0)
+);
+
+const hasActions = computed(() => totalContactActions.value > 0);
+
 const engagementRate = computed(() => {
   const s = summary.value?.totalScans ?? 0;
-  return s ? Math.round(((summary.value?.totalActions ?? 0) / s) * 100) : 0;
+  return s ? Math.round((totalContactActions.value / s) * 100) : 0;
 });
 
 const lastActivityLabel = computed(() => {
