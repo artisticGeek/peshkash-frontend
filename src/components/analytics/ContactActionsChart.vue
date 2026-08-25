@@ -1,24 +1,30 @@
 <template>
-  <div class="ca-chart">
-    <!-- CTA selector -->
-    <div class="ca-selector">
-      <label v-for="type in availableTypes" :key="type"
-        class="ca-chip" :class="{ 'ca-chip--on': selected.has(type) }"
-        :style="selected.has(type) ? chipStyle(type) : {}">
+  <div class="uc">
+    <!-- Series selector chips -->
+    <div class="uc-chips">
+      <!-- Scans chip always present -->
+      <label class="uc-chip" :class="{ 'uc-chip--on': showScans }"
+        :style="showScans ? chipStyle(SCANS_COLOR) : {}">
+        <input type="checkbox" class="visually-hidden" v-model="showScans" />
+        Scans
+      </label>
+      <!-- CTA chips — only types that have any data -->
+      <label v-for="type in availableCtaTypes" :key="type"
+        class="uc-chip" :class="{ 'uc-chip--on': selectedCtas.has(type) }"
+        :style="selectedCtas.has(type) ? chipStyle(ctaColor(type)) : {}">
         <input type="checkbox" class="visually-hidden"
-          :checked="selected.has(type)"
-          @change="toggle(type)" />
-        {{ LABEL[type] ?? type.replace(/_/g, ' ') }}
+          :checked="selectedCtas.has(type)" @change="toggleCta(type)" />
+        {{ LABELS[type] ?? type.replace(/_/g, ' ') }}
       </label>
     </div>
 
-    <!-- Chart or empty state -->
-    <div class="ca-wrap">
-      <div v-if="!availableTypes.length" class="ca-empty text-muted small text-center">
-        <i class="bi bi-cursor d-block mb-1 fs-3 opacity-25"></i>
-        No actions yet
+    <!-- Chart -->
+    <div class="uc-chart-wrap">
+      <div v-if="!hasData" class="uc-empty text-muted small text-center">
+        <i class="bi bi-bar-chart-line d-block mb-2 fs-2 opacity-25"></i>
+        No data for this period
       </div>
-      <Line v-else :data="chartData" :options="chartOptions" :plugins="[gradientPlugin]" />
+      <Line v-else :data="chartData" :options="chartOptions" />
     </div>
   </div>
 </template>
@@ -29,16 +35,22 @@ import { Line } from 'vue-chartjs';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, PointElement, LineElement,
-  Tooltip, Legend, Filler, type Plugin,
+  Tooltip, Legend, Filler,
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
+// ── Props ──────────────────────────────────────────────────────────────────────
 const props = defineProps<{
-  data: Array<{ date: string; actionType: string; count: number }>;
+  scansPerPeriod: Array<{ period: string; count: number }>;
+  actionsPerPeriodByType: Array<{ period: string; actionType: string; count: number }>;
+  from: Date;
+  to: Date;
+  granularity: 'hour' | 'day';
 }>();
 
-const LABEL: Record<string, string> = {
+// ── Labels / Colors ───────────────────────────────────────────────────────────
+const LABELS: Record<string, string> = {
   whatsapp_click:      'WhatsApp',
   call_click:          'Call',
   email_click:         'Email',
@@ -51,168 +63,207 @@ const LABEL: Record<string, string> = {
   menu_view:           'Menu View',
 };
 
-// Ordered palette — each type gets a stable color by index
-const PALETTE = [
-  '37,211,102',   // green  — WhatsApp
-  '59,130,246',   // blue   — Call
-  '234,179,8',    // yellow — Directions
-  '99,102,241',   // indigo — Save
-  '168,85,247',   // purple — Share
-  '14,165,233',   // sky    — Email
-  '249,115,22',   // orange — Social
-  '107,114,128',  // gray   — fallback
-];
+const SCANS_COLOR = '99,102,241';   // indigo — distinct from CTAs
 
-const COLOR_MAP: Record<string, string> = {
-  whatsapp_click:      PALETTE[0],
-  call_click:          PALETTE[1],
-  directions_click:    PALETTE[2],
-  save_contact:        PALETTE[3],
-  share_click:         PALETTE[4],
-  email_click:         PALETTE[5],
-  social_click:        PALETTE[6],
+const CTA_COLORS: Record<string, string> = {
+  whatsapp_click:      '37,211,102',
+  call_click:          '59,130,246',
+  email_click:         '14,165,233',
+  directions_click:    '234,179,8',
+  save_contact:        '168,85,247',
+  share_click:         '249,115,22',
+  social_click:        '107,114,128',
 };
+const CTA_FALLBACK = '16,185,129';
 
-function colorFor(type: string): string {
-  return COLOR_MAP[type] ?? PALETTE[PALETTE.length - 1];
+function ctaColor(type: string): string {
+  return CTA_COLORS[type] ?? CTA_FALLBACK;
 }
 
-function chipStyle(type: string) {
-  const c = colorFor(type);
+function chipStyle(rgb: string) {
   return {
-    background: `rgba(${c},0.15)`,
-    borderColor: `rgb(${c})`,
-    color: `rgb(${c})`,
+    background:   `rgba(${rgb},0.12)`,
+    borderColor:  `rgb(${rgb})`,
+    color:        `rgb(${rgb})`,
   };
 }
 
-// Derive all dates and types from raw data
-const allDates = computed(() => {
-  const s = new Set(props.data.map(d => d.date));
-  return [...s].sort();
-});
+// ── Selection state ───────────────────────────────────────────────────────────
+const showScans    = ref(true);
+const selectedCtas = ref<Set<string>>(new Set());  // default: none
 
-const availableTypes = computed(() => {
-  const s = new Set(props.data.map(d => d.actionType));
+const availableCtaTypes = computed(() => {
+  const s = new Set(props.actionsPerPeriodByType.map(d => d.actionType));
   return [...s];
 });
 
-// Selection state — default: select all
-const selected = ref<Set<string>>(new Set());
+// Auto-add newly appearing CTA types (don't auto-select them, but make them available)
+watch(availableCtaTypes, (n, o) => {
+  // no-op: chips appear automatically via computed; selection untouched
+}, { flush: 'post' });
 
-// Initialize with all types when data first arrives
-function initSelection() {
-  selected.value = new Set(availableTypes.value);
+function toggleCta(type: string) {
+  const s = new Set(selectedCtas.value);
+  s.has(type) ? s.delete(type) : s.add(type);
+  selectedCtas.value = s;
 }
-onMounted(initSelection);
-watch(availableTypes, (n, o) => {
-  // Add any new types automatically; keep existing selections
-  n.forEach(t => { if (!o.includes(t)) selected.value.add(t); });
+
+// ── Period generation (gap-fill) ──────────────────────────────────────────────
+const allPeriods = computed((): string[] => {
+  const periods: string[] = [];
+  const from = new Date(props.from);
+  const to   = new Date(props.to);
+
+  if (props.granularity === 'hour') {
+    // Truncate to hour
+    from.setMinutes(0, 0, 0);
+    const cur = new Date(from);
+    while (cur <= to) {
+      periods.push(formatPeriodKey(cur, 'hour'));
+      cur.setHours(cur.getHours() + 1);
+    }
+  } else {
+    // Truncate to day
+    from.setHours(0, 0, 0, 0);
+    const cur = new Date(from);
+    while (cur <= to) {
+      periods.push(formatPeriodKey(cur, 'day'));
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+  return periods;
 });
 
-function toggle(type: string) {
-  const s = new Set(selected.value);
-  s.has(type) ? s.delete(type) : s.add(type);
-  selected.value = s;
+function formatPeriodKey(d: Date, g: 'hour' | 'day'): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (g === 'hour') {
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00:00`;
+  }
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
-// Build per-type lookup: type → { date → count }
-function buildSeries(type: string): number[] {
+// Backend period strings may have different format; normalise to match our key format
+function normalisePeriod(raw: string, g: 'hour' | 'day'): string {
+  const d = new Date(raw.includes('T') ? raw : raw + 'T00:00:00');
+  if (isNaN(d.getTime())) return raw;
+  return formatPeriodKey(d, g);
+}
+
+// ── Chart labels ──────────────────────────────────────────────────────────────
+const chartLabels = computed(() => {
+  const spanDays = (props.to.getTime() - props.from.getTime()) / 86_400_000;
+  return allPeriods.value.map(p => {
+    const d = new Date(p.includes('T') ? p : p + 'T00:00:00');
+    if (props.granularity === 'hour') {
+      if (spanDays <= 1) return `${String(d.getHours()).padStart(2,'0')}:00`;
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+        + ` ${String(d.getHours()).padStart(2,'0')}:00`;
+    }
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  });
+});
+
+// ── Series builders ───────────────────────────────────────────────────────────
+function buildScanSeries(): number[] {
   const map = new Map<string, number>();
-  props.data.filter(d => d.actionType === type).forEach(d => map.set(d.date, d.count));
-  return allDates.value.map(date => map.get(date) ?? 0);
+  props.scansPerPeriod.forEach(r => map.set(normalisePeriod(r.period, props.granularity), r.count));
+  return allPeriods.value.map(p => map.get(p) ?? 0);
 }
 
-const gradientPlugin: Plugin<'line'> = {
-  id: 'ctaGradient',
-  beforeDatasetsDraw(chart) {
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
-    chart.data.datasets.forEach((ds: any) => {
-      if (!ds._ctaRgb || !ds.fill) return;
-      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-      g.addColorStop(0, `rgba(${ds._ctaRgb},0.2)`);
-      g.addColorStop(1, `rgba(${ds._ctaRgb},0)`);
-      ds.backgroundColor = g;
-    });
-  },
-};
+function buildCtaSeries(type: string): number[] {
+  const map = new Map<string, number>();
+  props.actionsPerPeriodByType
+    .filter(r => r.actionType === type)
+    .forEach(r => map.set(normalisePeriod(r.period, props.granularity), r.count));
+  return allPeriods.value.map(p => map.get(p) ?? 0);
+}
+
+function makeDataset(label: string, rgb: string, data: number[], fill = false) {
+  return {
+    label,
+    data,
+    borderColor: `rgb(${rgb})`,
+    backgroundColor: fill ? `rgba(${rgb},0.08)` : `rgba(${rgb},0.1)`,
+    borderWidth: 2,
+    tension: 0.35,
+    fill,
+    pointRadius: allPeriods.value.length <= 14 ? 4 : 2,
+    pointBackgroundColor: `rgb(${rgb})`,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 2,
+    pointHoverRadius: 6,
+  };
+}
+
+const hasData = computed(() => allPeriods.value.length > 0 && (showScans.value || selectedCtas.value.size > 0));
 
 const chartData = computed(() => {
-  const labels = allDates.value.map(d => {
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  });
-
-  const datasets = [...selected.value].map(type => {
-    const rgb = colorFor(type);
-    return {
-      label: LABEL[type] ?? type.replace(/_/g, ' '),
-      data: buildSeries(type),
-      borderColor: `rgb(${rgb})`,
-      borderWidth: 2,
-      tension: 0.38,
-      fill: selected.value.size === 1, // gradient fill only when one line
-      _ctaRgb: rgb,
-      backgroundColor: `rgba(${rgb},0.12)`,
-      pointRadius: allDates.value.length <= 10 ? 4 : 2,
-      pointBackgroundColor: `rgb(${rgb})`,
-      pointBorderColor: '#fff',
-      pointBorderWidth: 2,
-      pointHoverRadius: 6,
-    };
-  });
-
-  return { labels, datasets };
+  const datasets = [];
+  if (showScans.value) {
+    const onlyScans = !selectedCtas.value.size;
+    datasets.push(makeDataset('Scans', SCANS_COLOR, buildScanSeries(), onlyScans));
+  }
+  for (const type of selectedCtas.value) {
+    datasets.push(makeDataset(LABELS[type] ?? type, ctaColor(type), buildCtaSeries(type), false));
+  }
+  return { labels: chartLabels.value, datasets };
 });
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index' as const, intersect: false },
-  plugins: {
-    legend: { display: false }, // we have our own chip selector
-    tooltip: {
-      backgroundColor: 'rgba(17,24,39,0.88)',
-      titleColor: '#f3f4f6',
-      bodyColor: '#d1d5db',
-      padding: { top: 8, bottom: 8, left: 12, right: 12 },
-      cornerRadius: 8,
-      callbacks: {
-        label: (item: any) => ` ${item.dataset.label}: ${item.formattedValue}`,
+// ── Chart options ──────────────────────────────────────────────────────────────
+const chartOptions = computed(() => {
+  const maxTicks = props.granularity === 'hour' ? 12 : 10;
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index' as const, intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(17,24,39,0.9)',
+        titleColor: '#f3f4f6',
+        bodyColor: '#d1d5db',
+        padding: { top: 8, bottom: 8, left: 12, right: 12 },
+        cornerRadius: 8,
+        callbacks: {
+          label: (item: any) => ` ${item.dataset.label}: ${item.formattedValue}`,
+        },
       },
     },
-  },
-  scales: {
-    x: {
-      grid: { display: false },
-      border: { display: false },
-      ticks: { maxTicksLimit: 7, font: { size: 11 }, color: '#9ca3af' },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { maxTicksLimit: maxTicks, font: { size: 11 }, color: '#9ca3af', maxRotation: 0 },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0,0,0,0.04)' },
+        border: { display: false },
+        ticks: { precision: 0, font: { size: 11 }, color: '#9ca3af', padding: 6 },
+      },
     },
-    y: {
-      beginAtZero: true,
-      grid: { color: 'rgba(0,0,0,0.04)', tickLength: 0 },
-      border: { display: false },
-      ticks: { precision: 0, font: { size: 11 }, color: '#9ca3af', padding: 6 },
-    },
-  },
-};
+  };
+});
 </script>
 
 <style scoped>
-.ca-chart { display: flex; flex-direction: column; gap: 0.625rem; height: 100%; }
+.uc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  height: 100%;
+}
 
-/* Chip selector */
-.ca-selector {
+/* Chips */
+.uc-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
 }
-.ca-chip {
+.uc-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.65rem;
   border-radius: 999px;
   border: 1.5px solid var(--bs-border-color, #dee2e6);
   font-size: 0.7rem;
@@ -223,15 +274,15 @@ const chartOptions = {
   transition: background 0.12s, border-color 0.12s, color 0.12s;
   user-select: none;
 }
-.ca-chip--on { font-weight: 700; }
+.uc-chip--on { font-weight: 700; }
 
-/* Chart canvas */
-.ca-wrap {
+/* Chart */
+.uc-chart-wrap {
   position: relative;
   flex: 1;
-  min-height: 120px;
+  min-height: 130px;
 }
-.ca-empty {
+.uc-empty {
   position: absolute;
   inset: 0;
   display: flex;

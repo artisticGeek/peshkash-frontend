@@ -8,12 +8,7 @@
       </span>
       <span v-else />
       <div class="va-controls">
-        <div class="btn-group btn-group-sm">
-          <button v-for="r in RANGES" :key="r.value" type="button"
-            class="btn btn-outline-secondary"
-            :class="{ active: range === r.value }"
-            @click="setRange(r.value)">{{ r.label }}</button>
-        </div>
+        <DateRangePicker v-model="dateRange" @update:modelValue="load" />
         <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading" title="Refresh">
           <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
         </button>
@@ -29,7 +24,7 @@
       </div>
     </div>
 
-    <!-- Loading -->
+    <!-- Loading skeleton -->
     <div v-if="loading" class="va-stats-strip placeholder-glow mb-3">
       <div class="va-stat"><span class="placeholder col-4 rounded d-block mx-auto mb-1" style="height:2.5rem"></span><span class="placeholder col-6 rounded d-block mx-auto" style="height:.7rem"></span></div>
       <div class="va-divider" />
@@ -51,7 +46,7 @@
     <!-- Data -->
     <template v-else-if="summary">
 
-      <!-- Inline stats strip -->
+      <!-- Stats strip -->
       <div class="va-stats-strip mb-3">
         <div class="va-stat">
           <div class="va-stat-value">{{ summary.totalScans }}</div>
@@ -71,23 +66,17 @@
         </template>
       </div>
 
-      <!-- Two charts side by side -->
-      <div class="row g-3 mb-3">
-        <div class="col-12 col-md-6">
-          <div class="va-card h-100">
-            <div class="va-section-label">Scans Over Time</div>
-            <div class="va-chart-wrap">
-              <ScanChart :data="summary.scansPerDay" />
-            </div>
-          </div>
-        </div>
-        <div class="col-12 col-md-6">
-          <div class="va-card h-100">
-            <div class="va-section-label">Contact Actions</div>
-            <div class="va-chart-wrap">
-              <ContactActionsChart :data="summary.actionsPerDayByType ?? []" />
-            </div>
-          </div>
+      <!-- Unified chart -->
+      <div class="va-card mb-3">
+        <div class="va-section-label">Activity</div>
+        <div class="va-chart-wrap">
+          <ContactActionsChart
+            :scans-per-period="summary.scansPerPeriod"
+            :actions-per-period-by-type="summary.actionsPerPeriodByType"
+            :from="dateRange.from"
+            :to="dateRange.to"
+            :granularity="summary.granularity"
+          />
         </div>
       </div>
 
@@ -128,16 +117,16 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
-import ScanChart from './ScanChart.vue';
 import ContactActionsChart from './ContactActionsChart.vue';
+import DateRangePicker, { type DateRange } from './DateRangePicker.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 const CONTACT_ACTIONS = [
-  { key: 'whatsapp_click'  },
-  { key: 'call_click'      },
-  { key: 'directions_click'},
-  { key: 'save_contact'    },
-  { key: 'share_click'     },
+  { key: 'whatsapp_click'   },
+  { key: 'call_click'       },
+  { key: 'directions_click' },
+  { key: 'save_contact'     },
+  { key: 'share_click'      },
 ];
 
 const props = defineProps<{ vendorId: number; vendorName: string }>();
@@ -145,41 +134,41 @@ defineEmits<{ (e: 'close'): void }>();
 
 const { exportVendor, loading: exportLoading } = useAnalyticsExport();
 
-const RANGES = [
-  { label: '7D', value: '7d' }, { label: '30D', value: '30d' },
-  { label: '90D', value: '90d' }, { label: 'All', value: 'all' },
-] as const;
-type RangeValue = typeof RANGES[number]['value'];
+// Default: last 7 days
+function defaultRange(): DateRange {
+  const to   = new Date();
+  const from = new Date(to.getTime() - 7 * 24 * 3600 * 1000);
+  return { from, to, label: 'Last 7 days' };
+}
+
+const dateRange = ref<DateRange>(defaultRange());
 
 interface QrDetail { qrHash: string; qrType: string; targetName: string; scans: number; actions: number; lastActivity: string; }
 interface Summary {
-  totalScans: number; totalActions: number;
-  scansPerDay: Array<{ date: string; count: number }>;
+  totalScans: number;
+  totalActions: number;
+  scansPerPeriod: Array<{ period: string; count: number }>;
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
-  actionsPerDayByType: Array<{ date: string; actionType: string; count: number }>;
+  actionsPerPeriodByType: Array<{ period: string; actionType: string; count: number }>;
+  granularity: 'hour' | 'day';
+  rangeFrom: string;
+  rangeTo: string;
   lastActivity: string | null;
 }
 
 const loading = ref(false);
-const error = ref(false);
+const error   = ref(false);
 const summary = ref<Summary | null>(null);
-const range = ref<RangeValue>('30d');
-
-const CONTACT_ACTION_KEYS = new Set(CONTACT_ACTIONS.map(a => a.key));
 
 function actionCount(key: string): number {
   return summary.value?.actionBreakdown.find(a => a.actionType === key)?.count ?? 0;
 }
 
-// Sum only the 5 contact CTA types — excludes vendor_contact_view and other
-// internal events so the KPI matches what the tiles display.
 const totalContactActions = computed(() =>
   CONTACT_ACTIONS.reduce((sum, a) => sum + actionCount(a.key), 0)
 );
-
-const hasActions = computed(() => totalContactActions.value > 0);
-
+const hasActions    = computed(() => totalContactActions.value > 0);
 const engagementRate = computed(() => {
   const s = summary.value?.totalScans ?? 0;
   return s ? Math.round((totalContactActions.value / s) * 100) : 0;
@@ -196,14 +185,16 @@ const lastActivityLabel = computed(() => {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 });
 
-function setRange(v: RangeValue) { range.value = v; load(); }
-
 async function load() {
   loading.value = true;
-  error.value = false;
+  error.value   = false;
   try {
     const { data } = await axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, {
-      params: { range: range.value, vendorId: props.vendorId },
+      params: {
+        from:     dateRange.value.from.toISOString(),
+        to:       dateRange.value.to.toISOString(),
+        vendorId: props.vendorId,
+      },
     });
     summary.value = data;
   } catch {
@@ -230,7 +221,7 @@ onMounted(load);
   margin-bottom: 1.25rem;
 }
 .va-last-scan { font-size: 0.8rem; color: var(--bs-secondary-color, #6c757d); }
-.va-controls { display: flex; gap: 0.375rem; align-items: center; flex-wrap: wrap; }
+.va-controls  { display: flex; gap: 0.375rem; align-items: center; flex-wrap: wrap; }
 
 /* Stats strip */
 .va-stats-strip {
@@ -275,15 +266,13 @@ onMounted(load);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--bs-secondary-color, #6c757d);
-  margin-bottom: 0.625rem;
+  margin-bottom: 0.75rem;
 }
 
-/* Chart height override */
-.va-chart-wrap :deep(.scan-chart-wrap) { height: 160px; }
-
-
-/* Range btn group active state */
-.btn-group .btn.active { background-color: var(--bs-primary); color: #fff; border-color: var(--bs-primary); }
+/* Chart area — tall enough to read */
+.va-chart-wrap {
+  height: 220px;
+}
 
 .spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
