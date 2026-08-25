@@ -71,23 +71,22 @@
         </template>
       </div>
 
-      <!-- Scans chart -->
-      <div class="va-card mb-3">
-        <div class="va-section-label">Scans Over Time</div>
-        <div class="va-chart-wrap">
-          <ScanChart :data="summary.scansPerDay" />
+      <!-- Two charts side by side -->
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6">
+          <div class="va-card h-100">
+            <div class="va-section-label">Scans Over Time</div>
+            <div class="va-chart-wrap">
+              <ScanChart :data="summary.scansPerDay" />
+            </div>
+          </div>
         </div>
-      </div>
-
-      <!-- Contact actions grid — always visible -->
-      <div class="va-card mb-3">
-        <div class="va-section-label">Contact Actions</div>
-        <div class="va-action-grid">
-          <div v-for="action in CONTACT_ACTIONS" :key="action.key"
-            class="va-action-tile" :class="{ 'va-action-tile--active': actionCount(action.key) > 0 }">
-            <i :class="`bi ${action.icon} va-action-icon`"></i>
-            <div class="va-action-count">{{ actionCount(action.key) }}</div>
-            <div class="va-action-name">{{ action.label }}</div>
+        <div class="col-12 col-md-6">
+          <div class="va-card h-100">
+            <div class="va-section-label">Contact Actions</div>
+            <div class="va-chart-wrap">
+              <ContactActionsChart :data="summary.actionBreakdown" />
+            </div>
           </div>
         </div>
       </div>
@@ -130,14 +129,15 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import ScanChart from './ScanChart.vue';
+import ContactActionsChart from './ContactActionsChart.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 const CONTACT_ACTIONS = [
-  { key: 'whatsapp_click',  label: 'WhatsApp',  icon: 'bi-whatsapp'       },
-  { key: 'call_click',      label: 'Call',       icon: 'bi-telephone-fill' },
-  { key: 'directions_click',label: 'Directions', icon: 'bi-geo-alt-fill'   },
-  { key: 'save_contact',    label: 'Save',       icon: 'bi-person-plus-fill'},
-  { key: 'share_click',     label: 'Share',      icon: 'bi-share-fill'     },
+  { key: 'whatsapp_click'  },
+  { key: 'call_click'      },
+  { key: 'directions_click'},
+  { key: 'save_contact'    },
+  { key: 'share_click'     },
 ];
 
 const props = defineProps<{ vendorId: number; vendorName: string }>();
@@ -280,45 +280,6 @@ onMounted(load);
 /* Chart height override */
 .va-chart-wrap :deep(.scan-chart-wrap) { height: 160px; }
 
-/* Contact action grid */
-.va-action-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.5rem;
-}
-.va-action-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.625rem 0.25rem;
-  border-radius: 10px;
-  background: var(--bs-tertiary-bg, #f8f9fa);
-  text-align: center;
-  transition: background 0.15s;
-}
-.va-action-tile--active {
-  background: #e8f5e9;
-}
-.va-action-icon {
-  font-size: 1.25rem;
-  color: var(--bs-secondary-color, #6c757d);
-}
-.va-action-tile--active .va-action-icon { color: #2e7d32; }
-.va-action-count {
-  font-size: 1.3rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--bs-body-color);
-}
-.va-action-tile--active .va-action-count { color: #1b5e20; }
-.va-action-name {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--bs-secondary-color, #6c757d);
-}
 
 /* Range btn group active state */
 .btn-group .btn.active { background-color: var(--bs-primary); color: #fff; border-color: var(--bs-primary); }
