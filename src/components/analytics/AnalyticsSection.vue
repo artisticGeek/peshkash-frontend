@@ -22,16 +22,7 @@
           <option :value="undefined">All Vendors</option>
           <option v-for="v in vendors" :key="v.id" :value="v.id">{{ v.displayName }}</option>
         </select>
-        <div class="btn-group btn-group-sm" role="group">
-          <button
-            v-for="r in RANGES"
-            :key="r.value"
-            type="button"
-            class="btn btn-outline-secondary"
-            :class="{ active: range === r.value }"
-            @click="setRange(r.value)"
-          >{{ r.label }}</button>
-        </div>
+        <DateRangePicker v-model="dateRange" @update:modelValue="load" />
         <button class="btn btn-sm btn-outline-primary" @click="load" :disabled="loading">
           <i class="bi bi-arrow-clockwise" :class="{ 'spin': loading }"></i>
         </button>
@@ -110,19 +101,19 @@
 
       <!-- Charts row -->
       <div class="row g-3 mb-4">
-        <div class="col-12 col-lg-8">
+        <div class="col-12">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-              <h6 class="fw-semibold mb-3">Scans Over Time</h6>
-              <ScanChart :data="summary.scansPerDay" />
-            </div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="fw-semibold mb-3">User Actions</h6>
-              <ActionBreakdown :data="summary.actionBreakdown" />
+              <h6 class="fw-semibold mb-2">Activity Over Time</h6>
+              <div style="height: 220px;">
+                <ContactActionsChart
+                  :scans-per-period="summaryScansPerPeriod"
+                  :actions-per-period-by-type="summaryActionsPerPeriodByType"
+                  :from="dateRange.from"
+                  :to="dateRange.to"
+                  :granularity="summaryGranularity"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -211,7 +202,7 @@
           <div class="card border-0 shadow-sm">
             <div class="card-body">
               <h6 class="fw-semibold mb-3">Top Items / Products</h6>
-              <TopItemsTable :range="range" :vendor-id="selectedVendorId" :show-vendor="true" :show-event="true" />
+              <TopItemsTable range="30d" :vendor-id="selectedVendorId" :show-vendor="true" :show-event="true" />
             </div>
           </div>
         </div>
@@ -331,7 +322,8 @@ import { API_BASE_URL } from '../../config';
 import { gaEnabled } from '../../utils/ga';
 import { useAuthStore } from '../../stores/auth';
 import KpiCard from './KpiCard.vue';
-import ScanChart from './ScanChart.vue';
+import ContactActionsChart from './ContactActionsChart.vue';
+import DateRangePicker from './DateRangePicker.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
 import DeviceSplit from './DeviceSplit.vue';
 import TopItemsTable from './TopItemsTable.vue';
@@ -354,21 +346,16 @@ interface QrDetail {
 interface Summary {
   totalScans: number;
   totalActions: number;
-  scansPerDay: Array<{ date: string; count: number }>;
+  scansPerDay?: Array<{ date: string; count: number }>;
+  scansPerPeriod?: Array<{ period: string; count: number }>;
+  actionsPerDayByType?: Array<{ date: string; actionType: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  granularity?: 'hour' | 'day';
   topQrHashes: Array<{ qrHash: string; count: number }>;
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
   deviceSplit: Array<{ deviceType: string; count: number }>;
 }
-
-const RANGES = [
-  { label: '7D', value: '7d' },
-  { label: '30D', value: '30d' },
-  { label: '90D', value: '90d' },
-  { label: 'All', value: 'all' },
-] as const;
-
-type RangeValue = typeof RANGES[number]['value'];
 
 const authStore = useAuthStore();
 const isVendorRole = computed(() => authStore.role === 'vendor');
@@ -380,7 +367,13 @@ const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(undefined);
 
 const { exportVendor, loading: exportLoading, error: exportError } = useAnalyticsExport();
-const range = ref<RangeValue>('30d');
+
+function defaultDateRange() {
+  const to   = new Date();
+  const from = new Date(to.getTime() - 30 * 24 * 3600 * 1000);
+  return { from, to, label: 'Last 30 days' };
+}
+const dateRange = ref(defaultDateRange());
 
 // Drill-down state
 type ResourceTab = 'events' | 'contacts';
@@ -452,7 +445,7 @@ const summaryText = computed(() => {
   const actions = s.totalActions;
   const topQr = topQrDetails.value[0];
   const topAction = s.actionBreakdown[0];
-  const period = RANGE_LABEL[range.value] ?? 'This period';
+  const period = dateRange.value.label ?? 'This period';
 
   const parts: string[] = [];
   parts.push(`${period}, your QR pages received ${scans} scan${scans !== 1 ? 's' : ''} and ${actions} customer action${actions !== 1 ? 's' : ''}.`);
@@ -469,11 +462,24 @@ async function copySummary() {
   setTimeout(() => { summaryCopied.value = false; }, 2000);
 }
 
+// Compat: normalise new/old backend shapes for chart props
+const summaryScansPerPeriod = computed(() =>
+  summary.value?.scansPerPeriod?.length
+    ? summary.value.scansPerPeriod
+    : (summary.value?.scansPerDay ?? []).map(r => ({ period: r.date, count: r.count }))
+);
+const summaryActionsPerPeriodByType = computed(() =>
+  summary.value?.actionsPerPeriodByType?.length
+    ? summary.value.actionsPerPeriodByType
+    : (summary.value?.actionsPerDayByType ?? []).map(r => ({ period: r.date, actionType: r.actionType, count: r.count }))
+);
+const summaryGranularity = computed(() => summary.value?.granularity ?? 'day');
+
 const peakDay = computed(() => {
-  const days = summary.value?.scansPerDay ?? [];
-  if (!days.length) return { date: '—', count: 0 };
-  const peak = days.reduce((a, b) => b.count > a.count ? b : a);
-  const label = new Date(peak.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const periods = summaryScansPerPeriod.value;
+  if (!periods.length) return { date: '—', count: 0 };
+  const peak = periods.reduce((a, b) => b.count > a.count ? b : a);
+  const label = new Date(peak.period).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   return { date: label, count: peak.count };
 });
 
@@ -500,16 +506,14 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function setRange(v: RangeValue) {
-  range.value = v;
-  load();
-}
-
 async function load() {
   loading.value = true;
   error.value = false;
   try {
-    const params: Record<string, string | number> = { range: range.value };
+    const params: Record<string, string | number> = {
+      from: dateRange.value.from.toISOString(),
+      to:   dateRange.value.to.toISOString(),
+    };
     if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
     const res = await axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, { params });
     summary.value = res.data;

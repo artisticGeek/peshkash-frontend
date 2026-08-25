@@ -71,11 +71,11 @@
         <div class="va-section-label">Activity</div>
         <div class="va-chart-wrap">
           <ContactActionsChart
-            :scans-per-period="summary.scansPerPeriod"
-            :actions-per-period-by-type="summary.actionsPerPeriodByType"
+            :scans-per-period="scansPerPeriod"
+            :actions-per-period-by-type="actionsPerPeriodByType"
             :from="dateRange.from"
             :to="dateRange.to"
-            :granularity="summary.granularity"
+            :granularity="chartGranularity"
           />
         </div>
       </div>
@@ -147,19 +147,38 @@ interface QrDetail { qrHash: string; qrType: string; targetName: string; scans: 
 interface Summary {
   totalScans: number;
   totalActions: number;
-  scansPerPeriod: Array<{ period: string; count: number }>;
+  // New fields (backend finishing_24Aug26+)
+  scansPerPeriod?: Array<{ period: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  granularity?: 'hour' | 'day';
+  rangeFrom?: string;
+  rangeTo?: string;
+  // Legacy fields — still returned by older backend
+  scansPerDay?: Array<{ date: string; count: number }>;
+  actionsPerDayByType?: Array<{ date: string; actionType: string; count: number }>;
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
-  actionsPerPeriodByType: Array<{ period: string; actionType: string; count: number }>;
-  granularity: 'hour' | 'day';
-  rangeFrom: string;
-  rangeTo: string;
   lastActivity: string | null;
 }
 
 const loading = ref(false);
 const error   = ref(false);
 const summary = ref<Summary | null>(null);
+
+// Backward compat: fall back to legacy scansPerDay / actionsPerDayByType if new fields absent
+const scansPerPeriod = computed(() =>
+  (summary.value?.scansPerPeriod?.length
+    ? summary.value.scansPerPeriod
+    : (summary.value?.scansPerDay ?? []).map(r => ({ period: r.date, count: r.count })))
+);
+
+const actionsPerPeriodByType = computed(() =>
+  (summary.value?.actionsPerPeriodByType?.length
+    ? summary.value.actionsPerPeriodByType
+    : (summary.value?.actionsPerDayByType ?? []).map(r => ({ period: r.date, actionType: r.actionType, count: r.count })))
+);
+
+const chartGranularity = computed(() => summary.value?.granularity ?? 'day');
 
 function actionCount(key: string): number {
   return summary.value?.actionBreakdown.find(a => a.actionType === key)?.count ?? 0;

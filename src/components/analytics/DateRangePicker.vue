@@ -92,13 +92,15 @@ function toggle() {
       customFrom.value = toLocal(props.modelValue.from);
       customTo.value   = toLocal(props.modelValue.to);
     }
-    // Position panel below trigger
+    // Position panel below trigger — fixed coords (teleported to body)
     requestAnimationFrame(() => {
       if (!root.value) return;
       const rect = root.value.getBoundingClientRect();
+      const panelW = 380;
+      const left = Math.max(8, Math.min(rect.right - panelW, window.innerWidth - panelW - 8));
       panelStyle.value = {
-        top:  `${rect.bottom + window.scrollY + 6}px`,
-        left: `${Math.max(8, rect.right - 380 + window.scrollX)}px`,
+        top:  `${rect.bottom + 6}px`,
+        left: `${left}px`,
       };
     });
   }
@@ -142,17 +144,17 @@ onUnmounted(() => document.removeEventListener('click', onDocClick, true));
   gap: 0.15rem;
 }
 
-/* Backdrop — light, just for closing on outside click */
+/* Backdrop */
 .drp-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1039;
+  z-index: 1059;
 }
 
-/* Panel */
+/* Panel — fixed so it escapes any overflow:hidden ancestor (offcanvas, modal) */
 .drp-panel {
-  position: absolute;
-  z-index: 1040;
+  position: fixed;
+  z-index: 1060;
   width: 380px;
   background: var(--bs-body-bg, #fff);
   border: 1px solid var(--bs-border-color, #dee2e6);
