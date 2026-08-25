@@ -352,10 +352,16 @@ function vid() { return vendorData.value?.id as number | undefined }
 
 function trackSocial(action: SocialAction) {
   const TYPE_MAP: Record<string, string> = {
-    whatsapp: 'whatsapp_click',
-    directions: 'directions_click',
+    whatsapp:        'whatsapp_click',
+    directions:      'directions_click',
+    instagram:       'instagram_click',
+    facebook:        'facebook_click',
+    linkedin:        'linkedin_click',
+    twitter:         'twitter_click',
+    youtube:         'youtube_click',
+    'google-review': 'google_review_click',
   }
-  analytics.track((TYPE_MAP[action.key] ?? 'social_click') as any, { vendorId: vid() })
+  analytics.track((TYPE_MAP[action.key] ?? `${action.key}_click`) as any, { vendorId: vid() })
 }
 
 // ── vCard download ────────────────────────────────────────────────────────────
