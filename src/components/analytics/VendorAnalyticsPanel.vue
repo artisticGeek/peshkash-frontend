@@ -85,7 +85,7 @@
           <div class="va-card h-100">
             <div class="va-section-label">Contact Actions</div>
             <div class="va-chart-wrap">
-              <ContactActionsChart :data="summary.actionBreakdown" />
+              <ContactActionsChart :data="summary.actionsPerDayByType ?? []" />
             </div>
           </div>
         </div>
@@ -157,6 +157,7 @@ interface Summary {
   scansPerDay: Array<{ date: string; count: number }>;
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
+  actionsPerDayByType: Array<{ date: string; actionType: string; count: number }>;
   lastActivity: string | null;
 }
 
