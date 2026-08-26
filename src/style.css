@@ -89,3 +89,30 @@ p, .lead {
   font-weight: 600;
   transition: all 0.25s ease;
 }
+
+/* ── Peshkash loader utility ─────────────────────────────────────────────── */
+.pk-page-loader {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 3rem 1rem;
+  width: 100%;
+}
+.pk-page-loader--fullscreen {
+  background: var(--pk-near-black);
+  min-height: 100dvh;
+}
+.qr-redirect-shell {
+  display: contents;
+}
+.qr-redirect-error {
+  align-items: center;
+  color: var(--pk-muted-text);
+  display: flex;
+  font-size: 0.9rem;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 2rem;
+  text-align: center;
+}

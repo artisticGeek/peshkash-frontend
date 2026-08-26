@@ -9,18 +9,8 @@
   />
 
   <!-- Loading State -->
-  <div v-if="isLoading" class="container py-5">
-    <div class="text-center">
-      <div class="spinner-grow text-primary shadow-lg" style="width: 3rem; height: 3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-info shadow-lg mt-3" style="width: 2rem; height: 2rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-white shadow-lg mt-3" style="width: 1rem; height: 1rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
+  <div v-if="isLoading" class="pk-page-loader">
+    <peshkash-loader size="110" theme="light" label="Loading menu" />
   </div>
 
   <!-- Error State -->
@@ -115,11 +105,25 @@
       <i class="bi bi-basket display-1 text-muted"></i>
       <p class="text-muted mt-3">No items available in this menu.</p>
     </div>
+
+    <!-- Powered by Peshkash footer -->
+    <footer class="pk-powered-footer">
+      <a href="https://peshkash.app" target="_blank" rel="noopener" class="pk-powered-link">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="18" width="13" aria-hidden="true">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
+        <span class="pk-powered-label">powered by</span>
+        <span class="pk-powered-name">peshkash</span>
+      </a>
+    </footer>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, nextTick, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import MenuTree from '../components/MenuTree.vue'
@@ -127,10 +131,14 @@ import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
+import { usePageMeta } from '../composables/usePageMeta'
 
 const route = useRoute()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
+
+const { setMeta, resetMeta } = usePageMeta()
+onUnmounted(resetMeta)
 
 // Auth & login gate
 const authStore = useAuthStore()
@@ -229,6 +237,15 @@ onMounted(async () => {
     
     const data = await res.json()
     menuData.value = data
+
+    // Dynamic SEO
+    const menuDisplay  = data?.menu?.displayName  || menuName
+    const vendorDisplay = data?.vendor?.displayName || ''
+    setMeta(
+      vendorDisplay ? `${menuDisplay} by ${vendorDisplay} — Peshkash` : `${menuDisplay} — Peshkash`,
+      `Browse ${menuDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash — scan, explore, and enjoy.`,
+    )
+
     // If the vendor requires login and the user isn't logged in, show the modal.
     // No redirect — just gate the content; user stays on this page.
     if (data?.vendor?.requireLogin && !isLoggedIn.value) {
@@ -405,9 +422,44 @@ h1,
   .search-input {
     font-size: 0.95rem;
   }
-  
+
   .filter-tag {
     font-size: 0.9rem;
   }
+}
+
+/* Powered by Peshkash footer */
+.pk-powered-footer {
+  display: flex;
+  justify-content: center;
+  padding: 28px 0 20px;
+}
+
+.pk-powered-link {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 5px;
+  opacity: 0.55;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.pk-powered-link:hover {
+  opacity: 0.85;
+}
+
+.pk-powered-label {
+  color: #9a8870;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.pk-powered-name {
+  color: #BD945A;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 </style>

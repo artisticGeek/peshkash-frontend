@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import axios from 'axios';
 import QRCode from 'qrcode';
 import { API_BASE_URL } from '../config';
+import { drawPeshkashMark, EXPORT_SCALE as _EXPORT_SCALE } from '../utils/qrRenderer';
 
 const props = defineProps<{ embedded?: boolean }>();
 
@@ -79,6 +80,40 @@ const PRESETS = [
 const FONTS = ['Inter', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New', 'Playfair Display'];
 const BASE_SCALE = 3.78; // px per mm at 100% zoom
 
+// Mini layout preview for the list-page preset cards
+function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
+  const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+  const base: Record<string, string> = {
+    position: 'absolute',
+    left: pct(el.x, tpl.widthMm),
+    top: pct(el.y, tpl.heightMm),
+    width: pct(el.width, tpl.widthMm),
+    height: pct(el.height, tpl.heightMm),
+    boxSizing: 'border-box',
+  };
+  if (el.type === 'rect') {
+    const r = el as RectEl;
+    base.background = r.fill;
+    if ((r.strokeWidth ?? 0) > 0) base.border = `1px solid ${r.stroke}`;
+    if ((r.borderRadius ?? 0) > 0) base.borderRadius = '2px';
+    base.opacity = String(r.opacity ?? 1);
+  } else if (el.type === 'qr') {
+    base.background = '#e8e8e8';
+    base.backgroundImage = 'repeating-conic-gradient(#c0c0c0 0% 25%, #e8e8e8 0% 50%)';
+    base.backgroundSize = '5px 5px';
+  } else if (el.type === 'text') {
+    const t = el as TextEl;
+    base.background = t.color;
+    base.opacity = '0.28';
+    base.borderRadius = '1px';
+  } else if (el.type === 'image') {
+    base.background = '#d4b07a44';
+    base.borderRadius = '1px';
+    base.border = '1px dashed #d4b07a';
+  }
+  return base;
+}
+
 // ─── Trendy Preset Templates ──────────────────────────────────────────────────
 
 interface PresetTemplate {
@@ -97,7 +132,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       name: 'Classic Business Card', widthMm: 85, heightMm: 54,
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#faf8f3', stroke: '#c9a96e', strokeWidth: 0.6, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 41, width: 75, height: 8, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 10, fontWeight: '600', color: '#4a3f2e', textAlign: 'center' as const },
       ]
     })
@@ -111,7 +146,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#15191e', stroke: '#15191e', strokeWidth: 0, borderRadius: 2, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Gold Strip', x: 0, y: 44, width: 85, height: 10, locked: true, fill: '#c9a96e', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 46, width: 77, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Inter', fontSize: 7, fontWeight: '700', color: '#15191e', textAlign: 'center' as const },
       ]
     })
@@ -126,7 +161,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#ffffff', stroke: '#e8dccb', strokeWidth: 0.4, borderRadius: 3, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Header Bar', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1a1a1a', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
         { id: uid(), type: 'image' as const, name: 'Logo', x: 29, y: 4, width: 32, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 87, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Playfair Display', fontSize: 13, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' as const },
         { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 103, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Inter', fontSize: 8, fontWeight: '400', color: '#9a8870', textAlign: 'center' as const },
       ]
@@ -141,7 +176,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#ffffff', stroke: '#e8e0d4', strokeWidth: 0.5, borderRadius: 2, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Accent Bar', x: 0, y: 0, width: 80, height: 4, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 67, width: 70, height: 9, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 11, fontWeight: '500', color: '#15191e', textAlign: 'center' as const },
       ]
     })
@@ -155,7 +190,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 50, height: 30, locked: true, fill: '#ffffff', stroke: '#d8d0c4', strokeWidth: 0.4, borderRadius: 1.5, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Divider', x: 29, y: 4, width: 0.5, height: 22, locked: true, fill: '#e0d8cc', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Scan Text', x: 31, y: 10, width: 16, height: 10, locked: false, content: 'Scan for menu', fontFamily: 'Inter', fontSize: 6, fontWeight: '500', color: '#4a3f2e', textAlign: 'left' as const },
       ]
     })
@@ -272,13 +307,18 @@ function redo() {
 
 async function generateQrPreview(el: QrEl) {
   try {
-    const url = await QRCode.toDataURL('peshkash-preview', {
-      width: 200,
+    const previewSize = 200;
+    const qCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qCanvas, 'peshkash-preview', {
+      width: previewSize,
       margin: el.margin,
       color: { dark: el.fgColor, light: el.bgColor === 'transparent' ? '#ffffff' : el.bgColor },
-      errorCorrectionLevel: el.errorLevel,
+      errorCorrectionLevel: 'H', // always H so logo fits
     });
-    qrPreviews.value[el.id] = url;
+    // Overlay Peshkash mark (non-editable)
+    const ctx = qCanvas.getContext('2d')!;
+    drawPeshkashMark(ctx, previewSize / 2, previewSize / 2, previewSize * 0.22);
+    qrPreviews.value[el.id] = qCanvas.toDataURL('image/png');
   } catch { /* ignore */ }
 }
 
@@ -293,7 +333,7 @@ watch(
 function makeQr(): QrEl {
   const cx = tpl.widthMm / 2 - 15;
   const cy = tpl.heightMm / 2 - 15;
-  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#000000', bgColor: '#ffffff', margin: 1, errorLevel: 'M', borderRadius: 0 };
+  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#000000', bgColor: '#ffffff', margin: 1, errorLevel: 'H', borderRadius: 0 };
 }
 
 function makeText(): TextEl {
@@ -562,8 +602,10 @@ function applyPreset(p: typeof PRESETS[0]) {
 async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promise<void> {
   const pw = Math.round(tpl.widthMm * EXPORT_SCALE);
   const ph = Math.round(tpl.heightMm * EXPORT_SCALE);
+  const FOOTER_H = Math.round(6 * EXPORT_SCALE); // 6 mm branded footer
+
   canvas.width = pw;
-  canvas.height = ph;
+  canvas.height = ph + FOOTER_H;
   const ctx = canvas.getContext('2d')!;
 
   ctx.fillStyle = '#ffffff';
@@ -618,7 +660,7 @@ async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promi
         width: ew,
         margin: q.margin,
         color: { dark: q.fgColor, light: q.bgColor === 'transparent' ? '#ffffff' : q.bgColor },
-        errorCorrectionLevel: q.errorLevel,
+        errorCorrectionLevel: 'H', // always H to allow logo overlay
       });
       const br = q.borderRadius * EXPORT_SCALE;
       if (br > 0) {
@@ -629,9 +671,34 @@ async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promi
       }
       ctx.drawImage(qCanvas, ex, ey, ew, eh);
       if (br > 0) ctx.restore();
+      // Non-editable Peshkash mark centred on QR
+      ctx.globalAlpha = 1;
+      drawPeshkashMark(ctx, ex + ew / 2, ey + eh / 2, ew * 0.22);
     }
     ctx.restore();
   }
+
+  // ── Branded footer strip ──────────────────────────────────────────────────
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#f5f1eb';
+  ctx.fillRect(0, ph, pw, FOOTER_H);
+  ctx.fillStyle = '#e0d4be';
+  ctx.fillRect(0, ph, pw, Math.ceil(EXPORT_SCALE * 0.2));
+
+  const markH = FOOTER_H * 0.52;
+  const markCX = FOOTER_H * 0.72;
+  const markCY = ph + FOOTER_H / 2;
+  drawPeshkashMark(ctx, markCX, markCY, markH);
+
+  const textX = markCX + markH * 0.65;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.font = `400 ${Math.round(FOOTER_H * 0.24)}px Arial, sans-serif`;
+  ctx.fillStyle = '#9a8870';
+  ctx.fillText('powered by', textX, ph + FOOTER_H * 0.42);
+  ctx.font = `600 ${Math.round(FOOTER_H * 0.38)}px Georgia, "Times New Roman", serif`;
+  ctx.fillStyle = '#BD945A';
+  ctx.fillText('peshkash', textX, ph + FOOTER_H * 0.78);
 }
 
 async function exportPng(qrValue = 'https://peshkash.com') {
@@ -692,34 +759,51 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 <template>
   <!-- ── LIST VIEW ─────────────────────────────────────────── -->
   <div v-if="view === 'list'" class="qrt-list-page" :class="{ 'qrt-list-page--embedded': props.embedded }">
-    <div class="qrt-list-header">
-      <div>
-        <h2>Print Templates</h2>
-        <p class="hint">Design print-ready layouts once — reuse for every event or vendor.</p>
+
+    <!-- Hero banner -->
+    <div class="qrt-hero">
+      <div class="qrt-hero-mark">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="52" width="38">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
       </div>
-      <button class="btn btn-primary" @click="newTemplate">
-        <i class="bi bi-plus-lg"></i> Blank Template
+      <div class="qrt-hero-text">
+        <h2>QR Template Studio</h2>
+        <p>Design once. Share your Peshkash everywhere.<br>Every QR is automatically branded with the Peshkash mark — at 300 DPI, print-ready.</p>
+      </div>
+      <button class="btn btn-primary qrt-hero-cta" @click="newTemplate">
+        <i class="bi bi-plus-lg"></i> Blank Canvas
       </button>
     </div>
 
-    <!-- Trendy presets -->
+    <!-- Presets -->
     <div class="qrt-presets-section">
       <p class="qrt-section-title"><i class="bi bi-stars"></i> Start from a preset</p>
       <div class="qrt-presets-grid">
         <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
-          <div class="qrt-preset-thumb">
-            <i :class="`bi ${p.icon}`"></i>
+          <!-- Real layout preview thumbnail -->
+          <div class="qrt-preset-visual-wrap">
+            <div
+              class="qrt-preset-visual"
+              :style="{ aspectRatio: `${p.create().widthMm} / ${p.create().heightMm}` }"
+            >
+              <div v-for="el in p.create().elements" :key="el.id" :style="miniElStyle(el, p.create())"></div>
+            </div>
           </div>
           <div class="qrt-preset-info">
             <strong>{{ p.name }}</strong>
             <span>{{ p.desc }}</span>
           </div>
+          <div class="qrt-preset-use-btn">Use this →</div>
         </div>
       </div>
     </div>
 
     <!-- Saved templates -->
-    <div v-if="templates.length > 0" class="qrt-saved-section">
+    <div v-if="templates.length > 0" class="qrt-saved-section" style="padding: 0 40px;">
       <p class="qrt-section-title"><i class="bi bi-folder2-open"></i> Your templates</p>
       <div class="qrt-grid">
         <div v-for="t in templates" :key="t.id" class="qrt-card" @click="openTemplate(t)">
@@ -747,7 +831,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     <!-- Header -->
     <header class="qrt-header">
       <button class="qrt-back-btn" @click="backToList"><i class="bi bi-arrow-left"></i></button>
-      <input v-model="tpl.name" class="qrt-name-input" placeholder="Template name" spellcheck="false" />
+      <div class="qrt-header-brand">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="18" width="13">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
+      </div>
+      <input v-model="tpl.name" class="qrt-name-input" placeholder="Design name" spellcheck="false" />
       <div class="qrt-header-actions">
         <!-- Panel toggles (visible on tablet/mobile only) -->
         <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: leftPanelOpen }" title="Toggle layers panel" @click="leftPanelOpen = !leftPanelOpen"><i class="bi bi-layout-sidebar"></i></button>
@@ -848,6 +940,22 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
           </div>
           <!-- Canvas size badge -->
           <div class="qrt-canvas-badge">{{ tpl.widthMm }} × {{ tpl.heightMm }} mm</div>
+
+          <!-- Non-editable Peshkash footer preview (matches export output) -->
+          <div class="qrt-brand-footer" :style="{ width: `${tpl.widthMm * displayScale}px` }">
+            <div class="qrt-brand-footer-mark">
+              <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="100%" width="auto" style="display:block">
+                <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+                <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+                <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+                <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+              </svg>
+            </div>
+            <div class="qrt-brand-footer-text">
+              <span class="qrt-brand-powered">powered by</span>
+              <span class="qrt-brand-name">peshkash</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1129,7 +1237,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
       </div>
       <div class="qrt-footer-hint">
         <i class="bi bi-info-circle"></i>
-        Export PNG at 300 DPI · Del to remove · Ctrl+Z undo
+        300 DPI export · Peshkash mark auto-added · Del removes · Ctrl+Z undo
       </div>
     </footer>
 
@@ -1164,7 +1272,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
         <div class="qrt-preview-canvas-area">
           <div v-if="previewRendering" class="qrt-preview-loading">
-            <i class="bi bi-hourglass-split"></i> Rendering…
+            <peshkash-loader size="80" theme="dark" label="Rendering preview" />
           </div>
           <img v-else-if="previewDataUrl" :src="previewDataUrl" class="qrt-preview-img" :alt="`Preview of ${tpl.name}`" />
         </div>
@@ -1188,7 +1296,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-list-page {
   background: #f7f4ef;
   min-height: 100vh;
-  padding: 32px 40px;
+  padding: 0 0 48px;
 }
 
 .qrt-list-page--embedded {
@@ -1197,18 +1305,42 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   overflow-y: auto;
 }
 
-.qrt-list-header {
-  align-items: flex-start;
+/* Hero banner */
+.qrt-hero {
+  align-items: center;
+  background: linear-gradient(135deg, #1a1410 0%, #2a1f14 100%);
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 28px;
+  gap: 20px;
+  padding: 32px 40px;
+  flex-wrap: wrap;
 }
 
-.qrt-list-header h2 {
-  color: #15191e;
-  font-size: 1.4rem;
+.qrt-hero-mark {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.qrt-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.qrt-hero-text h2 {
+  color: #f5f1eb;
+  font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+}
+
+.qrt-hero-text p {
+  color: #a89070;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.qrt-hero-cta {
+  flex-shrink: 0;
 }
 
 .hint {
@@ -1347,6 +1479,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-back-btn:hover { background: #f4f1ed; }
+
+.qrt-header-brand {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
 
 .qrt-name-input {
   background: transparent;
@@ -1538,6 +1677,48 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+/* Non-editable brand footer strip below the canvas */
+.qrt-brand-footer {
+  align-items: center;
+  background: #f5f1eb;
+  border-top: 1px solid #e0d4be;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.14);
+  display: flex;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.qrt-brand-footer-mark {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.qrt-brand-footer-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.qrt-brand-powered {
+  color: #9a8870;
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.qrt-brand-name {
+  color: #BD945A;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 /* Elements */
@@ -1818,77 +1999,99 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   align-items: center;
   color: #7a6a52;
   display: flex;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   gap: 6px;
-  letter-spacing: 0.05em;
-  margin: 0 0 12px;
+  letter-spacing: 0.06em;
+  margin: 0 0 16px;
   text-transform: uppercase;
 }
 
 .qrt-presets-section {
-  margin-bottom: 36px;
+  margin-bottom: 40px;
+  padding: 32px 40px 0;
 }
 
 .qrt-saved-section {
   margin-bottom: 24px;
+  padding: 0 40px;
 }
 
 .qrt-presets-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
+/* Preset card — vertical layout with real layout preview */
 .qrt-preset-card {
-  align-items: center;
   background: #fff;
   border: 1.5px solid #e6dfd4;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
-  gap: 12px;
-  padding: 14px 14px;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 }
 
 .qrt-preset-card:hover {
   border-color: #BD945A;
-  box-shadow: 0 4px 16px rgba(189, 148, 90, 0.18);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(189, 148, 90, 0.2);
+  transform: translateY(-2px);
 }
 
-.qrt-preset-thumb {
+/* Layout preview area */
+.qrt-preset-visual-wrap {
   align-items: center;
-  background: #f5f0e8;
-  border-radius: 6px;
+  background: #f0ece6;
+  background-image: radial-gradient(circle, #c8b99a33 1px, transparent 1px);
+  background-size: 10px 10px;
   display: flex;
-  flex-shrink: 0;
-  font-size: 1.4rem;
-  height: 44px;
   justify-content: center;
-  width: 44px;
-  color: #BD945A;
+  min-height: 110px;
+  padding: 16px;
+}
+
+.qrt-preset-visual {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.14);
+  max-height: 90px;
+  max-width: 100%;
+  position: relative;
+  width: 100%;
 }
 
 .qrt-preset-info {
+  border-top: 1px solid #f0ece6;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 0;
+  padding: 10px 12px 4px;
 }
 
 .qrt-preset-info strong {
   color: #15191e;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
 }
 
 .qrt-preset-info span {
   color: #9a8870;
-  font-size: 0.74rem;
-  line-height: 1.3;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
+
+.qrt-preset-use-btn {
+  color: #BD945A;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 6px 12px 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.qrt-preset-card:hover .qrt-preset-use-btn { opacity: 1; }
 
 /* ─── Preview modal ──────────────────────────────────────────────────────── */
 .qrt-preview-backdrop {
@@ -2043,7 +2246,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   .qrt-sidebar-left,
   .qrt-sidebar-right { width: 200px; }
 
-  .qrt-list-page { padding: 12px 14px; }
-  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .qrt-hero { padding: 20px 16px; }
+  .qrt-hero-text h2 { font-size: 1.1rem; }
+  .qrt-presets-section { padding: 20px 16px 0; }
+  .qrt-saved-section { padding: 0 16px !important; }
+  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 }
 </style>

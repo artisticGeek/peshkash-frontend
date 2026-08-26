@@ -1,12 +1,8 @@
 <template>
   <Navbar />
 
-  <div v-if="isLoading" class="container py-5">
-    <div class="text-center">
-      <div class="spinner-grow shadow-lg" style="width: 3rem; height: 3rem; color: #BD945A;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
+  <div v-if="isLoading" class="pk-page-loader">
+    <peshkash-loader size="110" theme="light" label="Loading" />
   </div>
 
   <div v-else-if="error" class="container py-5">
@@ -146,6 +142,20 @@
         </div>
       </div>
     </div>
+
+    <!-- Powered by Peshkash footer -->
+    <footer class="pk-powered-footer">
+      <a href="https://peshkash.app" target="_blank" rel="noopener" class="pk-powered-link">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="18" width="13" aria-hidden="true">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
+        <span class="pk-powered-label">powered by</span>
+        <span class="pk-powered-name">peshkash</span>
+      </a>
+    </footer>
   </div>
 
   <!-- Login gate — Teleports to <body>, so placement here doesn't affect layout.
@@ -159,16 +169,20 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
+import { usePageMeta } from '../composables/usePageMeta'
 
 const route = useRoute()
 const vendorName = route.params.vendorName as string
+
+const { setMeta, resetMeta } = usePageMeta()
+onUnmounted(resetMeta)
 
 // Auth & login gate
 const authStore = useAuthStore()
@@ -417,6 +431,14 @@ onMounted(async () => {
       throw new Error(`Failed to load vendor card: ${res.status}`)
     }
     vendorData.value = await res.json()
+
+    // Dynamic SEO
+    const display = vendorData.value?.displayName || vendorName
+    setMeta(
+      `${display} — on Peshkash`,
+      `Contact and connect with ${display} on Peshkash — scan, call, and save their details.`,
+    )
+
     // If the vendor requires login and the user isn't logged in, open the modal.
     // We never redirect — just gate the content behind the modal.
     if (vendorData.value?.requireLogin && !isLoggedIn.value) {
@@ -761,4 +783,25 @@ a.row-value:hover { color: #BD945A; }
   .map-frame-wrap      { height: 140px; }
   .social-btn i        { font-size: 1.3rem; }
 }
+
+/* Powered by Peshkash footer */
+.pk-powered-footer {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 20px;
+}
+
+.pk-powered-link {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 5px;
+  opacity: 0.5;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.pk-powered-link:hover { opacity: 0.85; }
+.pk-powered-label { color: #9a8870; font-size: 0.68rem; font-weight: 400; }
+.pk-powered-name { color: #BD945A; font-family: Georgia, 'Times New Roman', serif; font-size: 0.88rem; font-weight: 600; }
 </style>

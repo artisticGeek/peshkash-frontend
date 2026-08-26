@@ -46,7 +46,7 @@
                 </div>
                 <div v-if="error" class="ldrawer-error">{{ error }}</div>
                 <button class="ldrawer-btn-primary" :disabled="loading" @click="send">
-                  <span v-if="loading"><i class="bi bi-arrow-clockwise spin me-1"></i>Sending…</span>
+                  <span v-if="loading"><peshkash-loader size="22" theme="dark" label="Sending" style="display:inline-block;vertical-align:middle;margin-right:6px" />Sending…</span>
                   <span v-else>Send OTP</span>
                 </button>
               </template>
@@ -73,7 +73,7 @@
                 </div>
                 <div v-if="error" class="ldrawer-error">{{ error }}</div>
                 <button class="ldrawer-btn-primary" :disabled="loading" @click="verify">
-                  <span v-if="loading"><i class="bi bi-arrow-clockwise spin me-1"></i>Verifying…</span>
+                  <span v-if="loading"><peshkash-loader size="22" theme="dark" label="Verifying" style="display:inline-block;vertical-align:middle;margin-right:6px" />Verifying…</span>
                   <span v-else>Verify &amp; Continue</span>
                 </button>
               </template>

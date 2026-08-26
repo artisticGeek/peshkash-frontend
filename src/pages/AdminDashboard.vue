@@ -1078,7 +1078,7 @@
         <!-- ── QR Bank header ─────────────────────────────────────── -->
         <div class="qr-bank-header panel">
           <div>
-            <h3>QR Bank <span v-if="vendorQrMappings.length" class="qr-count-badge">{{ vendorQrMappings.length }}</span></h3>
+            <h3>QR Bank <span v-if="filteredQrMappings.length" class="qr-count-badge">{{ filteredQrMappings.length }}</span></h3>
           </div>
           <button class="btn btn-primary" type="button" @click="openQrEditor()">
             <i class="bi bi-plus-lg"></i> New QR Asset
@@ -1105,8 +1105,6 @@
               <button :class="{ active: qrTypeFilter === 'all' }" @click="qrTypeFilter = 'all'">All</button>
               <button :class="{ active: qrTypeFilter === 'dynamic' }" @click="qrTypeFilter = 'dynamic'">Event</button>
               <button :class="{ active: qrTypeFilter === 'contact' }" @click="qrTypeFilter = 'contact'">Contact</button>
-              <button :class="{ active: qrTypeFilter === 'menu' }" @click="qrTypeFilter = 'menu'">Menu</button>
-              <button :class="{ active: qrTypeFilter === 'item' }" @click="qrTypeFilter = 'item'">Item</button>
             </div>
             <select v-model="qrSortBy" class="form-select form-select-sm qr-sort-select">
               <option value="scans">Most scans</option>
@@ -1752,6 +1750,62 @@
 <script setup lang="ts">
 import axios from 'axios';
 import QRCode from 'qrcode';
+import { drawPeshkashMark } from '../utils/qrRenderer';
+
+/** Renders a framed, branded QR card (beige bg, border, P mark, right-aligned attribution). */
+async function makeQrDataUrl(url: string, size = 180): Promise<string> {
+  const qCanvas = document.createElement('canvas');
+  await QRCode.toCanvas(qCanvas, url, { margin: 1, width: size, errorCorrectionLevel: 'H' });
+
+  const pad      = Math.round(size * 0.10);
+  const footerH  = Math.round(size * 0.14);
+  const totalW   = size + pad * 2;
+  const totalH   = size + pad + footerH;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = totalW;
+  canvas.height = totalH;
+  const ctx = canvas.getContext('2d')!;
+
+  // Beige card background
+  ctx.fillStyle = '#f5f1eb';
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  // Thin warm border framing the QR area
+  ctx.strokeStyle = '#c8b89a';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad - 1.5, pad - 1.5, size + 3, size + 3);
+
+  // QR code
+  ctx.drawImage(qCanvas, pad, pad, size, size);
+
+  // P mark centred on QR
+  drawPeshkashMark(ctx, pad + size / 2, pad + size / 2, size * 0.22);
+
+  // Footer: right-aligned "powered by [P] peshkash" — no separator
+  const fY       = pad + size + footerH * 0.54;
+  const rightX   = totalW - Math.round(pad * 0.45);
+  const markSz   = footerH * 0.44;
+  const gap      = Math.round(markSz * 0.28);
+
+  ctx.textBaseline = 'middle';
+  ctx.textAlign    = 'right';
+
+  ctx.font      = `600 ${Math.round(footerH * 0.37)}px Georgia, serif`;
+  ctx.fillStyle = '#BD945A';
+  const wmW = ctx.measureText('peshkash').width;
+  ctx.fillText('peshkash', rightX, fY);
+
+  const markCX = rightX - wmW - gap - markSz * 0.5;
+  drawPeshkashMark(ctx, markCX, fY, markSz);
+
+  ctx.font      = `400 ${Math.round(footerH * 0.26)}px Arial, sans-serif`;
+  ctx.fillStyle = '#a89880';
+  ctx.textAlign = 'right';
+  ctx.fillText('powered by', markCX - markSz * 0.5 - gap, fY);
+
+  return canvas.toDataURL('image/png');
+}
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { Bar, Doughnut } from 'vue-chartjs';
@@ -2753,7 +2807,7 @@ function vendorContactPayload() {
 
 async function renderVendorQr() {
   vendorQrCodeDataUrl.value = vendorQrDraft.qrHash
-    ? await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 })
+    ? await makeQrDataUrl(`${window.location.origin}/${vendorQrDraft.qrHash}`)
     : '';
 }
 
@@ -3436,7 +3490,7 @@ async function buildQrDestination() {
       // Event-dynamic QRs have no static URL — skip destination build
       qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
       qrPreview.finalPublicUrl = '→ resolves dynamically at scan time';
-      qrCodeDataUrl.value = qrPreview.shortQrUrl ? await QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }) : '';
+      qrCodeDataUrl.value = qrPreview.shortQrUrl ? await makeQrDataUrl(qrPreview.shortQrUrl) : '';
       return;
     }
     if (qrTargetType.value === 'vendor') {
@@ -3453,7 +3507,7 @@ async function buildQrDestination() {
     }
     qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
     qrPreview.finalPublicUrl = qrForm.url ? buildAbsolute(qrForm.url) : '';
-    qrCodeDataUrl.value = qrPreview.shortQrUrl ? await QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }) : '';
+    qrCodeDataUrl.value = qrPreview.shortQrUrl ? await makeQrDataUrl(qrPreview.shortQrUrl) : '';
   } catch (err) {
     setError(err);
   }
@@ -3463,7 +3517,7 @@ function editQr(mapping: QrMapping) {
   Object.assign(qrForm, { qrHash: mapping.qrHash, url: mapping.url || '', isActive: mapping.isActive, paid: mapping.paid !== false, templateLabel: mapping.templateLabel || '', selectedTemplateId: qrLocalMeta.value[mapping.id]?.selectedTemplateId ?? 0, eventId: mapping.eventId || 0, menuId: 0, itemId: 0 });
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
-  if (mapping.shortQrUrl) QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
+  if (mapping.shortQrUrl) makeQrDataUrl(mapping.shortQrUrl).then((url) => { qrCodeDataUrl.value = url; });
   // Derive target type — check explicit type first, fall back to URL-based inference
   if (mapping.type === 'event') {
     qrTargetType.value = 'event';
@@ -3629,12 +3683,12 @@ watch(() => productSelections.fullMenuQr, (value) => {
 
 watch(() => qrForm.qrHash, () => {
   qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
-  if (qrPreview.shortQrUrl) QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
+  if (qrPreview.shortQrUrl) makeQrDataUrl(qrPreview.shortQrUrl).then((url) => { qrCodeDataUrl.value = url; });
 });
 
 watch(eventQrMapping, async (mapping) => {
   if (mapping?.shortQrUrl) {
-    eventQrDataUrl.value = await QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 160 });
+    eventQrDataUrl.value = await makeQrDataUrl(mapping.shortQrUrl, 160);
   } else {
     eventQrDataUrl.value = '';
   }
@@ -3770,7 +3824,10 @@ const qrTypeFilter = ref('all');
 const qrSortBy = ref<'scans' | 'hash' | 'status'>('scans');
 
 const filteredQrMappings = computed(() => {
-  let list = [...vendorQrMappings.value];
+  let list = vendorQrMappings.value.filter((m) => {
+    const t = qrTypeBadge(m).css;
+    return t === 'dynamic' || t === 'contact';
+  });
   if (qrSearch.value) {
     const q = qrSearch.value.toLowerCase();
     list = list.filter((m) => m.qrHash.toLowerCase().includes(q) || qrTargetLabel(m).toLowerCase().includes(q));
@@ -7012,7 +7069,7 @@ td.row-actions .icon-btn + a {
 }
 
 /* QR image elements */
-.qr-modal-img { border: 1px solid #e4d7c5; border-radius: 8px; display: block; max-width: 200px; width: 100%; }
+.qr-modal-img { border: none; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); display: block; height: auto; max-width: 230px; width: 100%; }
 
 .qr-modal-img-placeholder {
   align-items: center;
@@ -7188,11 +7245,13 @@ td.row-actions .icon-btn + a {
 }
 
 .qr-view-img {
-  border: 1px solid #e4d7c5;
-  border-radius: 8px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   display: block;
-  height: 180px;
-  width: 180px;
+  height: auto;
+  max-width: 230px;
+  width: 100%;
 }
 
 .qr-view-placeholder {
@@ -7350,7 +7409,7 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 
 .col-window { color: #6b7280; font-size: 0.82rem; white-space: nowrap; }
 
-.qr-image { border: 1px solid #e4d7c5; border-radius: 6px; display: block; height: 160px; width: 160px; }
+.qr-image { border: none; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); display: block; height: auto; max-width: 200px; width: 100%; }
 
 .saved-state { color: #9a8878; font-size: 0.75rem; }
 

@@ -9,16 +9,8 @@
   </div>
 
   <div class="container py-3">
-    <div v-if="isLoading" class="text-center py-5">
-      <div class="spinner-grow text-primary shadow-lg" style="width: 3rem; height: 3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-info shadow-lg mt-3" style="width: 2rem; height: 2rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-white shadow-lg mt-3" style="width: 1rem; height: 1rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
+    <div v-if="isLoading" class="pk-page-loader">
+      <peshkash-loader size="110" theme="light" label="Loading item" />
     </div>
     <div v-else-if="error" class="text-danger">{{ error }}</div>
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
@@ -122,16 +114,20 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
+import { usePageMeta } from '../composables/usePageMeta';
 
 const route = useRoute()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
 const itemName = route.params.itemName as string
+
+const { setMeta, resetMeta } = usePageMeta()
+onUnmounted(resetMeta)
 
 const itemData = ref<any>(null)
 const isLoading = ref(true)
@@ -166,6 +162,17 @@ onMounted(async () => {
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     const data = await res.json()
     itemData.value = data
+
+    // Dynamic SEO
+    const itemDisplay  = data?.name || itemName
+    const vendorDisplay = data?.event?.vendor?.displayName || ''
+    setMeta(
+      vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
+      data?.description
+        ? `${itemDisplay}: ${data.description.slice(0, 140)}`
+        : `Explore ${itemDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash.`,
+    )
+
     analytics.track('item_detail_view', {
       vendorId: data?.event?.vendor?.id,
       eventId: data?.event?.id,

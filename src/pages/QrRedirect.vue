@@ -1,7 +1,9 @@
 <template>
-  <div>
-    <p v-if="loading">Loading...</p>
-    <p v-if="error">{{ errorMessage }}</p>
+  <div class="qr-redirect-shell">
+    <div v-if="loading" class="pk-page-loader pk-page-loader--fullscreen">
+      <peshkash-loader size="120" theme="dark" label="Resolving QR" />
+    </div>
+    <p v-if="error" class="qr-redirect-error">{{ errorMessage }}</p>
   </div>
 </template>
 
