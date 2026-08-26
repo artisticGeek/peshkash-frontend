@@ -1,16 +1,16 @@
 <template>
 <nav class="navbar navbar-dark navbar-professional">
   <div class="container-fluid px-3 px-md-4">
-    <a class="navbar-brand d-flex align-items-center py-2" href="/#hero">
-      <i class="bi bi-qr-code-scan brand-icon me-2"></i>
-      <span class="pk-brand-text">Peshkash</span>
+    <a class="navbar-brand py-2" href="/#hero">
+      <PeshkashLogo variant="dark-bg" :height="44" />
     </a>
 
     <!-- Desktop inline nav -->
     <div class="d-none d-lg-flex align-items-center gap-1 me-3">
       <a class="nav-link-inline" href="/#how">How It Works</a>
       <a class="nav-link-inline" href="/#picker">For Vendors</a>
-      <a class="nav-link-inline" href="/#contact">Pricing</a>
+      <a class="nav-link-inline" href="/#demo">See It Live</a>
+      <a class="nav-link-inline" href="/#faq">FAQ</a>
       <a class="nav-link-inline" href="/#contact">Contact</a>
     </div>
     <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2">
@@ -24,43 +24,40 @@
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel">
+    <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel" style="background:#1A1410;border-left:1px solid rgba(189,148,90,0.2)">
       <div class="offcanvas-header">
-        <div class="d-flex align-items-center gap-2">
-          <i class="bi bi-qr-code-scan brand-icon"></i>
-          <span class="pk-brand-text">Peshkash</span>
-        </div>
+        <PeshkashLogo variant="dark-bg" :height="38" />
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
       </div>
       <div class="offcanvas-body d-flex flex-column">
         <ul class="navbar-nav flex-grow-1">
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#hero" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#hero" @click.prevent="navigateTo('#hero')">
               <i class="bi bi-house me-2 text-gold"></i>Home
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#how" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#how" @click.prevent="navigateTo('#how')">
               <i class="bi bi-list-check me-2 text-gold"></i>How It Works
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#picker" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#picker" @click.prevent="navigateTo('#picker')">
               <i class="bi bi-shop me-2 text-gold"></i>For Vendors
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#contact" data-bs-dismiss="offcanvas">
-              <i class="bi bi-tag me-2 text-gold"></i>Pricing
+            <a class="nav-link py-3" href="#demo" @click.prevent="navigateTo('#demo')">
+              <i class="bi bi-qr-code-scan me-2 text-gold"></i>See It Live
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#faq" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#faq" @click.prevent="navigateTo('#faq')">
               <i class="bi bi-question-circle me-2 text-gold"></i>FAQ
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#contact" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#contact" @click.prevent="navigateTo('#contact')">
               <i class="bi bi-telephone me-2 text-gold"></i>Contact
             </a>
           </li>
@@ -80,13 +77,22 @@
 </nav>
 </template>
 
+<script setup lang="ts">
+import PeshkashLogo from '@/components/PeshkashLogo.vue'
+
+function navigateTo(hash: string) {
+  const closeBtn = document.querySelector<HTMLElement>('#offcanvasDarkNavbar .btn-close')
+  closeBtn?.click()
+  // Wait for offcanvas close animation, then jump via hash
+  setTimeout(() => { window.location.hash = hash }, 350)
+}
+</script>
+
 <style scoped>
 .navbar-professional {
   padding: 0.3rem 0;
-  background: rgba(10, 10, 18, 0.96);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 1px 0 rgba(189, 148, 90, 0.15);
+  background: rgba(26, 20, 16, 0.97);
+  box-shadow: 0 1px 0 rgba(189, 148, 90, 0.18);
   position: sticky;
   top: 0;
   z-index: 1030;
@@ -94,21 +100,11 @@
 
 .navbar-brand {
   padding: 0.2rem 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s;
+  display: flex;
+  align-items: center;
 }
-.navbar-brand:hover { opacity: 0.85; }
-
-.brand-icon {
-  font-size: 1.4rem;
-  color: #bd945a;
-}
-
-.pk-brand-text {
-  font-family: 'Dancing Script', cursive;
-  font-size: 1.7rem;
-  font-weight: 400;
-  color: #fff;
-}
+.navbar-brand:hover { opacity: 0.82; }
 
 /* Desktop inline links */
 .nav-link-inline {
@@ -122,13 +118,13 @@
   letter-spacing: 0.01em;
 }
 .nav-link-inline:hover {
-  color: #bd945a;
+  color: #BD945A;
   background: rgba(189,148,90,0.1);
 }
 
 /* Gold CTA button */
 .btn-pk-gold {
-  background: linear-gradient(135deg, #bd945a, #d4a76a);
+  background: linear-gradient(135deg, #BD945A, #D4A87A);
   color: #fff;
   border: none;
   font-weight: 600;
@@ -138,16 +134,17 @@
   transition: all 0.2s;
 }
 .btn-pk-gold:hover {
-  background: linear-gradient(135deg, #c9a368, #e0b878);
+  background: linear-gradient(135deg, #C9A368, #E0B878);
   color: #fff;
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(189,148,90,0.35);
 }
 
 /* Mobile offcanvas */
+:deep(.offcanvas.text-bg-dark),
 .offcanvas.text-bg-dark {
-  background: #0a0a12 !important;
-  border-left: 1px solid rgba(189,148,90,0.2);
+  background: #1A1410 !important;
+  border-left: 1px solid rgba(189,148,90,0.2) !important;
 }
 .offcanvas-header {
   border-bottom: 1px solid rgba(255,255,255,0.07);
@@ -165,19 +162,19 @@
   border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 .navbar-nav .nav-link:hover {
-  color: #bd945a;
+  color: #BD945A;
   background: rgba(189,148,90,0.08);
   padding-left: 1.25rem !important;
 }
 
-.text-gold { color: #bd945a !important; }
+.text-gold { color: #BD945A !important; }
 
 .navbar-toggler {
   border: 1px solid rgba(255,255,255,0.15) !important;
   transition: all 0.2s;
 }
 .navbar-toggler:hover {
-  border-color: #bd945a !important;
+  border-color: #BD945A !important;
   background: rgba(189,148,90,0.08);
 }
 .navbar-toggler:focus {

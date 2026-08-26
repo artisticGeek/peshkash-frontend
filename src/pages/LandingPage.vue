@@ -276,7 +276,7 @@
       <footer class="footer">
         <div class="ft-inner">
           <div class="fb">
-            <div class="fb-brand"><i class="bi bi-qr-code-scan"></i><span>Peshkash</span></div>
+            <div class="fb-brand"><PeshkashLogo variant="dark-bg" :height="36" /></div>
             <p>Digital insights from offline experiences.</p>
             <div class="fb-social">
               <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i></a>
@@ -311,6 +311,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, computed, reactive } from 'vue';
 import Navbar from '../components/Navbar.vue';
+import PeshkashLogo from '../components/PeshkashLogo.vue';
 import * as THREE from 'three';
 import qrImg     from '../assets/peshkashqrhero.png';
 import menuImg   from '../assets/peshkash-demo-section.png';
@@ -1230,12 +1231,10 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .ct-right button:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(189,148,90,.38); }
 
 /* ── FOOTER ──────────────────────────────────────────────── */
-.footer { background: rgba(5,4,2,.97); border-top: 1px solid rgba(189,148,90,.12); padding: 3rem max(1.5rem,5vw) 0; }
+.footer { background: #1A1410; border-top: 1px solid rgba(189,148,90,.12); padding: 3rem max(1.5rem,5vw) 0; }
 .ft-inner { display: flex; gap: 4rem; flex-wrap: wrap; padding-bottom: 2.5rem; border-bottom: 1px solid rgba(189,148,90,.1); max-width: 1200px; margin: 0 auto; }
 .fb { flex: 1; min-width: 200px; }
-.fb-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem; }
-.fb-brand i { font-size: 1.3rem; color: var(--g); }
-.fb-brand span { font-family: 'Dancing Script', cursive; font-size: 1.55rem; color: var(--w); }
+.fb-brand { display: flex; align-items: center; margin-bottom: 0.75rem; }
 .fb > p { font-size: 0.82rem; color: rgba(255,255,255,.26); line-height: 1.6; max-width: 240px; margin: 0 0 0.75rem; }
 .fb-social { display: flex; gap: 9px; }
 .fb-social a { width: 36px; height: 36px; border-radius: 8px; background: rgba(189,148,90,.08); border: 1px solid rgba(189,148,90,.2); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.36); text-decoration: none; font-size: 0.9rem; transition: all 0.2s; }

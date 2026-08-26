@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Peshkash app icon on cream">
+<rect width="512" height="512" rx="92" fill="#F5F2EE"/>
+<g transform="matrix(1.135 0 0 1.135 -214 -70)"><g fill="none" stroke="#BB9057" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter">
+  <path d="M297 121.5H257V162"/>
+  <path d="M531 121.5H570V162"/>
+  <path d="M257 411V452H297"/>
+  <path d="M531 452H570V411"/>
+</g>
+<g shape-rendering="geometricPrecision">
+  <path d="M391.5 164H471L516 205L391.5 276.5Z" fill="#E8DBCE"/>
+  <path d="M516 205V262.5L470.5 310L391.5 276.5Z" fill="#C5AF9D"/>
+  <path d="M391.5 276.5L470.5 310H391.5Z" fill="#8C7667"/>
+  <path d="M335 164H392V415L364 389L335 415Z" fill="#BB9057"/>
+</g></g>
+</svg>
