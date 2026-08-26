@@ -1,85 +1,91 @@
+/* ── Peshkash design tokens ─────────────────────────────────── */
 :root {
-  --rx-main-color: #BD945A;
-  --rx-bg-color: #F4F1ED;
-  --rx-text-color: #15191e;
-  --rx-font-heading: 'Rufina', serif;
-  --rx-font-body: 'Urbanist', sans-serif;
+  /* Core palette */
+  --pk-cream:         #F5F2EE;
+  --pk-cream-dark:    #EBE7E1;
+  --pk-near-black:    #1A1410;
+  --pk-muted-text:    #564C40;
+  --pk-gold:          #BD945A;
+  --pk-gold-hover:    #D4A87A;
+  --pk-logo-brass:    #BB9057;
+  --pk-bone:          #E8DBCE;
+  --pk-stone-beige:   #C5AF9D;
+  --pk-mushroom:      #8C7667;
+
+  /* Semantic aliases used across components */
+  --rx-main-color:    #BD945A;
+  --rx-bg-color:      #F5F2EE;
+  --rx-surface-color: #EBE7E1;
+  --rx-text-color:    #1A1410;
+  --rx-muted-color:   #564C40;
+  --rx-border-color:  #D8D2C8;
+
+  /* Typography */
+  --rx-font-heading:  'Rufina', Georgia, serif;
+  --rx-font-body:     'Urbanist', system-ui, Arial, sans-serif;
+
+  /* Radius */
+  --pk-radius-sm:     4px;
+  --pk-radius-md:     8px;
 }
 
 body {
   font-family: var(--rx-font-body);
   background-color: var(--rx-bg-color);
   color: var(--rx-text-color);
+  -webkit-font-smoothing: antialiased;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-.display-1,
-.display-2,
-.display-3,
-.display-4,
-.display-5,
-.display-6 {
+h1, h2, h3, h4, h5, h6,
+.display-1, .display-2, .display-3,
+.display-4, .display-5, .display-6 {
   font-family: var(--rx-font-heading);
 }
 
-p,
-.lead {
+p, .lead {
   font-family: var(--rx-font-body);
 }
 
+/* ── Landing page scoped overrides ──────────────────────────── */
 .pk-landing a {
   text-decoration: none;
 }
-
 .pk-landing a:hover {
   text-decoration: none;
 }
-
 .pk-landing footer a:hover {
   text-decoration: underline;
   text-underline-offset: 0.22rem;
 }
 
-/* Landing page specific button styles */
 .pk-landing .btn-primary {
-  background-color: var(--rx-main-color);
-  border-color: var(--rx-main-color);
-  color: white;
+  background-color: var(--pk-gold);
+  border-color: var(--pk-gold);
+  color: #fff;
   border-radius: 50px;
-  /* Pill shape */
   padding: 0.75rem 2rem;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
-
 .pk-landing .btn-primary:hover {
-  background-color: #a37d45;
-  /* Darker shade */
-  border-color: #a37d45;
+  background-color: var(--pk-gold-hover);
+  border-color: var(--pk-gold-hover);
   transform: translateY(-2px);
 }
-
 .pk-landing .btn-outline-light {
   border-radius: 50px;
   padding: 0.75rem 2rem;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
-
 .pk-landing .btn-outline-light:hover {
-  background-color: white;
+  background-color: #fff;
   color: var(--rx-text-color);
   transform: translateY(-2px);
 }
-
 .pk-landing .btn-outline-primary {
   border-radius: 50px;
   padding: 0.75rem 2rem;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="235 95 360 380" role="img" aria-label="Peshkash-Symbol-For-Dark">
+<g fill="none" stroke="#C79C62" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter">
+  <path d="M297 121.5H257V162"/>
+  <path d="M531 121.5H570V162"/>
+  <path d="M257 411V452H297"/>
+  <path d="M531 452H570V411"/>
+</g>
+<g shape-rendering="geometricPrecision">
+  <path d="M391.5 164H471L516 205L391.5 276.5Z" fill="#E8DBCE"/>
+  <path d="M516 205V262.5L470.5 310L391.5 276.5Z" fill="#C5AF9D"/>
+  <path d="M391.5 276.5L470.5 310H391.5Z" fill="#8C7667"/>
+  <path d="M335 164H392V415L364 389L335 415Z" fill="#BB9057"/>
+</g>
+</svg>

@@ -2,8 +2,8 @@
   <div class="admin-shell" :data-sidebar="sidebarState">
     <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
       <div class="sidebar-brand">
-        <i class="bi bi-grid-1x2-fill sidebar-logo"></i>
-        <span class="sidebar-brand-name">Peshkash</span>
+        <PeshkashLogo v-if="sidebarState === 'full'" variant="dark-bg" :height="22" class="sidebar-logo-full" />
+        <PeshkashLogo v-else variant="dark-bg" :height="26" :symbol="true" class="sidebar-logo-symbol" />
         <button class="sidebar-brand-toggle" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
           <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
         </button>
@@ -1281,6 +1281,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import WorkspaceSwitcher from '../components/admin/WorkspaceSwitcher.vue';
 import MenuTree from '../components/MenuTree.vue';
+import PeshkashLogo from '../components/PeshkashLogo.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
 import { API_BASE_URL } from '../config';
@@ -3142,19 +3143,13 @@ function confirmDeactivate() {
   min-height: 56px;
   padding: 0 12px;
 }
-.sidebar-logo {
-  color: #BD945A;
+.sidebar-logo-full {
   flex-shrink: 0;
-  font-size: 1.15rem;
-}
-.sidebar-brand-name {
-  color: rgba(255,255,255,0.9);
   flex: 1;
-  font-size: 0.88rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  transition: opacity 0.15s;
-  white-space: nowrap;
+  min-width: 0;
+}
+.sidebar-logo-symbol {
+  flex-shrink: 0;
 }
 .sidebar-brand-toggle {
   align-items: center;
@@ -3223,8 +3218,7 @@ function confirmDeactivate() {
 
 /* Icons-only state */
 .admin-shell[data-sidebar="icons"] .admin-sidebar { width: 56px; }
-.admin-shell[data-sidebar="icons"] .nav-label,
-.admin-shell[data-sidebar="icons"] .sidebar-brand-name { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
+.admin-shell[data-sidebar="icons"] .nav-label { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
 .admin-shell[data-sidebar="icons"] .nav-button { justify-content: center; padding: 10px 0; }
 .admin-shell[data-sidebar="icons"] .sidebar-brand { justify-content: center; gap: 0; }
 .admin-shell[data-sidebar="icons"] .sidebar-brand-toggle { display: none; }
@@ -3234,8 +3228,7 @@ function confirmDeactivate() {
 .admin-shell[data-sidebar="hidden"] .admin-sidebar { width: 0; }
 
 /* Overlay open: always show labels regardless of sidebar state */
-.admin-sidebar.sidebar--overlay-open .nav-label,
-.admin-sidebar.sidebar--overlay-open .sidebar-brand-name { opacity: 1; width: auto; overflow: visible; pointer-events: auto; }
+.admin-sidebar.sidebar--overlay-open .nav-label { opacity: 1; width: auto; overflow: visible; pointer-events: auto; }
 .admin-sidebar.sidebar--overlay-open .nav-button { justify-content: flex-start; padding: 10px; }
 .admin-sidebar.sidebar--overlay-open .sidebar-brand { justify-content: flex-start; gap: 10px; }
 .admin-sidebar.sidebar--overlay-open .sidebar-cycle-btn { justify-content: flex-start; }
