@@ -8,8 +8,9 @@
     <!-- Desktop inline nav -->
     <div class="d-none d-lg-flex align-items-center gap-1 me-3">
       <a class="nav-link-inline" href="/#how">How It Works</a>
-      <a class="nav-link-inline" href="/#vendors">For Vendors</a>
-      <a class="nav-link-inline" href="/#pricing">Pricing</a>
+      <a class="nav-link-inline" href="/#picker">For Vendors</a>
+      <a class="nav-link-inline" href="/#demo">See It Live</a>
+      <a class="nav-link-inline" href="/#faq">FAQ</a>
       <a class="nav-link-inline" href="/#contact">Contact</a>
     </div>
     <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2">
@@ -31,32 +32,32 @@
       <div class="offcanvas-body d-flex flex-column">
         <ul class="navbar-nav flex-grow-1">
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#hero" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#hero" @click.prevent="navigateTo('#hero')">
               <i class="bi bi-house me-2 text-gold"></i>Home
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#how" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#how" @click.prevent="navigateTo('#how')">
               <i class="bi bi-list-check me-2 text-gold"></i>How It Works
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#vendors" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#picker" @click.prevent="navigateTo('#picker')">
               <i class="bi bi-shop me-2 text-gold"></i>For Vendors
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#pricing" data-bs-dismiss="offcanvas">
-              <i class="bi bi-tag me-2 text-gold"></i>Pricing
+            <a class="nav-link py-3" href="#demo" @click.prevent="navigateTo('#demo')">
+              <i class="bi bi-qr-code-scan me-2 text-gold"></i>See It Live
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#faq" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#faq" @click.prevent="navigateTo('#faq')">
               <i class="bi bi-question-circle me-2 text-gold"></i>FAQ
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#contact" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="#contact" @click.prevent="navigateTo('#contact')">
               <i class="bi bi-telephone me-2 text-gold"></i>Contact
             </a>
           </li>
@@ -78,6 +79,13 @@
 
 <script setup lang="ts">
 import PeshkashLogo from '@/components/PeshkashLogo.vue'
+
+function navigateTo(hash: string) {
+  const closeBtn = document.querySelector<HTMLElement>('#offcanvasDarkNavbar .btn-close')
+  closeBtn?.click()
+  // Wait for offcanvas close animation, then jump via hash
+  setTimeout(() => { window.location.hash = hash }, 350)
+}
 </script>
 
 <style scoped>
