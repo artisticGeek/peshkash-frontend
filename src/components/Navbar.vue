@@ -1,8 +1,8 @@
 <template>
-<nav class="navbar navbar-light navbar-professional">
+<nav class="navbar navbar-dark navbar-professional">
   <div class="container-fluid px-3 px-md-4">
     <a class="navbar-brand py-2" href="/#hero">
-      <PeshkashLogo variant="light-bg" :symbol="true" :height="44" />
+      <PeshkashLogo variant="dark-bg" :height="44" />
     </a>
 
     <!-- Desktop inline nav -->
@@ -83,11 +83,12 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 <style scoped>
 .navbar-professional {
   padding: 0.3rem 0;
-  background: transparent;
-  position: absolute;
+  background: rgba(26, 20, 16, 0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(189, 148, 90, 0.18);
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   z-index: 1030;
 }
 
@@ -101,7 +102,7 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 
 /* Desktop inline links */
 .nav-link-inline {
-  color: rgba(26,20,16,0.72);
+  color: rgba(255,255,255,0.75);
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
@@ -162,7 +163,7 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 .text-gold { color: #BD945A !important; }
 
 .navbar-toggler {
-  border: 1px solid rgba(26,20,16,0.2) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
   transition: all 0.2s;
 }
 .navbar-toggler:hover {
