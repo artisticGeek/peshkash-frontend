@@ -1078,7 +1078,7 @@
         <!-- ── QR Bank header ─────────────────────────────────────── -->
         <div class="qr-bank-header panel">
           <div>
-            <h3>QR Bank <span v-if="vendorQrMappings.length" class="qr-count-badge">{{ vendorQrMappings.length }}</span></h3>
+            <h3>QR Bank <span v-if="filteredQrMappings.length" class="qr-count-badge">{{ filteredQrMappings.length }}</span></h3>
           </div>
           <button class="btn btn-primary" type="button" @click="openQrEditor()">
             <i class="bi bi-plus-lg"></i> New QR Asset
@@ -1105,8 +1105,6 @@
               <button :class="{ active: qrTypeFilter === 'all' }" @click="qrTypeFilter = 'all'">All</button>
               <button :class="{ active: qrTypeFilter === 'dynamic' }" @click="qrTypeFilter = 'dynamic'">Event</button>
               <button :class="{ active: qrTypeFilter === 'contact' }" @click="qrTypeFilter = 'contact'">Contact</button>
-              <button :class="{ active: qrTypeFilter === 'menu' }" @click="qrTypeFilter = 'menu'">Menu</button>
-              <button :class="{ active: qrTypeFilter === 'item' }" @click="qrTypeFilter = 'item'">Item</button>
             </div>
             <select v-model="qrSortBy" class="form-select form-select-sm qr-sort-select">
               <option value="scans">Most scans</option>
@@ -3770,7 +3768,10 @@ const qrTypeFilter = ref('all');
 const qrSortBy = ref<'scans' | 'hash' | 'status'>('scans');
 
 const filteredQrMappings = computed(() => {
-  let list = [...vendorQrMappings.value];
+  let list = vendorQrMappings.value.filter((m) => {
+    const t = qrTypeBadge(m).css;
+    return t === 'dynamic' || t === 'contact';
+  });
   if (qrSearch.value) {
     const q = qrSearch.value.toLowerCase();
     list = list.filter((m) => m.qrHash.toLowerCase().includes(q) || qrTargetLabel(m).toLowerCase().includes(q));

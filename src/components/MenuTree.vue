@@ -63,10 +63,11 @@
     
     <!-- Leaf Item View (individual menu item) -->
     <template v-else>
-      <div 
+      <div
         v-show="matchesFilters"
         class="menu-item"
-        :class="{ 'has-description': item.description && isDescriptionTruncated }"
+        :class="{ 'has-description': item.description && isDescriptionTruncated, 'is-drillable': !editMode && eventName && menuName }"
+        @click="openItemDetail"
       >
         <!-- Connecting Line -->
         <div v-if="level > 0" class="tree-line"></div>
@@ -127,6 +128,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAnalytics } from '../composables/useAnalytics';
 
 interface LineItem {
@@ -166,6 +168,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const { track } = useAnalytics();
+const router = useRouter();
 
 const isExpanded = ref(false);
 const descriptionExpanded = ref(false);
@@ -255,6 +258,17 @@ const leafItemCount = computed(() => {
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value;
 };
+
+function openItemDetail() {
+  if (props.editMode || !props.eventName || !props.menuName) return;
+  track('item_detail_view', {
+    itemId: props.item.id,
+    vendorId: props.analyticsVendorId,
+    eventId: props.analyticsEventId,
+    menuId: props.analyticsMenuId,
+  });
+  router.push(`/event/${props.eventName}/menu/${props.menuName}/item/${props.item.name}`);
+}
 
 const toggleDescription = () => {
   if (!descriptionExpanded.value && !props.editMode) {
@@ -390,7 +404,14 @@ const getEnumClass = (enumType: string): string => {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   transition: all 0.2s ease;
   border-left: 2px solid rgba(189, 148, 90, 0.4);
+  cursor: default;
+}
+.menu-item.is-drillable {
   cursor: pointer;
+}
+.menu-item.is-drillable:hover {
+  box-shadow: 0 2px 8px rgba(189, 148, 90, 0.22);
+  border-left-color: #bd945a;
 }
 
 @media (min-width: 768px) {
