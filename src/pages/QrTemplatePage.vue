@@ -80,6 +80,40 @@ const PRESETS = [
 const FONTS = ['Inter', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New', 'Playfair Display'];
 const BASE_SCALE = 3.78; // px per mm at 100% zoom
 
+// Mini layout preview for the list-page preset cards
+function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
+  const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+  const base: Record<string, string> = {
+    position: 'absolute',
+    left: pct(el.x, tpl.widthMm),
+    top: pct(el.y, tpl.heightMm),
+    width: pct(el.width, tpl.widthMm),
+    height: pct(el.height, tpl.heightMm),
+    boxSizing: 'border-box',
+  };
+  if (el.type === 'rect') {
+    const r = el as RectEl;
+    base.background = r.fill;
+    if ((r.strokeWidth ?? 0) > 0) base.border = `1px solid ${r.stroke}`;
+    if ((r.borderRadius ?? 0) > 0) base.borderRadius = '2px';
+    base.opacity = String(r.opacity ?? 1);
+  } else if (el.type === 'qr') {
+    base.background = '#e8e8e8';
+    base.backgroundImage = 'repeating-conic-gradient(#c0c0c0 0% 25%, #e8e8e8 0% 50%)';
+    base.backgroundSize = '5px 5px';
+  } else if (el.type === 'text') {
+    const t = el as TextEl;
+    base.background = t.color;
+    base.opacity = '0.28';
+    base.borderRadius = '1px';
+  } else if (el.type === 'image') {
+    base.background = '#d4b07a44';
+    base.borderRadius = '1px';
+    base.border = '1px dashed #d4b07a';
+  }
+  return base;
+}
+
 // ─── Trendy Preset Templates ──────────────────────────────────────────────────
 
 interface PresetTemplate {
@@ -725,34 +759,51 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 <template>
   <!-- ── LIST VIEW ─────────────────────────────────────────── -->
   <div v-if="view === 'list'" class="qrt-list-page" :class="{ 'qrt-list-page--embedded': props.embedded }">
-    <div class="qrt-list-header">
-      <div>
-        <h2>Your Peshkash QRs</h2>
-        <p class="hint">Design a QR once — share your Peshkash everywhere. Every QR carries the Peshkash mark.</p>
+
+    <!-- Hero banner -->
+    <div class="qrt-hero">
+      <div class="qrt-hero-mark">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="52" width="38">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
       </div>
-      <button class="btn btn-primary" @click="newTemplate">
-        <i class="bi bi-plus-lg"></i> New QR Design
+      <div class="qrt-hero-text">
+        <h2>QR Template Studio</h2>
+        <p>Design once. Share your Peshkash everywhere.<br>Every QR is automatically branded with the Peshkash mark — at 300 DPI, print-ready.</p>
+      </div>
+      <button class="btn btn-primary qrt-hero-cta" @click="newTemplate">
+        <i class="bi bi-plus-lg"></i> Blank Canvas
       </button>
     </div>
 
-    <!-- Trendy presets -->
+    <!-- Presets -->
     <div class="qrt-presets-section">
-      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start your Peshkash</p>
+      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start from a preset</p>
       <div class="qrt-presets-grid">
         <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
-          <div class="qrt-preset-thumb">
-            <i :class="`bi ${p.icon}`"></i>
+          <!-- Real layout preview thumbnail -->
+          <div class="qrt-preset-visual-wrap">
+            <div
+              class="qrt-preset-visual"
+              :style="{ aspectRatio: `${p.create().widthMm} / ${p.create().heightMm}` }"
+            >
+              <div v-for="el in p.create().elements" :key="el.id" :style="miniElStyle(el, p.create())"></div>
+            </div>
           </div>
           <div class="qrt-preset-info">
             <strong>{{ p.name }}</strong>
             <span>{{ p.desc }}</span>
           </div>
+          <div class="qrt-preset-use-btn">Use this →</div>
         </div>
       </div>
     </div>
 
     <!-- Saved templates -->
-    <div v-if="templates.length > 0" class="qrt-saved-section">
+    <div v-if="templates.length > 0" class="qrt-saved-section" style="padding: 0 40px;">
       <p class="qrt-section-title"><i class="bi bi-folder2-open"></i> Your templates</p>
       <div class="qrt-grid">
         <div v-for="t in templates" :key="t.id" class="qrt-card" @click="openTemplate(t)">
@@ -780,7 +831,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     <!-- Header -->
     <header class="qrt-header">
       <button class="qrt-back-btn" @click="backToList"><i class="bi bi-arrow-left"></i></button>
-      <input v-model="tpl.name" class="qrt-name-input" placeholder="Template name" spellcheck="false" />
+      <div class="qrt-header-brand">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="18" width="13">
+          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+        </svg>
+      </div>
+      <input v-model="tpl.name" class="qrt-name-input" placeholder="Design name" spellcheck="false" />
       <div class="qrt-header-actions">
         <!-- Panel toggles (visible on tablet/mobile only) -->
         <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: leftPanelOpen }" title="Toggle layers panel" @click="leftPanelOpen = !leftPanelOpen"><i class="bi bi-layout-sidebar"></i></button>
@@ -1237,7 +1296,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-list-page {
   background: #f7f4ef;
   min-height: 100vh;
-  padding: 32px 40px;
+  padding: 0 0 48px;
 }
 
 .qrt-list-page--embedded {
@@ -1246,18 +1305,42 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   overflow-y: auto;
 }
 
-.qrt-list-header {
-  align-items: flex-start;
+/* Hero banner */
+.qrt-hero {
+  align-items: center;
+  background: linear-gradient(135deg, #1a1410 0%, #2a1f14 100%);
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 28px;
+  gap: 20px;
+  padding: 32px 40px;
+  flex-wrap: wrap;
 }
 
-.qrt-list-header h2 {
-  color: #15191e;
-  font-size: 1.4rem;
+.qrt-hero-mark {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.qrt-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.qrt-hero-text h2 {
+  color: #f5f1eb;
+  font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+}
+
+.qrt-hero-text p {
+  color: #a89070;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.qrt-hero-cta {
+  flex-shrink: 0;
 }
 
 .hint {
@@ -1396,6 +1479,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-back-btn:hover { background: #f4f1ed; }
+
+.qrt-header-brand {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
 
 .qrt-name-input {
   background: transparent;
@@ -1909,77 +1999,99 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   align-items: center;
   color: #7a6a52;
   display: flex;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   gap: 6px;
-  letter-spacing: 0.05em;
-  margin: 0 0 12px;
+  letter-spacing: 0.06em;
+  margin: 0 0 16px;
   text-transform: uppercase;
 }
 
 .qrt-presets-section {
-  margin-bottom: 36px;
+  margin-bottom: 40px;
+  padding: 32px 40px 0;
 }
 
 .qrt-saved-section {
   margin-bottom: 24px;
+  padding: 0 40px;
 }
 
 .qrt-presets-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
+/* Preset card — vertical layout with real layout preview */
 .qrt-preset-card {
-  align-items: center;
   background: #fff;
   border: 1.5px solid #e6dfd4;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
-  gap: 12px;
-  padding: 14px 14px;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 }
 
 .qrt-preset-card:hover {
   border-color: #BD945A;
-  box-shadow: 0 4px 16px rgba(189, 148, 90, 0.18);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(189, 148, 90, 0.2);
+  transform: translateY(-2px);
 }
 
-.qrt-preset-thumb {
+/* Layout preview area */
+.qrt-preset-visual-wrap {
   align-items: center;
-  background: #f5f0e8;
-  border-radius: 6px;
+  background: #f0ece6;
+  background-image: radial-gradient(circle, #c8b99a33 1px, transparent 1px);
+  background-size: 10px 10px;
   display: flex;
-  flex-shrink: 0;
-  font-size: 1.4rem;
-  height: 44px;
   justify-content: center;
-  width: 44px;
-  color: #BD945A;
+  min-height: 110px;
+  padding: 16px;
+}
+
+.qrt-preset-visual {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.14);
+  max-height: 90px;
+  max-width: 100%;
+  position: relative;
+  width: 100%;
 }
 
 .qrt-preset-info {
+  border-top: 1px solid #f0ece6;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 0;
+  padding: 10px 12px 4px;
 }
 
 .qrt-preset-info strong {
   color: #15191e;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
 }
 
 .qrt-preset-info span {
   color: #9a8870;
-  font-size: 0.74rem;
-  line-height: 1.3;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
+
+.qrt-preset-use-btn {
+  color: #BD945A;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 6px 12px 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.qrt-preset-card:hover .qrt-preset-use-btn { opacity: 1; }
 
 /* ─── Preview modal ──────────────────────────────────────────────────────── */
 .qrt-preview-backdrop {
@@ -2134,7 +2246,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   .qrt-sidebar-left,
   .qrt-sidebar-right { width: 200px; }
 
-  .qrt-list-page { padding: 12px 14px; }
-  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .qrt-hero { padding: 20px 16px; }
+  .qrt-hero-text h2 { font-size: 1.1rem; }
+  .qrt-presets-section { padding: 20px 16px 0; }
+  .qrt-saved-section { padding: 0 16px !important; }
+  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 }
 </style>

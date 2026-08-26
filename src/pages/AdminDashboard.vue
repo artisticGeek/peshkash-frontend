@@ -1750,6 +1750,16 @@
 <script setup lang="ts">
 import axios from 'axios';
 import QRCode from 'qrcode';
+import { drawPeshkashMark } from '../utils/qrRenderer';
+
+/** Renders a branded QR (error level H + Peshkash P mark) and returns a data URL. */
+async function makeQrDataUrl(url: string, size = 180): Promise<string> {
+  const canvas = document.createElement('canvas');
+  await QRCode.toCanvas(canvas, url, { margin: 1, width: size, errorCorrectionLevel: 'H' });
+  const ctx = canvas.getContext('2d')!;
+  drawPeshkashMark(ctx, size / 2, size / 2, size * 0.22);
+  return canvas.toDataURL('image/png');
+}
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { Bar, Doughnut } from 'vue-chartjs';
@@ -2751,7 +2761,7 @@ function vendorContactPayload() {
 
 async function renderVendorQr() {
   vendorQrCodeDataUrl.value = vendorQrDraft.qrHash
-    ? await QRCode.toDataURL(`${window.location.origin}/${vendorQrDraft.qrHash}`, { margin: 1, width: 180 })
+    ? await makeQrDataUrl(`${window.location.origin}/${vendorQrDraft.qrHash}`)
     : '';
 }
 
@@ -3434,7 +3444,7 @@ async function buildQrDestination() {
       // Event-dynamic QRs have no static URL — skip destination build
       qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
       qrPreview.finalPublicUrl = '→ resolves dynamically at scan time';
-      qrCodeDataUrl.value = qrPreview.shortQrUrl ? await QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }) : '';
+      qrCodeDataUrl.value = qrPreview.shortQrUrl ? await makeQrDataUrl(qrPreview.shortQrUrl) : '';
       return;
     }
     if (qrTargetType.value === 'vendor') {
@@ -3451,7 +3461,7 @@ async function buildQrDestination() {
     }
     qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
     qrPreview.finalPublicUrl = qrForm.url ? buildAbsolute(qrForm.url) : '';
-    qrCodeDataUrl.value = qrPreview.shortQrUrl ? await QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }) : '';
+    qrCodeDataUrl.value = qrPreview.shortQrUrl ? await makeQrDataUrl(qrPreview.shortQrUrl) : '';
   } catch (err) {
     setError(err);
   }
@@ -3461,7 +3471,7 @@ function editQr(mapping: QrMapping) {
   Object.assign(qrForm, { qrHash: mapping.qrHash, url: mapping.url || '', isActive: mapping.isActive, paid: mapping.paid !== false, templateLabel: mapping.templateLabel || '', selectedTemplateId: qrLocalMeta.value[mapping.id]?.selectedTemplateId ?? 0, eventId: mapping.eventId || 0, menuId: 0, itemId: 0 });
   qrPreview.shortQrUrl = mapping.shortQrUrl;
   qrPreview.finalPublicUrl = mapping.finalPublicUrl;
-  if (mapping.shortQrUrl) QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
+  if (mapping.shortQrUrl) makeQrDataUrl(mapping.shortQrUrl).then((url) => { qrCodeDataUrl.value = url; });
   // Derive target type — check explicit type first, fall back to URL-based inference
   if (mapping.type === 'event') {
     qrTargetType.value = 'event';
@@ -3627,12 +3637,12 @@ watch(() => productSelections.fullMenuQr, (value) => {
 
 watch(() => qrForm.qrHash, () => {
   qrPreview.shortQrUrl = qrForm.qrHash ? `${window.location.origin}/${qrForm.qrHash}` : '';
-  if (qrPreview.shortQrUrl) QRCode.toDataURL(qrPreview.shortQrUrl, { margin: 1, width: 180 }).then((url) => { qrCodeDataUrl.value = url; });
+  if (qrPreview.shortQrUrl) makeQrDataUrl(qrPreview.shortQrUrl).then((url) => { qrCodeDataUrl.value = url; });
 });
 
 watch(eventQrMapping, async (mapping) => {
   if (mapping?.shortQrUrl) {
-    eventQrDataUrl.value = await QRCode.toDataURL(mapping.shortQrUrl, { margin: 1, width: 160 });
+    eventQrDataUrl.value = await makeQrDataUrl(mapping.shortQrUrl, 160);
   } else {
     eventQrDataUrl.value = '';
   }

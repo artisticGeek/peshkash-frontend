@@ -264,9 +264,6 @@
       </div>
 
       <div v-else-if="resourceTab === 'items'" class="resource-grid">
-        <div v-if="itemsLoading" class="resource-empty">
-          <i class="bi bi-arrow-clockwise spin"></i><span>Loading items…</span>
-        </div>
         <div
           v-for="item in drilldownItems"
           :key="item.itemId"
@@ -287,7 +284,7 @@
           </div>
           <i class="bi bi-chevron-right resource-card-arrow"></i>
         </div>
-        <div v-if="!itemsLoading && !drilldownItems.length" class="resource-empty">
+        <div v-if="!drilldownItems.length" class="resource-empty">
           <i class="bi bi-box-seam"></i>
           <span>No item analytics yet. Views and interactions will appear here.</span>
         </div>
@@ -394,6 +391,11 @@ interface Summary {
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
   deviceSplit: Array<{ deviceType: string; count: number }>;
+  topItemsDetailed?: Array<{
+    itemId: number; itemName: string; itemType: string;
+    vendorName: string; eventName: string;
+    views: number; actions: number; lastActivity: string;
+  }>;
 }
 
 const authStore = useAuthStore();
@@ -428,8 +430,6 @@ interface ItemResource {
   vendorName: string; eventName: string;
   views: number; actions: number; lastActivity: string | null;
 }
-const allItems = ref<ItemResource[]>([]);
-const itemsLoading = ref(false);
 
 const drilldownVendors = computed(() =>
   selectedVendorId.value
@@ -443,14 +443,14 @@ const drilldownEvents = computed(() =>
     : allEvents.value
 );
 
-const drilldownItems = computed(() =>
-  selectedVendorId.value
-    ? allItems.value.filter(i => {
-        const v = vendors.value.find(v => v.id === selectedVendorId.value);
-        return v ? i.vendorName === v.displayName : true;
-      })
-    : allItems.value
-);
+// Use topItemsDetailed from the already-loaded summary — the /analytics/items
+// endpoint only returns raw counts, not the enriched shape the UI needs.
+const drilldownItems = computed<ItemResource[]>(() => {
+  const items = (summary.value?.topItemsDetailed ?? []) as ItemResource[];
+  if (!selectedVendorId.value) return items;
+  const v = vendors.value.find(v => v.id === selectedVendorId.value);
+  return v ? items.filter(i => i.vendorName === v.displayName) : items;
+});
 
 const resourceTabs = computed(() => [
   { key: 'events'   as ResourceTab, label: 'Events',           icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
@@ -606,22 +606,7 @@ async function loadEvents() {
   }
 }
 
-async function loadItems() {
-  itemsLoading.value = true;
-  try {
-    const params: Record<string, any> = { range: 'all' };
-    if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
-    const res = await axios.get<ItemResource[]>(`${API_BASE_URL}/analytics/items`, { params });
-    allItems.value = res.data ?? [];
-  } catch {
-    allItems.value = [];
-  } finally {
-    itemsLoading.value = false;
-  }
-}
-
-watch(resourceTab, tab => { if (tab === 'items' && !allItems.value.length) loadItems(); });
-watch(selectedVendorId, () => { if (resourceTab.value === 'items') loadItems(); });
+watch(selectedVendorId, () => { drilldownTarget.value = null; });
 
 onMounted(async () => {
   if (isVendorRole.value && authStore.vendorId) {
