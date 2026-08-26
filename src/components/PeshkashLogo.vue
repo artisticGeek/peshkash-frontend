@@ -12,8 +12,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import primaryDark from '@/assets/logo/Peshkash-Primary-For-Dark.svg'
-import primaryLight from '@/assets/logo/Peshkash-Primary-For-Light.svg'
+import primaryDark from '@/assets/logo/Peshkash-Primary-For-Dark-Display.svg'
+import primaryLight from '@/assets/logo/Peshkash-Primary-For-Light-Display.svg'
 import symbolDark from '@/assets/logo/Peshkash-Symbol-For-Dark.svg'
 import symbolLight from '@/assets/logo/Peshkash-Symbol-For-Light.svg'
 

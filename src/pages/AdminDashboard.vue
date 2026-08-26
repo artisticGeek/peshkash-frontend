@@ -2,8 +2,8 @@
   <div class="admin-shell" :data-sidebar="sidebarState">
     <aside class="admin-sidebar" :class="{ 'sidebar--overlay-open': sidebarOverlayOpen }">
       <div class="sidebar-brand">
-        <PeshkashLogo v-if="sidebarState === 'full'" variant="dark-bg" :height="22" class="sidebar-logo-full" />
-        <PeshkashLogo v-else variant="dark-bg" :height="26" :symbol="true" class="sidebar-logo-symbol" />
+        <PeshkashLogo v-if="sidebarState === 'full'" variant="dark-bg" :height="32" class="sidebar-logo-full" />
+        <PeshkashLogo v-else variant="dark-bg" :height="30" :symbol="true" class="sidebar-logo-symbol" />
         <button class="sidebar-brand-toggle" type="button" :title="sidebarState === 'full' ? 'Icon-only mode' : 'Expand sidebar'" @click="cycleSidebar">
           <i :class="sidebarState === 'full' ? 'bi bi-layout-sidebar-inset-reverse' : 'bi bi-layout-sidebar-reverse'"></i>
         </button>

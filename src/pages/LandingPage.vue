@@ -273,7 +273,7 @@
       <footer class="footer">
         <div class="ft-inner">
           <div class="fb">
-            <div class="fb-brand"><PeshkashLogo variant="dark-bg" :height="26" /></div>
+            <div class="fb-brand"><PeshkashLogo variant="dark-bg" :height="36" /></div>
             <p>Digital insights from offline experiences.</p>
             <div class="fb-social">
               <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i></a>

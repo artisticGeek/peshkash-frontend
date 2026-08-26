@@ -2,7 +2,7 @@
 <nav class="navbar navbar-dark navbar-professional">
   <div class="container-fluid px-3 px-md-4">
     <a class="navbar-brand py-2" href="/#hero">
-      <PeshkashLogo variant="dark-bg" :height="30" />
+      <PeshkashLogo variant="dark-bg" :height="44" />
     </a>
 
     <!-- Desktop inline nav -->
@@ -25,7 +25,7 @@
 
     <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel">
       <div class="offcanvas-header">
-        <PeshkashLogo variant="dark-bg" :height="28" />
+        <PeshkashLogo variant="dark-bg" :height="38" />
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
       </div>
       <div class="offcanvas-body d-flex flex-column">
