@@ -39,8 +39,7 @@
 
             <!-- Brand -->
             <div class="lm-brand">
-              <i class="bi bi-grid-1x2-fill lm-brand-icon"></i>
-              <span class="lm-brand-name">Peshkash</span>
+              <PeshkashLogo variant="light-bg" :height="28" />
             </div>
 
             <h5 class="lm-title">Sign in to continue</h5>
@@ -130,6 +129,7 @@
 import { computed, watch, nextTick, ref } from 'vue';
 import { useOtpLogin } from '../../composables/useOtpLogin';
 import type { Role } from '../../stores/auth';
+import PeshkashLogo from '../PeshkashLogo.vue';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -261,14 +261,7 @@ watch(
 .lm-brand {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-weight: 700;
-  font-size: 1rem;
   margin-bottom: 1.5rem;
-}
-.lm-brand-icon {
-  font-size: 1.15rem;
-  color: var(--bs-primary, #0d6efd);
 }
 
 /* ── Headings ───────────────────────────────────────────────────────────────── */
@@ -307,8 +300,8 @@ watch(
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .lm-phone-row:focus-within {
-  border-color: var(--bs-primary, #0d6efd);
-  box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb, 13, 110, 253), 0.15);
+  border-color: #BD945A;
+  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.18);
 }
 .lm-prefix {
   padding: 0.65rem 0.9rem;
@@ -345,8 +338,8 @@ watch(
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .lm-otp-input:focus {
-  border-color: var(--bs-primary, #0d6efd);
-  box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb, 13, 110, 253), 0.15);
+  border-color: #BD945A;
+  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.18);
 }
 
 /* ── Sent note ──────────────────────────────────────────────────────────────── */
@@ -373,7 +366,7 @@ watch(
   padding: 0.8rem;
   border: none;
   border-radius: 12px;
-  background: var(--bs-primary, #0d6efd);
+  background: #BD945A;
   color: #fff;
   font-size: 0.95rem;
   font-weight: 600;
@@ -389,7 +382,7 @@ watch(
 .lm-link {
   border: none;
   background: none;
-  color: var(--bs-primary, #0d6efd);
+  color: #BD945A;
   font-size: 0.85rem;
   cursor: pointer;
   text-decoration: underline;
