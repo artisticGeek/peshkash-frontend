@@ -37,6 +37,15 @@ export type ActionType =
   | 'menu_view'
   | 'item_detail_view';
 
+function getStoredPhone(): string | null {
+  try {
+    const raw = localStorage.getItem('peshkash_auth_v1');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed.phone === 'string' ? parsed.phone : null;
+  } catch { return null; }
+}
+
 export function useAnalytics(ctx: AnalyticsContext = {}) {
   /**
    * Fire-and-forget: posts to backend AND fires a GA custom event.
@@ -44,7 +53,8 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
    */
   function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): void {
     const merged = { ...ctx, ...extra };
-    const payload = { actionType, ...merged, pageUrl: window.location.href };
+    const phone = getStoredPhone();
+    const payload = { actionType, ...merged, pageUrl: window.location.href, ...(phone ? { phone } : {}) };
 
     // ── 1. Backend (Postgres via Redis queue) ──────────────────────────
     // keepalive:true lets the request outlive page navigation (same guarantee

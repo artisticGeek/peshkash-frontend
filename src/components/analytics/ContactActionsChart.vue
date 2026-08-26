@@ -6,7 +6,7 @@
       <label class="uc-chip" :class="{ 'uc-chip--on': showScans }"
         :style="showScans ? chipStyle(SCANS_COLOR) : {}">
         <input type="checkbox" class="visually-hidden" v-model="showScans" />
-        Scans
+        {{ props.scanLabel ?? 'Scans' }}
       </label>
       <!-- CTA chips — only types that have any data -->
       <label v-for="type in availableCtaTypes" :key="type"
@@ -47,6 +47,7 @@ const props = defineProps<{
   from: Date;
   to: Date;
   granularity: 'hour' | 'day';
+  scanLabel?: string;
 }>();
 
 // ── Labels / Colors ───────────────────────────────────────────────────────────
@@ -121,51 +122,54 @@ function toggleCta(type: string) {
 }
 
 // ── Period generation (gap-fill) ──────────────────────────────────────────────
+// Periods are always keyed in UTC to match the database's DATE_TRUNC output.
+// Display labels convert back to local time for readability.
+
+function formatUTCKey(d: Date, g: 'hour' | 'day'): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (g === 'hour') {
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:00:00`;
+  }
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+}
+
 const allPeriods = computed((): string[] => {
   const periods: string[] = [];
-  const from = new Date(props.from);
-  const to   = new Date(props.to);
+  const toMs = props.to.getTime();
 
   if (props.granularity === 'hour') {
-    // Truncate to hour
-    from.setMinutes(0, 0, 0);
-    const cur = new Date(from);
-    while (cur <= to) {
-      periods.push(formatPeriodKey(cur, 'hour'));
-      cur.setHours(cur.getHours() + 1);
+    // Truncate from to UTC hour boundary
+    const startMs = Math.floor(props.from.getTime() / 3_600_000) * 3_600_000;
+    for (let ms = startMs; ms <= toMs; ms += 3_600_000) {
+      periods.push(formatUTCKey(new Date(ms), 'hour'));
     }
   } else {
-    // Truncate to day
-    from.setHours(0, 0, 0, 0);
-    const cur = new Date(from);
-    while (cur <= to) {
-      periods.push(formatPeriodKey(cur, 'day'));
-      cur.setDate(cur.getDate() + 1);
+    // Truncate from to UTC day boundary
+    const cur = new Date(props.from);
+    cur.setUTCHours(0, 0, 0, 0);
+    while (cur.getTime() <= toMs) {
+      periods.push(formatUTCKey(cur, 'day'));
+      cur.setUTCDate(cur.getUTCDate() + 1);
     }
   }
   return periods;
 });
 
-function formatPeriodKey(d: Date, g: 'hour' | 'day'): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  if (g === 'hour') {
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00:00`;
-  }
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-}
-
-// Backend period strings may have different format; normalise to match our key format
+// Backend returns UTC timestamps without Z suffix — parse as UTC by appending Z
 function normalisePeriod(raw: string, g: 'hour' | 'day'): string {
-  const d = new Date(raw.includes('T') ? raw : raw + 'T00:00:00');
+  const utcStr = raw.includes('T') ? raw + 'Z' : raw + 'T00:00:00Z';
+  const d = new Date(utcStr);
   if (isNaN(d.getTime())) return raw;
-  return formatPeriodKey(d, g);
+  return formatUTCKey(d, g);
 }
 
 // ── Chart labels ──────────────────────────────────────────────────────────────
+// Periods are UTC keys; convert to local time for axis display
 const chartLabels = computed(() => {
   const spanDays = (props.to.getTime() - props.from.getTime()) / 86_400_000;
   return allPeriods.value.map(p => {
-    const d = new Date(p.includes('T') ? p : p + 'T00:00:00');
+    // Parse UTC key back to a Date (append Z so JS doesn't misinterpret as local)
+    const d = new Date(p.includes('T') ? p + 'Z' : p + 'T00:00:00Z');
     if (props.granularity === 'hour') {
       if (spanDays <= 1) return `${String(d.getHours()).padStart(2,'0')}:00`;
       return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })

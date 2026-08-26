@@ -53,8 +53,8 @@
 
         <!-- Right: session badge -->
         <div class="el-session">
-          <span class="el-session-badge" :title="`Session: ${row.sessionId}`">
-            <i class="bi bi-person-circle me-1" />{{ row.sessionId }}
+          <span class="el-session-badge" :title="row.phone ? `Phone: ${row.phone}` : `Session: ${row.sessionId}`">
+            <i class="bi bi-person-circle me-1" />{{ row.phone ?? row.sessionId }}
           </span>
         </div>
       </div>
@@ -82,13 +82,16 @@ interface EventRow {
   actionType: string | null;
   deviceType: string;
   sessionId: string;
+  phone: string | null;
   referrer: string | null;
   qrHash: string | null;
   pageName: string | null;
 }
 
 const props = defineProps<{
-  vendorId: number;
+  vendorId?: number;
+  eventId?: number;
+  itemId?: number;
   from: Date;
   to: Date;
 }>();
@@ -191,9 +194,13 @@ async function fetchRows(offset = 0) {
   loading.value = true;
   fetchError.value = null;
   try {
+    const params: Record<string, any> = { from: props.from.toISOString(), to: props.to.toISOString(), limit: PAGE, offset };
+    if (props.eventId) params.eventId = props.eventId;
+    else if (props.itemId) params.itemId = props.itemId;
+    else params.vendorId = props.vendorId;
     const { data } = await axios.get<{ rows: EventRow[]; total: number }>(
       `${API_BASE_URL}/analytics/event-log`,
-      { params: { vendorId: props.vendorId, from: props.from.toISOString(), to: props.to.toISOString(), limit: PAGE, offset } }
+      { params }
     );
     if (offset === 0) rows.value = data.rows;
     else rows.value.push(...data.rows);
@@ -210,8 +217,7 @@ async function fetchRows(offset = 0) {
 
 function loadMore() { fetchRows(rows.value.length); }
 
-// Reload whenever the date range or vendor changes
-watch([() => props.vendorId, () => props.from, () => props.to], () => fetchRows(0), { immediate: true });
+watch([() => props.vendorId, () => props.eventId, () => props.itemId, () => props.from, () => props.to], () => fetchRows(0), { immediate: true });
 </script>
 
 <style scoped>

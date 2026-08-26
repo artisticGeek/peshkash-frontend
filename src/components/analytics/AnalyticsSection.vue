@@ -74,7 +74,7 @@
           <KpiCard
             label="Engagement Rate"
             :value="engagementRate"
-            :subtitle="engagementRate + '% actions from scans'"
+            :subtitle="actionsPerScan > 1 ? actionsPerScan + ' actions/scan' : engagementRate + '% of scans engaged'"
             icon="bi-arrow-repeat"
             icon-class="text-purple"
           />
@@ -263,6 +263,36 @@
         </div>
       </div>
 
+      <div v-else-if="resourceTab === 'items'" class="resource-grid">
+        <div v-if="itemsLoading" class="resource-empty">
+          <i class="bi bi-arrow-clockwise spin"></i><span>Loading items…</span>
+        </div>
+        <div
+          v-for="item in drilldownItems"
+          :key="item.itemId"
+          class="resource-card"
+          :class="{ active: drilldownTarget?.type === 'item' && drilldownTarget.id === item.itemId }"
+          @click="selectDrilldown('item', item.itemId, item.itemName)"
+        >
+          <div class="resource-card-icon"><i class="bi bi-box-seam"></i></div>
+          <div class="resource-card-body">
+            <div class="resource-card-name">{{ item.itemName }}</div>
+            <div class="resource-card-meta" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <code class="small text-muted" style="font-size:0.7rem;">{{ item.vendorName }}</code>
+              <span v-if="item.eventName" class="text-muted" style="font-size:0.7rem;">· {{ item.eventName }}</span>
+              <span class="ms-auto" style="font-size:0.7rem;color:var(--bs-secondary-color)">
+                {{ item.views }}v · {{ item.actions }}a
+              </span>
+            </div>
+          </div>
+          <i class="bi bi-chevron-right resource-card-arrow"></i>
+        </div>
+        <div v-if="!itemsLoading && !drilldownItems.length" class="resource-empty">
+          <i class="bi bi-box-seam"></i>
+          <span>No item analytics yet. Views and interactions will appear here.</span>
+        </div>
+      </div>
+
       <div v-else-if="resourceTab === 'contacts'" class="resource-grid">
         <div
           v-for="vendor in drilldownVendors"
@@ -313,6 +343,14 @@
       @close="drawerOpen = false"
     />
   </AnalyticsDrawer>
+
+  <!-- ── Item detail drawer ─────────────────────────────────────────────── -->
+  <ItemDetailDrawer
+    v-if="drawerTarget?.type === 'item'"
+    v-model="drawerOpen"
+    :item-id="drawerTarget.id"
+    :item-name="drawerTarget.name"
+  />
 </template>
 
 <script setup lang="ts">
@@ -330,6 +368,7 @@ import TopItemsTable from './TopItemsTable.vue';
 import EventDetailDrawer from './EventDetailDrawer.vue';
 import AnalyticsDrawer from './AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from './VendorAnalyticsPanel.vue';
+import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 interface Vendor { id: number; displayName: string; name: string }
@@ -376,13 +415,22 @@ function defaultDateRange() {
 const dateRange = ref(defaultDateRange());
 
 // Drill-down state
-type ResourceTab = 'events' | 'contacts';
+type ResourceTab = 'events' | 'contacts' | 'items';
 const resourceTab = ref<ResourceTab>('events');
 // drilldownTarget drives active-card highlight; drawerTarget/drawerOpen drive the drawer
-const drilldownTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
-const drawerTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
+const drilldownTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
+const drawerTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
 const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
+
+interface ItemResource {
+  itemId: number; itemName: string; itemType: string;
+  vendorName: string; eventName: string;
+  views: number; actions: number; lastActivity: string | null;
+}
+const allItems = ref<ItemResource[]>([]);
+const itemsLoading = ref(false);
+
 const drilldownVendors = computed(() =>
   selectedVendorId.value
     ? vendors.value.filter(v => v.id === selectedVendorId.value)
@@ -395,9 +443,19 @@ const drilldownEvents = computed(() =>
     : allEvents.value
 );
 
+const drilldownItems = computed(() =>
+  selectedVendorId.value
+    ? allItems.value.filter(i => {
+        const v = vendors.value.find(v => v.id === selectedVendorId.value);
+        return v ? i.vendorName === v.displayName : true;
+      })
+    : allItems.value
+);
+
 const resourceTabs = computed(() => [
-  { key: 'events' as ResourceTab, label: 'Events', icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
-  { key: 'contacts' as ResourceTab, label: 'Contact Cards', icon: 'bi bi-person-vcard', count: drilldownVendors.value.length },
+  { key: 'events'   as ResourceTab, label: 'Events',           icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
+  { key: 'contacts' as ResourceTab, label: 'Contact Cards',    icon: 'bi bi-person-vcard',   count: drilldownVendors.value.length },
+  { key: 'items'    as ResourceTab, label: 'Items / Products', icon: 'bi bi-box-seam',        count: drilldownItems.value.length },
 ]);
 
 watch(selectedVendorId, () => {
@@ -405,7 +463,7 @@ watch(selectedVendorId, () => {
   drawerOpen.value = false;
 });
 
-function selectDrilldown(type: 'event' | 'vendor', id: number, name: string) {
+function selectDrilldown(type: 'event' | 'vendor' | 'item', id: number, name: string) {
   drilldownTarget.value = { type, id, name };
   drawerTarget.value = { type, id, name };
   drawerOpen.value = true;
@@ -421,7 +479,13 @@ const topQrDetails = computed(() => summary.value?.topQrDetails ?? []);
 const engagementRate = computed(() => {
   const scans = summary.value?.totalScans ?? 0;
   if (!scans) return 0;
-  return Math.round(((summary.value?.totalActions ?? 0) / scans) * 100);
+  return Math.min(100, Math.round(((summary.value?.totalActions ?? 0) / scans) * 100));
+});
+
+const actionsPerScan = computed(() => {
+  const scans = summary.value?.totalScans ?? 0;
+  if (!scans) return 0;
+  return Math.round(((summary.value?.totalActions ?? 0) / scans) * 10) / 10;
 });
 
 const ACTION_LABEL: Record<string, string> = {
@@ -541,6 +605,23 @@ async function loadEvents() {
     // Non-critical
   }
 }
+
+async function loadItems() {
+  itemsLoading.value = true;
+  try {
+    const params: Record<string, any> = { range: 'all' };
+    if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
+    const res = await axios.get<ItemResource[]>(`${API_BASE_URL}/analytics/items`, { params });
+    allItems.value = res.data ?? [];
+  } catch {
+    allItems.value = [];
+  } finally {
+    itemsLoading.value = false;
+  }
+}
+
+watch(resourceTab, tab => { if (tab === 'items' && !allItems.value.length) loadItems(); });
+watch(selectedVendorId, () => { if (resourceTab.value === 'items') loadItems(); });
 
 onMounted(async () => {
   if (isVendorRole.value && authStore.vendorId) {
