@@ -83,8 +83,13 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 function navigateTo(hash: string) {
   const closeBtn = document.querySelector<HTMLElement>('#offcanvasDarkNavbar .btn-close')
   closeBtn?.click()
-  // Wait for offcanvas close animation, then jump via hash
-  setTimeout(() => { window.location.hash = hash }, 350)
+  setTimeout(() => {
+    if (window.location.pathname === '/') {
+      window.location.hash = hash;
+    } else {
+      window.location.href = '/' + hash;
+    }
+  }, 350)
 }
 </script>
 
