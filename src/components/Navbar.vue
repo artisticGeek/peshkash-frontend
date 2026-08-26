@@ -23,7 +23,7 @@
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel">
+    <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel" style="background:#1A1410;border-left:1px solid rgba(189,148,90,0.2)">
       <div class="offcanvas-header">
         <PeshkashLogo variant="dark-bg" :height="38" />
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -84,8 +84,6 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 .navbar-professional {
   padding: 0.3rem 0;
   background: rgba(26, 20, 16, 0.97);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 1px 0 rgba(189, 148, 90, 0.18);
   position: sticky;
   top: 0;
@@ -135,9 +133,10 @@ import PeshkashLogo from '@/components/PeshkashLogo.vue'
 }
 
 /* Mobile offcanvas */
+:deep(.offcanvas.text-bg-dark),
 .offcanvas.text-bg-dark {
   background: #1A1410 !important;
-  border-left: 1px solid rgba(189,148,90,0.2);
+  border-left: 1px solid rgba(189,148,90,0.2) !important;
 }
 .offcanvas-header {
   border-bottom: 1px solid rgba(255,255,255,0.07);
