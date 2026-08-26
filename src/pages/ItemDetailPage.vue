@@ -9,16 +9,8 @@
   </div>
 
   <div class="container py-3">
-    <div v-if="isLoading" class="text-center py-5">
-      <div class="spinner-grow text-primary shadow-lg" style="width: 3rem; height: 3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-info shadow-lg mt-3" style="width: 2rem; height: 2rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-white shadow-lg mt-3" style="width: 1rem; height: 1rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
+    <div v-if="isLoading" class="pk-page-loader">
+      <peshkash-loader size="110" theme="light" label="Loading item" />
     </div>
     <div v-else-if="error" class="text-danger">{{ error }}</div>
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">

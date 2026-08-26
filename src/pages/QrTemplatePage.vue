@@ -1272,7 +1272,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
         <div class="qrt-preview-canvas-area">
           <div v-if="previewRendering" class="qrt-preview-loading">
-            <i class="bi bi-hourglass-split"></i> Rendering…
+            <peshkash-loader size="80" theme="dark" label="Rendering preview" />
           </div>
           <img v-else-if="previewDataUrl" :src="previewDataUrl" class="qrt-preview-img" :alt="`Preview of ${tpl.name}`" />
         </div>

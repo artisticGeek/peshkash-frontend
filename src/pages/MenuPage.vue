@@ -9,18 +9,8 @@
   />
 
   <!-- Loading State -->
-  <div v-if="isLoading" class="container py-5">
-    <div class="text-center">
-      <div class="spinner-grow text-primary shadow-lg" style="width: 3rem; height: 3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-info shadow-lg mt-3" style="width: 2rem; height: 2rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-      <div class="spinner-grow text-white shadow-lg mt-3" style="width: 1rem; height: 1rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
+  <div v-if="isLoading" class="pk-page-loader">
+    <peshkash-loader size="110" theme="light" label="Loading menu" />
   </div>
 
   <!-- Error State -->

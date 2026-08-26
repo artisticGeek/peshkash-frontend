@@ -1,12 +1,8 @@
 <template>
   <Navbar />
 
-  <div v-if="isLoading" class="container py-5">
-    <div class="text-center">
-      <div class="spinner-grow shadow-lg" style="width: 3rem; height: 3rem; color: #BD945A;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
+  <div v-if="isLoading" class="pk-page-loader">
+    <peshkash-loader size="110" theme="light" label="Loading" />
   </div>
 
   <div v-else-if="error" class="container py-5">
