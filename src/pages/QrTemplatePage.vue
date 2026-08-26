@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import axios from 'axios';
 import QRCode from 'qrcode';
 import { API_BASE_URL } from '../config';
+import { drawPeshkashMark, EXPORT_SCALE as _EXPORT_SCALE } from '../utils/qrRenderer';
 
 const props = defineProps<{ embedded?: boolean }>();
 
@@ -97,7 +98,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       name: 'Classic Business Card', widthMm: 85, heightMm: 54,
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#faf8f3', stroke: '#c9a96e', strokeWidth: 0.6, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 41, width: 75, height: 8, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 10, fontWeight: '600', color: '#4a3f2e', textAlign: 'center' as const },
       ]
     })
@@ -111,7 +112,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#15191e', stroke: '#15191e', strokeWidth: 0, borderRadius: 2, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Gold Strip', x: 0, y: 44, width: 85, height: 10, locked: true, fill: '#c9a96e', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 46, width: 77, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Inter', fontSize: 7, fontWeight: '700', color: '#15191e', textAlign: 'center' as const },
       ]
     })
@@ -126,7 +127,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#ffffff', stroke: '#e8dccb', strokeWidth: 0.4, borderRadius: 3, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Header Bar', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1a1a1a', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
         { id: uid(), type: 'image' as const, name: 'Logo', x: 29, y: 4, width: 32, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 87, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Playfair Display', fontSize: 13, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' as const },
         { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 103, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Inter', fontSize: 8, fontWeight: '400', color: '#9a8870', textAlign: 'center' as const },
       ]
@@ -141,7 +142,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#ffffff', stroke: '#e8e0d4', strokeWidth: 0.5, borderRadius: 2, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Accent Bar', x: 0, y: 0, width: 80, height: 4, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 67, width: 70, height: 9, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 11, fontWeight: '500', color: '#15191e', textAlign: 'center' as const },
       ]
     })
@@ -155,7 +156,7 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
       elements: [
         { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 50, height: 30, locked: true, fill: '#ffffff', stroke: '#d8d0c4', strokeWidth: 0.4, borderRadius: 1.5, opacity: 1 },
         { id: uid(), type: 'rect' as const, name: 'Divider', x: 29, y: 4, width: 0.5, height: 22, locked: true, fill: '#e0d8cc', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'M' as const, borderRadius: 0 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
         { id: uid(), type: 'text' as const, name: 'Scan Text', x: 31, y: 10, width: 16, height: 10, locked: false, content: 'Scan for menu', fontFamily: 'Inter', fontSize: 6, fontWeight: '500', color: '#4a3f2e', textAlign: 'left' as const },
       ]
     })
@@ -272,13 +273,18 @@ function redo() {
 
 async function generateQrPreview(el: QrEl) {
   try {
-    const url = await QRCode.toDataURL('peshkash-preview', {
-      width: 200,
+    const previewSize = 200;
+    const qCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qCanvas, 'peshkash-preview', {
+      width: previewSize,
       margin: el.margin,
       color: { dark: el.fgColor, light: el.bgColor === 'transparent' ? '#ffffff' : el.bgColor },
-      errorCorrectionLevel: el.errorLevel,
+      errorCorrectionLevel: 'H', // always H so logo fits
     });
-    qrPreviews.value[el.id] = url;
+    // Overlay Peshkash mark (non-editable)
+    const ctx = qCanvas.getContext('2d')!;
+    drawPeshkashMark(ctx, previewSize / 2, previewSize / 2, previewSize * 0.22);
+    qrPreviews.value[el.id] = qCanvas.toDataURL('image/png');
   } catch { /* ignore */ }
 }
 
@@ -293,7 +299,7 @@ watch(
 function makeQr(): QrEl {
   const cx = tpl.widthMm / 2 - 15;
   const cy = tpl.heightMm / 2 - 15;
-  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#000000', bgColor: '#ffffff', margin: 1, errorLevel: 'M', borderRadius: 0 };
+  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#000000', bgColor: '#ffffff', margin: 1, errorLevel: 'H', borderRadius: 0 };
 }
 
 function makeText(): TextEl {
@@ -562,8 +568,10 @@ function applyPreset(p: typeof PRESETS[0]) {
 async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promise<void> {
   const pw = Math.round(tpl.widthMm * EXPORT_SCALE);
   const ph = Math.round(tpl.heightMm * EXPORT_SCALE);
+  const FOOTER_H = Math.round(6 * EXPORT_SCALE); // 6 mm branded footer
+
   canvas.width = pw;
-  canvas.height = ph;
+  canvas.height = ph + FOOTER_H;
   const ctx = canvas.getContext('2d')!;
 
   ctx.fillStyle = '#ffffff';
@@ -618,7 +626,7 @@ async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promi
         width: ew,
         margin: q.margin,
         color: { dark: q.fgColor, light: q.bgColor === 'transparent' ? '#ffffff' : q.bgColor },
-        errorCorrectionLevel: q.errorLevel,
+        errorCorrectionLevel: 'H', // always H to allow logo overlay
       });
       const br = q.borderRadius * EXPORT_SCALE;
       if (br > 0) {
@@ -629,9 +637,34 @@ async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promi
       }
       ctx.drawImage(qCanvas, ex, ey, ew, eh);
       if (br > 0) ctx.restore();
+      // Non-editable Peshkash mark centred on QR
+      ctx.globalAlpha = 1;
+      drawPeshkashMark(ctx, ex + ew / 2, ey + eh / 2, ew * 0.22);
     }
     ctx.restore();
   }
+
+  // ── Branded footer strip ──────────────────────────────────────────────────
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#f5f1eb';
+  ctx.fillRect(0, ph, pw, FOOTER_H);
+  ctx.fillStyle = '#e0d4be';
+  ctx.fillRect(0, ph, pw, Math.ceil(EXPORT_SCALE * 0.2));
+
+  const markH = FOOTER_H * 0.52;
+  const markCX = FOOTER_H * 0.72;
+  const markCY = ph + FOOTER_H / 2;
+  drawPeshkashMark(ctx, markCX, markCY, markH);
+
+  const textX = markCX + markH * 0.65;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.font = `400 ${Math.round(FOOTER_H * 0.24)}px Arial, sans-serif`;
+  ctx.fillStyle = '#9a8870';
+  ctx.fillText('powered by', textX, ph + FOOTER_H * 0.42);
+  ctx.font = `600 ${Math.round(FOOTER_H * 0.38)}px Georgia, "Times New Roman", serif`;
+  ctx.fillStyle = '#BD945A';
+  ctx.fillText('peshkash', textX, ph + FOOTER_H * 0.78);
 }
 
 async function exportPng(qrValue = 'https://peshkash.com') {
@@ -694,17 +727,17 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   <div v-if="view === 'list'" class="qrt-list-page" :class="{ 'qrt-list-page--embedded': props.embedded }">
     <div class="qrt-list-header">
       <div>
-        <h2>Print Templates</h2>
-        <p class="hint">Design print-ready layouts once — reuse for every event or vendor.</p>
+        <h2>Your Peshkash QRs</h2>
+        <p class="hint">Design a QR once — share your Peshkash everywhere. Every QR carries the Peshkash mark.</p>
       </div>
       <button class="btn btn-primary" @click="newTemplate">
-        <i class="bi bi-plus-lg"></i> Blank Template
+        <i class="bi bi-plus-lg"></i> New QR Design
       </button>
     </div>
 
     <!-- Trendy presets -->
     <div class="qrt-presets-section">
-      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start from a preset</p>
+      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start your Peshkash</p>
       <div class="qrt-presets-grid">
         <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
           <div class="qrt-preset-thumb">
@@ -848,6 +881,22 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
           </div>
           <!-- Canvas size badge -->
           <div class="qrt-canvas-badge">{{ tpl.widthMm }} × {{ tpl.heightMm }} mm</div>
+
+          <!-- Non-editable Peshkash footer preview (matches export output) -->
+          <div class="qrt-brand-footer" :style="{ width: `${tpl.widthMm * displayScale}px` }">
+            <div class="qrt-brand-footer-mark">
+              <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="100%" width="auto" style="display:block">
+                <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
+                <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
+                <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
+                <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+              </svg>
+            </div>
+            <div class="qrt-brand-footer-text">
+              <span class="qrt-brand-powered">powered by</span>
+              <span class="qrt-brand-name">peshkash</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1129,7 +1178,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
       </div>
       <div class="qrt-footer-hint">
         <i class="bi bi-info-circle"></i>
-        Export PNG at 300 DPI · Del to remove · Ctrl+Z undo
+        300 DPI export · Peshkash mark auto-added · Del removes · Ctrl+Z undo
       </div>
     </footer>
 
@@ -1538,6 +1587,48 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+/* Non-editable brand footer strip below the canvas */
+.qrt-brand-footer {
+  align-items: center;
+  background: #f5f1eb;
+  border-top: 1px solid #e0d4be;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.14);
+  display: flex;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.qrt-brand-footer-mark {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.qrt-brand-footer-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.qrt-brand-powered {
+  color: #9a8870;
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.qrt-brand-name {
+  color: #BD945A;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 /* Elements */
