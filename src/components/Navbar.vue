@@ -9,8 +9,8 @@
     <!-- Desktop inline nav -->
     <div class="d-none d-lg-flex align-items-center gap-1 me-3">
       <a class="nav-link-inline" href="/#how">How It Works</a>
-      <a class="nav-link-inline" href="/#vendors">For Vendors</a>
-      <a class="nav-link-inline" href="/#pricing">Pricing</a>
+      <a class="nav-link-inline" href="/#picker">For Vendors</a>
+      <a class="nav-link-inline" href="/#contact">Pricing</a>
       <a class="nav-link-inline" href="/#contact">Contact</a>
     </div>
     <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2">
@@ -45,12 +45,12 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#vendors" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="/#picker" data-bs-dismiss="offcanvas">
               <i class="bi bi-shop me-2 text-gold"></i>For Vendors
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link py-3" href="/#pricing" data-bs-dismiss="offcanvas">
+            <a class="nav-link py-3" href="/#contact" data-bs-dismiss="offcanvas">
               <i class="bi bi-tag me-2 text-gold"></i>Pricing
             </a>
           </li>
@@ -68,11 +68,11 @@
 
         <!-- Bottom CTA in side menu -->
         <div class="offcanvas-footer mt-auto pt-4 border-top border-secondary">
-          <a href="https://wa.me/+919041716953" target="_blank" rel="noopener"
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
             class="btn btn-pk-gold w-100 mb-3 d-flex align-items-center justify-content-center gap-2">
             <i class="bi bi-whatsapp"></i> Chat on WhatsApp
           </a>
-          <p class="text-muted small text-center mb-0">+91-9041716953 · contact@peshkash.app</p>
+          <p class="text-muted small text-center mb-0">+91-9115551110 · contact@peshkash.app</p>
         </div>
       </div>
     </div>

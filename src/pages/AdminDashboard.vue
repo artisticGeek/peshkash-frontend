@@ -106,7 +106,7 @@
           <RouterLink class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-boxes"></i></span>
             <div>
-              <strong class="metric-value">{{ items.length }}</strong>
+              <strong class="metric-value">{{ vendorItems.length }}</strong>
               <span class="metric-label">Items</span>
             </div>
             <span class="metric-tile-sub">across all menus</span>
@@ -975,7 +975,7 @@
         <PrintStudio
           :event="selectedEventForItems ?? null"
           :targets="selectedEventForItems ? eventQrTargets(selectedEventForItems) : []"
-          :qr-mappings="qrMappings"
+          :qr-mappings="vendorQrMappings"
         />
       </section>
 
@@ -1062,7 +1062,7 @@
         <div class="adhoc-box">
           <h4>Import From Existing Menu</h4>
           <div class="form-grid">
-            <label>Import From Menu<select v-model.number="importForm.menuId" class="form-select"><option :value="0">Select menu</option><option v-for="menu in menus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
+            <label>Import From Menu<select v-model.number="importForm.menuId" class="form-select"><option :value="0">Select menu</option><option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">{{ menu.displayName }}</option></select></label>
             <label>Item<select v-model.number="importForm.itemId" class="form-select"><option :value="0">Select item</option><option v-for="item in importMenuItems" :key="item.id" :value="item.id">{{ itemLabel(item) }}</option></select></label>
             <label>Custom Menu Name<input v-model.trim="importForm.customMenuDisplayName" class="form-control" placeholder="Supreme Custom for Sanya" /></label>
             <label>Destination<select v-model="importForm.destination" class="form-select"><option value="source">Selected source menu</option><option value="adhoc">Adhoc/custom menu</option><option value="both">Both</option></select></label>
@@ -1956,7 +1956,8 @@ const SOCIAL_TYPES = [
   { key: 'Facebook',  icon: 'bi-facebook',  label: 'Facebook',   prefix: null,  hint: 'page name or facebook.com/…' },
   { key: 'LinkedIn',  icon: 'bi-linkedin',  label: 'LinkedIn',   prefix: 'in/', hint: 'profile or linkedin.com/…' },
   { key: 'Twitter',   icon: 'bi-twitter-x', label: 'Twitter / X',prefix: '@',   hint: 'handle or x.com/…' },
-  { key: 'YouTube',   icon: 'bi-youtube',   label: 'YouTube',    prefix: '@',   hint: 'channel or youtube.com/…' },
+  { key: 'YouTube',       icon: 'bi-youtube',   label: 'YouTube',       prefix: '@',   hint: 'channel or youtube.com/…' },
+  { key: 'Google Review', icon: 'bi-google',    label: 'Google Review', prefix: null,  hint: 'Google review link URL' },
 ] as const;
 type SocialKey = (typeof SOCIAL_TYPES)[number]['key'];
 
@@ -2152,7 +2153,7 @@ const vendorQrMappings = computed(() => {
       const event = events.value.find((e) => e.name === eventSlug);
       return event?.vendorId === selectedVendorId.value;
     }
-    return true; // custom paths shown in all vendor contexts
+    return false; // unclassified paths hidden in vendor-scoped views
   }).map(withMeta);
 });
 const eventQrMapping = computed(() =>
@@ -4039,13 +4040,14 @@ async function deleteVendorById(id: number, name: string) {
 
 /* ── Shell & sidebar layout ─────────────────────────────────────────────────── */
 .admin-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 260px 1fr;
   background: #f7f2ea;
   color: #2f2a24;
   font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   transition: grid-template-columns 0.22s ease;
+  overflow: hidden;
 }
 .admin-shell[data-sidebar="icons"] { grid-template-columns: 64px 1fr; }
 .admin-shell[data-sidebar="hidden"] { grid-template-columns: 0px 1fr; }
@@ -4300,7 +4302,8 @@ async function deleteVendorById(id: number, name: string) {
 
 .admin-main {
   min-width: 0;
-  overflow: auto;
+  height: 100vh;
+  overflow-y: auto;
   padding: 0 20px 16px;
 }
 

@@ -155,7 +155,7 @@ function shareItem() {
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
-    itemId: itemData.value?.id,
+    itemId: itemData.value?.numericId,
   });
   navigator.share?.({ title: itemData.value?.name, url: window.location.href });
 }
@@ -170,7 +170,7 @@ onMounted(async () => {
       vendorId: data?.event?.vendor?.id,
       eventId: data?.event?.id,
       menuId: data?.menu?.id,
-      itemId: data?.id,
+      itemId: data?.numericId,
     })
   } catch (err: any) {
     error.value = err.message

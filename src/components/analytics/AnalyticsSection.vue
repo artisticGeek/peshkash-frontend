@@ -13,7 +13,7 @@
       </div>
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <select
-          v-if="vendors.length"
+          v-if="vendors.length && !isVendorRole"
           v-model="selectedVendorId"
           class="form-select form-select-sm"
           style="max-width: 180px;"
@@ -22,16 +22,7 @@
           <option :value="undefined">All Vendors</option>
           <option v-for="v in vendors" :key="v.id" :value="v.id">{{ v.displayName }}</option>
         </select>
-        <div class="btn-group btn-group-sm" role="group">
-          <button
-            v-for="r in RANGES"
-            :key="r.value"
-            type="button"
-            class="btn btn-outline-secondary"
-            :class="{ active: range === r.value }"
-            @click="setRange(r.value)"
-          >{{ r.label }}</button>
-        </div>
+        <DateRangePicker v-model="dateRange" @update:modelValue="load" />
         <button class="btn btn-sm btn-outline-primary" @click="load" :disabled="loading">
           <i class="bi bi-arrow-clockwise" :class="{ 'spin': loading }"></i>
         </button>
@@ -40,14 +31,15 @@
           v-if="selectedVendorId"
           class="btn btn-sm btn-outline-success"
           :disabled="exportLoading"
-          title="Export raw analytics for selected vendor"
+          :title="exportError ?? 'Export raw analytics for selected vendor'"
           @click="exportVendor(
             selectedVendorId!,
             vendors.find(v => v.id === selectedVendorId)?.displayName ?? 'vendor'
           )"
         >
-          <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+          <i :class="exportError ? 'bi bi-exclamation-triangle me-1 text-warning' : 'bi bi-file-earmark-spreadsheet me-1'"></i>
           <span v-if="exportLoading"><i class="bi bi-arrow-clockwise spin me-1"></i>Exporting…</span>
+          <span v-else-if="exportError" class="text-warning">No data</span>
           <span v-else>Excel</span>
         </button>
       </div>
@@ -82,7 +74,7 @@
           <KpiCard
             label="Engagement Rate"
             :value="engagementRate"
-            :subtitle="engagementRate + '% actions from scans'"
+            :subtitle="actionsPerScan > 1 ? actionsPerScan + ' actions/scan' : engagementRate + '% of scans engaged'"
             icon="bi-arrow-repeat"
             icon-class="text-purple"
           />
@@ -109,19 +101,19 @@
 
       <!-- Charts row -->
       <div class="row g-3 mb-4">
-        <div class="col-12 col-lg-8">
+        <div class="col-12">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
-              <h6 class="fw-semibold mb-3">Scans Over Time</h6>
-              <ScanChart :data="summary.scansPerDay" />
-            </div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="fw-semibold mb-3">User Actions</h6>
-              <ActionBreakdown :data="summary.actionBreakdown" />
+              <h6 class="fw-semibold mb-2">Activity Over Time</h6>
+              <div style="height: 220px;">
+                <ContactActionsChart
+                  :scans-per-period="summaryScansPerPeriod"
+                  :actions-per-period-by-type="summaryActionsPerPeriodByType"
+                  :from="dateRange.from"
+                  :to="dateRange.to"
+                  :granularity="summaryGranularity"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -210,7 +202,7 @@
           <div class="card border-0 shadow-sm">
             <div class="card-body">
               <h6 class="fw-semibold mb-3">Top Items / Products</h6>
-              <TopItemsTable :range="range" :vendor-id="selectedVendorId" :show-vendor="true" :show-event="true" />
+              <TopItemsTable range="30d" :vendor-id="selectedVendorId" :show-vendor="true" :show-event="true" />
             </div>
           </div>
         </div>
@@ -271,6 +263,36 @@
         </div>
       </div>
 
+      <div v-else-if="resourceTab === 'items'" class="resource-grid">
+        <div v-if="itemsLoading" class="resource-empty">
+          <i class="bi bi-arrow-clockwise spin"></i><span>Loading items…</span>
+        </div>
+        <div
+          v-for="item in drilldownItems"
+          :key="item.itemId"
+          class="resource-card"
+          :class="{ active: drilldownTarget?.type === 'item' && drilldownTarget.id === item.itemId }"
+          @click="selectDrilldown('item', item.itemId, item.itemName)"
+        >
+          <div class="resource-card-icon"><i class="bi bi-box-seam"></i></div>
+          <div class="resource-card-body">
+            <div class="resource-card-name">{{ item.itemName }}</div>
+            <div class="resource-card-meta" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <code class="small text-muted" style="font-size:0.7rem;">{{ item.vendorName }}</code>
+              <span v-if="item.eventName" class="text-muted" style="font-size:0.7rem;">· {{ item.eventName }}</span>
+              <span class="ms-auto" style="font-size:0.7rem;color:var(--bs-secondary-color)">
+                {{ item.views }}v · {{ item.actions }}a
+              </span>
+            </div>
+          </div>
+          <i class="bi bi-chevron-right resource-card-arrow"></i>
+        </div>
+        <div v-if="!itemsLoading && !drilldownItems.length" class="resource-empty">
+          <i class="bi bi-box-seam"></i>
+          <span>No item analytics yet. Views and interactions will appear here.</span>
+        </div>
+      </div>
+
       <div v-else-if="resourceTab === 'contacts'" class="resource-grid">
         <div
           v-for="vendor in drilldownVendors"
@@ -321,6 +343,14 @@
       @close="drawerOpen = false"
     />
   </AnalyticsDrawer>
+
+  <!-- ── Item detail drawer ─────────────────────────────────────────────── -->
+  <ItemDetailDrawer
+    v-if="drawerTarget?.type === 'item'"
+    v-model="drawerOpen"
+    :item-id="drawerTarget.id"
+    :item-name="drawerTarget.name"
+  />
 </template>
 
 <script setup lang="ts">
@@ -328,14 +358,17 @@ import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import { gaEnabled } from '../../utils/ga';
+import { useAuthStore } from '../../stores/auth';
 import KpiCard from './KpiCard.vue';
-import ScanChart from './ScanChart.vue';
+import ContactActionsChart from './ContactActionsChart.vue';
+import DateRangePicker from './DateRangePicker.vue';
 import ActionBreakdown from './ActionBreakdown.vue';
 import DeviceSplit from './DeviceSplit.vue';
 import TopItemsTable from './TopItemsTable.vue';
 import EventDetailDrawer from './EventDetailDrawer.vue';
 import AnalyticsDrawer from './AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from './VendorAnalyticsPanel.vue';
+import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 interface Vendor { id: number; displayName: string; name: string }
@@ -352,21 +385,19 @@ interface QrDetail {
 interface Summary {
   totalScans: number;
   totalActions: number;
-  scansPerDay: Array<{ date: string; count: number }>;
+  scansPerDay?: Array<{ date: string; count: number }>;
+  scansPerPeriod?: Array<{ period: string; count: number }>;
+  actionsPerDayByType?: Array<{ date: string; actionType: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  granularity?: 'hour' | 'day';
   topQrHashes: Array<{ qrHash: string; count: number }>;
   topQrDetails: QrDetail[];
   actionBreakdown: Array<{ actionType: string; count: number }>;
   deviceSplit: Array<{ deviceType: string; count: number }>;
 }
 
-const RANGES = [
-  { label: '7D', value: '7d' },
-  { label: '30D', value: '30d' },
-  { label: '90D', value: '90d' },
-  { label: 'All', value: 'all' },
-] as const;
-
-type RangeValue = typeof RANGES[number]['value'];
+const authStore = useAuthStore();
+const isVendorRole = computed(() => authStore.role === 'vendor');
 
 const loading = ref(false);
 const error = ref(false);
@@ -374,18 +405,37 @@ const summary = ref<Summary | null>(null);
 const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(undefined);
 
-const { exportVendor, loading: exportLoading } = useAnalyticsExport();
-const range = ref<RangeValue>('30d');
+const { exportVendor, loading: exportLoading, error: exportError } = useAnalyticsExport();
+
+function defaultDateRange() {
+  const to   = new Date();
+  const from = new Date(to.getTime() - 30 * 24 * 3600 * 1000);
+  return { from, to, label: 'Last 30 days' };
+}
+const dateRange = ref(defaultDateRange());
 
 // Drill-down state
-type ResourceTab = 'events' | 'contacts';
+type ResourceTab = 'events' | 'contacts' | 'items';
 const resourceTab = ref<ResourceTab>('events');
 // drilldownTarget drives active-card highlight; drawerTarget/drawerOpen drive the drawer
-const drilldownTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
-const drawerTarget = ref<{ type: 'event' | 'vendor'; id: number; name: string } | null>(null);
+const drilldownTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
+const drawerTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
 const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
-const drilldownVendors = ref<Vendor[]>([]);
+
+interface ItemResource {
+  itemId: number; itemName: string; itemType: string;
+  vendorName: string; eventName: string;
+  views: number; actions: number; lastActivity: string | null;
+}
+const allItems = ref<ItemResource[]>([]);
+const itemsLoading = ref(false);
+
+const drilldownVendors = computed(() =>
+  selectedVendorId.value
+    ? vendors.value.filter(v => v.id === selectedVendorId.value)
+    : vendors.value
+);
 
 const drilldownEvents = computed(() =>
   selectedVendorId.value
@@ -393,9 +443,19 @@ const drilldownEvents = computed(() =>
     : allEvents.value
 );
 
+const drilldownItems = computed(() =>
+  selectedVendorId.value
+    ? allItems.value.filter(i => {
+        const v = vendors.value.find(v => v.id === selectedVendorId.value);
+        return v ? i.vendorName === v.displayName : true;
+      })
+    : allItems.value
+);
+
 const resourceTabs = computed(() => [
-  { key: 'events' as ResourceTab, label: 'Events', icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
-  { key: 'contacts' as ResourceTab, label: 'Contact Cards', icon: 'bi bi-person-vcard', count: drilldownVendors.value.length },
+  { key: 'events'   as ResourceTab, label: 'Events',           icon: 'bi bi-calendar2-week', count: drilldownEvents.value.length },
+  { key: 'contacts' as ResourceTab, label: 'Contact Cards',    icon: 'bi bi-person-vcard',   count: drilldownVendors.value.length },
+  { key: 'items'    as ResourceTab, label: 'Items / Products', icon: 'bi bi-box-seam',        count: drilldownItems.value.length },
 ]);
 
 watch(selectedVendorId, () => {
@@ -403,7 +463,7 @@ watch(selectedVendorId, () => {
   drawerOpen.value = false;
 });
 
-function selectDrilldown(type: 'event' | 'vendor', id: number, name: string) {
+function selectDrilldown(type: 'event' | 'vendor' | 'item', id: number, name: string) {
   drilldownTarget.value = { type, id, name };
   drawerTarget.value = { type, id, name };
   drawerOpen.value = true;
@@ -419,7 +479,13 @@ const topQrDetails = computed(() => summary.value?.topQrDetails ?? []);
 const engagementRate = computed(() => {
   const scans = summary.value?.totalScans ?? 0;
   if (!scans) return 0;
-  return Math.round(((summary.value?.totalActions ?? 0) / scans) * 100);
+  return Math.min(100, Math.round(((summary.value?.totalActions ?? 0) / scans) * 100));
+});
+
+const actionsPerScan = computed(() => {
+  const scans = summary.value?.totalScans ?? 0;
+  if (!scans) return 0;
+  return Math.round(((summary.value?.totalActions ?? 0) / scans) * 10) / 10;
 });
 
 const ACTION_LABEL: Record<string, string> = {
@@ -443,7 +509,7 @@ const summaryText = computed(() => {
   const actions = s.totalActions;
   const topQr = topQrDetails.value[0];
   const topAction = s.actionBreakdown[0];
-  const period = RANGE_LABEL[range.value] ?? 'This period';
+  const period = dateRange.value.label ?? 'This period';
 
   const parts: string[] = [];
   parts.push(`${period}, your QR pages received ${scans} scan${scans !== 1 ? 's' : ''} and ${actions} customer action${actions !== 1 ? 's' : ''}.`);
@@ -460,11 +526,24 @@ async function copySummary() {
   setTimeout(() => { summaryCopied.value = false; }, 2000);
 }
 
+// Compat: normalise new/old backend shapes for chart props
+const summaryScansPerPeriod = computed(() =>
+  summary.value?.scansPerPeriod?.length
+    ? summary.value.scansPerPeriod
+    : (summary.value?.scansPerDay ?? []).map(r => ({ period: r.date, count: r.count }))
+);
+const summaryActionsPerPeriodByType = computed(() =>
+  summary.value?.actionsPerPeriodByType?.length
+    ? summary.value.actionsPerPeriodByType
+    : (summary.value?.actionsPerDayByType ?? []).map(r => ({ period: r.date, actionType: r.actionType, count: r.count }))
+);
+const summaryGranularity = computed(() => summary.value?.granularity ?? 'day');
+
 const peakDay = computed(() => {
-  const days = summary.value?.scansPerDay ?? [];
-  if (!days.length) return { date: '—', count: 0 };
-  const peak = days.reduce((a, b) => b.count > a.count ? b : a);
-  const label = new Date(peak.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const periods = summaryScansPerPeriod.value;
+  if (!periods.length) return { date: '—', count: 0 };
+  const peak = periods.reduce((a, b) => b.count > a.count ? b : a);
+  const label = new Date(peak.period).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   return { date: label, count: peak.count };
 });
 
@@ -491,16 +570,14 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function setRange(v: RangeValue) {
-  range.value = v;
-  load();
-}
-
 async function load() {
   loading.value = true;
   error.value = false;
   try {
-    const params: Record<string, string | number> = { range: range.value };
+    const params: Record<string, string | number> = {
+      from: dateRange.value.from.toISOString(),
+      to:   dateRange.value.to.toISOString(),
+    };
     if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
     const res = await axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, { params });
     summary.value = res.data;
@@ -515,7 +592,6 @@ async function loadVendors() {
   try {
     const res = await axios.get<Vendor[]>(`${API_BASE_URL}/admin/vendors`);
     vendors.value = res.data ?? [];
-    drilldownVendors.value = res.data ?? [];
   } catch {
     // vendors list stays empty — non-critical
   }
@@ -530,7 +606,27 @@ async function loadEvents() {
   }
 }
 
+async function loadItems() {
+  itemsLoading.value = true;
+  try {
+    const params: Record<string, any> = { range: 'all' };
+    if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
+    const res = await axios.get<ItemResource[]>(`${API_BASE_URL}/analytics/items`, { params });
+    allItems.value = res.data ?? [];
+  } catch {
+    allItems.value = [];
+  } finally {
+    itemsLoading.value = false;
+  }
+}
+
+watch(resourceTab, tab => { if (tab === 'items' && !allItems.value.length) loadItems(); });
+watch(selectedVendorId, () => { if (resourceTab.value === 'items') loadItems(); });
+
 onMounted(async () => {
+  if (isVendorRole.value && authStore.vendorId) {
+    selectedVendorId.value = authStore.vendorId;
+  }
   await Promise.all([loadVendors(), load(), loadEvents()]);
 });
 </script>

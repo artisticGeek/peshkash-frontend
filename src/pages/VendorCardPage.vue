@@ -41,7 +41,7 @@
               <!-- Phone -->
               <div v-if="phoneField" class="contact-row">
                 <i class="bi bi-telephone-fill row-icon"></i>
-                <a :href="'tel:' + phoneField.value" class="row-value">{{ phoneField.value }}</a>
+                <a :href="'tel:' + phoneField.value" class="row-value" @click="analytics.track('call_click', { vendorId: vid() })">{{ phoneField.value }}</a>
                 <button
                   class="copy-btn"
                   :class="{ copied: copiedKey === 'phone' }"
@@ -56,7 +56,7 @@
               <!-- Email -->
               <div v-if="emailField" class="contact-row">
                 <i class="bi bi-envelope-fill row-icon"></i>
-                <a :href="'mailto:' + emailField.value" class="row-value">{{ emailField.value }}</a>
+                <a :href="'mailto:' + emailField.value" class="row-value" @click="analytics.track('email_click', { vendorId: vid() })">{{ emailField.value }}</a>
                 <button
                   class="copy-btn"
                   :class="{ copied: copiedKey === 'email' }"
@@ -84,10 +84,16 @@
                 </div>
               </div>
 
+              <!-- Address -->
+              <div v-if="vendorData?.address" class="contact-row">
+                <i class="bi bi-geo-alt-fill row-icon"></i>
+                <span class="row-value">{{ vendorData.address }}</span>
+              </div>
+
             </div>
           </div>
 
-          <!-- Map — themed, read-only -->
+          <!-- Map — only when Google Maps contact field is explicitly set -->
           <div v-if="mapQuery" class="map-section">
             <div class="map-frame-wrap">
               <iframe
@@ -114,6 +120,7 @@
                 :title="action.label"
                 target="_blank"
                 rel="noreferrer"
+                @click="trackSocial(action)"
               >
                 <i :class="'bi ' + action.icon"></i>
                 <span>{{ action.label }}</span>
@@ -240,6 +247,11 @@ const CONTACT_FIELD_MAP: Record<string, ContactMeta> = {
     hrefFn: (v) => v.startsWith('http') ? v : `https://youtube.com/@${v.replace(/^@/, '')}`,
     isSocial: true, socialIcon: 'bi-youtube', socialLabel: 'YouTube', socialKey: 'youtube',
   },
+  'Google Review': {
+    icon: 'bi bi-google',
+    hrefFn: (v) => v,
+    isSocial: true, socialIcon: 'bi-google', socialLabel: 'Review Us', socialKey: 'google-review',
+  },
 }
 
 // ── Raw parsed contact list (used for vCard + field lookups) ──────────────────
@@ -273,7 +285,8 @@ const websiteDomain = computed(() => {
 })
 
 // ── Map section ───────────────────────────────────────────────────────────────
-// Prefer explicit Google Maps field; extract query if it's a full URL; else fall back to address.
+// Google Maps contact field takes precedence; falls back to address field.
+// Address text is shown separately in the contact list regardless.
 const mapQuery = computed(() => {
   const gmaps = parsedContact.value.find(f => f.prefix === 'Google Maps')
   if (gmaps) {
@@ -334,9 +347,27 @@ const socialActions = computed((): SocialAction[] => {
   return actions
 })
 
+// ── Analytics helpers ─────────────────────────────────────────────────────────
+function vid() { return vendorData.value?.id as number | undefined }
+
+function trackSocial(action: SocialAction) {
+  const TYPE_MAP: Record<string, string> = {
+    whatsapp:        'whatsapp_click',
+    directions:      'directions_click',
+    instagram:       'instagram_click',
+    facebook:        'facebook_click',
+    linkedin:        'linkedin_click',
+    twitter:         'twitter_click',
+    youtube:         'youtube_click',
+    'google-review': 'google_review_click',
+  }
+  analytics.track((TYPE_MAP[action.key] ?? `${action.key}_click`) as any, { vendorId: vid() })
+}
+
 // ── vCard download ────────────────────────────────────────────────────────────
 function downloadVCard() {
   if (!vendorData.value) return
+  analytics.track('save_contact', { vendorId: vid() })
   const vCard = [
     'BEGIN:VCARD',
     'VERSION:3.0',
@@ -363,6 +394,7 @@ function downloadVCard() {
 // ── Share ─────────────────────────────────────────────────────────────────────
 async function shareCard() {
   if (!vendorData.value) return
+  analytics.track('share_click', { vendorId: vid() })
   const shareData = {
     title: vendorData.value.displayName,
     text: vendorData.value.description || `Contact information for ${vendorData.value.displayName}`,
