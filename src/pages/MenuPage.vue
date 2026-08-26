@@ -1,6 +1,13 @@
 <template>
   <Navbar />
-  
+
+  <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
+  <LoginModal
+    v-model="loginModalOpen"
+    no-dismiss
+    @success="onLoginSuccess"
+  />
+
   <!-- Loading State -->
   <div v-if="isLoading" class="container py-5">
     <div class="text-center">
@@ -81,8 +88,8 @@
 
     <!-- Menu Categories -->
     <div v-if="filteredMenuItems && filteredMenuItems.length > 0" class="menu-list pk-reveal" data-anim="animate__fadeInUp" data-delay="100">
-      <MenuTree 
-        v-for="item in filteredMenuItems" 
+      <MenuTree
+        v-for="item in filteredMenuItems"
         :key="`${item.id}-${forceRenderKey}`"
         :item="item"
         :level="0"
@@ -90,6 +97,9 @@
         :menu-name="menuName"
         :search-query="searchQuery"
         :selected-filter="selectedFilter"
+        :analytics-vendor-id="menuData?.vendor?.id"
+        :analytics-event-id="menuData?.event?.id"
+        :analytics-menu-id="menuData?.menu?.id"
       />
     </div>
 
@@ -113,11 +123,25 @@ import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import MenuTree from '../components/MenuTree.vue'
+import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
+import { useAnalytics } from '../composables/useAnalytics'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
+
+// Auth & login gate
+const authStore = useAuthStore()
+const loginModalOpen = ref(false)
+const isLoggedIn = computed(() => authStore.isLoggedIn)
+
+function onLoginSuccess() {
+  loginModalOpen.value = false
+}
+
+const analytics = useAnalytics()
 
 const menuData = ref<any>(null)
 const isLoading = ref(true)
@@ -127,16 +151,19 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const selectedFilter = ref('All')
 
-// Check if event is currently active
+// Check if event is currently active.
+// Rule: no start/end times = perpetually active (most menus are evergreen).
+// Only show "expired" when BOTH times are set AND the window has passed.
 const isEventActive = computed(() => {
-  if (!menuData.value?.event) return false
-  
+  if (!menuData.value?.event) return true // data not loaded yet — don't flash warning
+
   const now = new Date()
   const startTime = menuData.value.event.startTime ? new Date(menuData.value.event.startTime) : null
   const endTime = menuData.value.event.endTime ? new Date(menuData.value.event.endTime) : null
-  
-  if (!startTime || !endTime) return false
-  
+
+  // No time window configured → always active
+  if (!startTime || !endTime) return true
+
   return now >= startTime && now <= endTime
 })
 
@@ -202,7 +229,17 @@ onMounted(async () => {
     
     const data = await res.json()
     menuData.value = data
-    console.log('Menu data loaded:', data)
+    // If the vendor requires login and the user isn't logged in, show the modal.
+    // No redirect — just gate the content; user stays on this page.
+    if (data?.vendor?.requireLogin && !isLoggedIn.value) {
+      loginModalOpen.value = true
+    }
+    // Track menu page view (fires regardless of login state)
+    analytics.track('menu_view', {
+      vendorId: data?.vendor?.id,
+      eventId: data?.event?.id,
+      menuId: data?.menu?.id,
+    })
   } catch (err: any) {
     error.value = err.message || 'An error occurred while loading the menu'
     console.error('Error loading menu:', err)

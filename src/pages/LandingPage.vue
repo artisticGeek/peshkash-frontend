@@ -242,7 +242,10 @@
 
         <div class="ct-right scene-in dir-r" style="--d:.12s">
           <h4>Send a message</h4>
-          <form action="mailto:contact@peshkash.app" method="post" enctype="text/plain">
+          <form action="https://formsubmit.co/contact@peshkash.app" method="POST">
+            <input type="hidden" name="_subject" value="New inquiry from Peshkash website" />
+            <input type="hidden" name="_captcha" value="false" />
+            <input type="hidden" name="_next" value="https://peshkash.app/?sent=1" />
             <div class="f2">
               <label><span>Name</span><input name="name" type="text" placeholder="Your name" required /></label>
               <label><span>Phone</span><input name="phone" type="tel" placeholder="+91 90000 00000" /></label>

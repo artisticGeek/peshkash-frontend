@@ -65,11 +65,11 @@
 
         <!-- Bottom CTA in side menu -->
         <div class="offcanvas-footer mt-auto pt-4 border-top border-secondary">
-          <a href="https://wa.me/+919041716953" target="_blank" rel="noopener"
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
             class="btn btn-pk-gold w-100 mb-3 d-flex align-items-center justify-content-center gap-2">
             <i class="bi bi-whatsapp"></i> Chat on WhatsApp
           </a>
-          <p class="text-muted small text-center mb-0">+91-9041716953 · contact@peshkash.app</p>
+          <p class="text-muted small text-center mb-0">+91-9115551110 · contact@peshkash.app</p>
         </div>
       </div>
     </div>

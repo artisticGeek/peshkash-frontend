@@ -54,6 +54,9 @@
           :selected-filter="selectedFilter"
           :edit-mode="editMode"
           :on-add-child="onAddChild"
+          :analytics-vendor-id="analyticsVendorId"
+          :analytics-event-id="analyticsEventId"
+          :analytics-menu-id="analyticsMenuId"
         />
       </div>
     </template>
@@ -124,6 +127,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useAnalytics } from '../composables/useAnalytics';
 
 interface LineItem {
   id: number;
@@ -149,6 +153,9 @@ interface Props {
   selectedFilter?: string;
   editMode?: boolean;
   onAddChild?: (parentId: number) => void;
+  analyticsVendorId?: number;
+  analyticsEventId?: number;
+  analyticsMenuId?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -157,6 +164,8 @@ const props = withDefaults(defineProps<Props>(), {
   selectedFilter: 'All',
   editMode: false,
 });
+
+const { track } = useAnalytics();
 
 const isExpanded = ref(false);
 const descriptionExpanded = ref(false);
@@ -248,6 +257,14 @@ const toggleExpanded = () => {
 };
 
 const toggleDescription = () => {
+  if (!descriptionExpanded.value && !props.editMode) {
+    track('item_expand', {
+      itemId: props.item.id,
+      vendorId: props.analyticsVendorId,
+      eventId: props.analyticsEventId,
+      menuId: props.analyticsMenuId,
+    });
+  }
   descriptionExpanded.value = !descriptionExpanded.value;
 };
 
