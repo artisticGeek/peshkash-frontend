@@ -7069,7 +7069,7 @@ td.row-actions .icon-btn + a {
 }
 
 /* QR image elements */
-.qr-modal-img { border: 1px solid #e4d7c5; border-radius: 8px; display: block; max-width: 200px; width: 100%; }
+.qr-modal-img { border: none; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); display: block; height: auto; max-width: 230px; width: 100%; }
 
 .qr-modal-img-placeholder {
   align-items: center;
@@ -7245,11 +7245,13 @@ td.row-actions .icon-btn + a {
 }
 
 .qr-view-img {
-  border: 1px solid #e4d7c5;
-  border-radius: 8px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   display: block;
-  height: 180px;
-  width: 180px;
+  height: auto;
+  max-width: 230px;
+  width: 100%;
 }
 
 .qr-view-placeholder {
@@ -7407,7 +7409,7 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 
 .col-window { color: #6b7280; font-size: 0.82rem; white-space: nowrap; }
 
-.qr-image { border: 1px solid #e4d7c5; border-radius: 6px; display: block; height: 160px; width: 160px; }
+.qr-image { border: none; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); display: block; height: auto; max-width: 200px; width: 100%; }
 
 .saved-state { color: #9a8878; font-size: 0.75rem; }
 
