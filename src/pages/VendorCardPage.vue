@@ -1,5 +1,5 @@
 <template>
-  <Navbar />
+  <PublicNav />
 
   <div v-if="isLoading" class="pk-page-loader">
     <peshkash-loader size="110" theme="light" label="Loading" />
@@ -171,7 +171,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import Navbar from '../components/Navbar.vue'
+import PublicNav from '../components/PublicNav.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'

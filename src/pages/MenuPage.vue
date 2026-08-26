@@ -1,5 +1,5 @@
 <template>
-  <Navbar />
+  <PublicNav />
 
   <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
   <LoginModal
@@ -125,7 +125,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import Navbar from '../components/Navbar.vue'
+import PublicNav from '../components/PublicNav.vue'
 import MenuTree from '../components/MenuTree.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'

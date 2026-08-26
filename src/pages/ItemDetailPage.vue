@@ -1,5 +1,5 @@
 <template>
-  <Navbar />
+  <PublicNav />
   <div
     v-if="showFeedback"
     class="position-fixed top-0 start-50 translate-middle-x mt-3"
@@ -59,7 +59,9 @@
 
       <div class="card bg-light border-0 mb-4 shadow-sm">
         <div class="card-body">
-          <h2 class="h5 mb-3 text-primary"><i class="bi bi-fork-knife me-2"></i>About the delight!</h2>
+          <h2 class="h5 mb-3 text-primary">
+            <i :class="['bi', 'me-2', itemSectionIcon]"></i>{{ itemSectionLabel }}
+          </h2>
           <p class="mb-3">{{ itemData?.description }}</p>
           <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2 mb-3">
             <span
@@ -114,9 +116,9 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import Navbar from '../components/Navbar.vue';
+import PublicNav from '../components/PublicNav.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
@@ -131,6 +133,24 @@ onUnmounted(resetMeta)
 
 const itemData = ref<any>(null)
 const isLoading = ref(true)
+
+const ITEM_SECTION_MAP: Record<string, { label: string; icon: string }> = {
+  dish:     { label: 'About the dish',    icon: 'bi-fork-knife' },
+  dishtype: { label: 'About the dish',    icon: 'bi-fork-knife' },
+  product:  { label: 'About this piece',  icon: 'bi-box-seam' },
+  item:     { label: 'About this item',   icon: 'bi-tag' },
+  service:  { label: 'About this service', icon: 'bi-gear' },
+  art:      { label: 'About this piece',  icon: 'bi-palette' },
+}
+
+const itemSectionLabel = computed(() => {
+  const t = itemData.value?.type?.toLowerCase()
+  return ITEM_SECTION_MAP[t]?.label ?? 'Details'
+})
+const itemSectionIcon = computed(() => {
+  const t = itemData.value?.type?.toLowerCase()
+  return ITEM_SECTION_MAP[t]?.icon ?? 'bi-info-circle'
+})
 const error = ref<string | null>(null)
 const rating = ref<number>(0)
 const feedback = ref('')

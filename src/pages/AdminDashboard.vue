@@ -166,13 +166,19 @@
         <div class="panel">
           <div class="panel-heading">
             <h3>Vendors</h3>
-            <button class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
+            <div class="d-flex align-items-center gap-2">
+              <div class="position-relative">
+                <i class="bi bi-search position-absolute top-50 translate-middle-y ms-2 text-muted" style="pointer-events:none;font-size:0.8rem;"></i>
+                <input v-model="vendorSearch" type="search" class="form-control form-control-sm ps-4" placeholder="Search vendors…" style="min-width:160px;" />
+              </div>
+              <button class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
+            </div>
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table vendors-table">
               <thead><tr><th>Vendor</th><th>Description</th><th>Events</th><th>Contact Card</th><th>Login</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="vendor in vendors" :key="vendor.id" class="clickable-row" @click="openVendorEditor(vendor)">
+                <tr v-for="vendor in filteredVendors" :key="vendor.id" class="clickable-row" @click="openVendorEditor(vendor)">
                   <td>
                     <strong>{{ vendor.displayName }}</strong>
                     <span v-if="vendor.id === selectedVendorId" class="workspace-badge" title="Current workspace">●</span>
@@ -193,7 +199,9 @@
                     <button class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
-                <tr v-if="!vendors.length"><td colspan="6" class="muted">No vendors yet.</td></tr>
+                <tr v-if="!filteredVendors.length">
+                  <td colspan="6" class="muted">{{ vendorSearch ? 'No vendors match your search.' : 'No vendors yet.' }}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -793,7 +801,7 @@
 
       <!-- ── Analytics Dashboard ─────────────────────────────────────── -->
       <section v-if="activeSection === 'insights'" class="panel" style="min-height: 80vh;">
-        <AnalyticsSection />
+        <AnalyticsSection :initial-vendor-id="selectedVendorId || undefined" />
       </section>
 
       <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
@@ -818,7 +826,7 @@
                 <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
                   <option :value="0">Select menu</option>
                   <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                    {{ isMenuLinked(menu.id) ? '∞ ' : '' }}{{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                    {{ menu.displayName }}{{ isMenuLinked(menu.id) ? ' [linked]' : '' }}{{ menu.type === 'personalized' ? ' [personalized]' : '' }}
                   </option>
                 </select>
                 <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
@@ -2059,6 +2067,14 @@ const menuRenameValue = ref('');
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
+const vendorSearch = ref('');
+const filteredVendors = computed(() => {
+  const q = vendorSearch.value.trim().toLowerCase();
+  if (!q) return vendors.value;
+  return vendors.value.filter(v =>
+    v.displayName.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)
+  );
+});
 const events = ref<EventRow[]>([]);
 const menus = ref<MenuRow[]>([]);
 const items = ref<ItemRow[]>([]);
