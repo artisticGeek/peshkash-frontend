@@ -180,31 +180,29 @@ export async function renderTemplateToCanvas(
     ctx.restore();
   }
 
-  // ── Branded footer strip
+  // ── Branded footer — no separator, right-aligned one line
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#f5f1eb';
   ctx.fillRect(0, ph, pw, FOOTER_H);
 
-  // Thin separator
-  ctx.fillStyle = '#e0d4be';
-  ctx.fillRect(0, ph, pw, Math.ceil(EXPORT_SCALE * 0.2));
+  const fCY      = ph + FOOTER_H / 2;
+  const rightEdge = pw - Math.round(FOOTER_H * 0.45);
+  const markH2   = FOOTER_H * 0.50;
+  const iconGap  = Math.round(markH2 * 0.28);
 
-  // P mark
-  const markH = FOOTER_H * 0.52;
-  const markCX = FOOTER_H * 0.72;
-  const markCY = ph + FOOTER_H / 2;
-  drawPeshkashMark(ctx, markCX, markCY, markH);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign    = 'right';
 
-  // "peshkash" wordmark
-  const textX = markCX + markH * 0.65;
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign    = 'left';
-
-  ctx.font      = `400 ${Math.round(FOOTER_H * 0.24)}px Arial, sans-serif`;
-  ctx.fillStyle = '#9a8870';
-  ctx.fillText('powered by', textX, ph + FOOTER_H * 0.42);
-
-  ctx.font      = `600 ${Math.round(FOOTER_H * 0.38)}px Georgia, "Times New Roman", serif`;
+  ctx.font      = `600 ${Math.round(FOOTER_H * 0.40)}px Georgia, "Times New Roman", serif`;
   ctx.fillStyle = '#BD945A';
-  ctx.fillText('peshkash', textX, ph + FOOTER_H * 0.78);
+  const wmW = ctx.measureText('peshkash').width;
+  ctx.fillText('peshkash', rightEdge, fCY);
+
+  const markCX2 = rightEdge - wmW - iconGap - markH2 * 0.5;
+  drawPeshkashMark(ctx, markCX2, fCY, markH2);
+
+  ctx.font      = `400 ${Math.round(FOOTER_H * 0.28)}px Arial, sans-serif`;
+  ctx.fillStyle = '#9a8870';
+  ctx.textAlign = 'right';
+  ctx.fillText('powered by', markCX2 - markH2 * 0.5 - iconGap, fCY);
 }

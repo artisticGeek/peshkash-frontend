@@ -1752,12 +1752,58 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { drawPeshkashMark } from '../utils/qrRenderer';
 
-/** Renders a branded QR (error level H + Peshkash P mark) and returns a data URL. */
+/** Renders a framed, branded QR card (beige bg, border, P mark, right-aligned attribution). */
 async function makeQrDataUrl(url: string, size = 180): Promise<string> {
+  const qCanvas = document.createElement('canvas');
+  await QRCode.toCanvas(qCanvas, url, { margin: 1, width: size, errorCorrectionLevel: 'H' });
+
+  const pad      = Math.round(size * 0.10);
+  const footerH  = Math.round(size * 0.14);
+  const totalW   = size + pad * 2;
+  const totalH   = size + pad + footerH;
+
   const canvas = document.createElement('canvas');
-  await QRCode.toCanvas(canvas, url, { margin: 1, width: size, errorCorrectionLevel: 'H' });
+  canvas.width  = totalW;
+  canvas.height = totalH;
   const ctx = canvas.getContext('2d')!;
-  drawPeshkashMark(ctx, size / 2, size / 2, size * 0.22);
+
+  // Beige card background
+  ctx.fillStyle = '#f5f1eb';
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  // Thin warm border framing the QR area
+  ctx.strokeStyle = '#c8b89a';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad - 1.5, pad - 1.5, size + 3, size + 3);
+
+  // QR code
+  ctx.drawImage(qCanvas, pad, pad, size, size);
+
+  // P mark centred on QR
+  drawPeshkashMark(ctx, pad + size / 2, pad + size / 2, size * 0.22);
+
+  // Footer: right-aligned "powered by [P] peshkash" — no separator
+  const fY       = pad + size + footerH * 0.54;
+  const rightX   = totalW - Math.round(pad * 0.45);
+  const markSz   = footerH * 0.44;
+  const gap      = Math.round(markSz * 0.28);
+
+  ctx.textBaseline = 'middle';
+  ctx.textAlign    = 'right';
+
+  ctx.font      = `600 ${Math.round(footerH * 0.37)}px Georgia, serif`;
+  ctx.fillStyle = '#BD945A';
+  const wmW = ctx.measureText('peshkash').width;
+  ctx.fillText('peshkash', rightX, fY);
+
+  const markCX = rightX - wmW - gap - markSz * 0.5;
+  drawPeshkashMark(ctx, markCX, fY, markSz);
+
+  ctx.font      = `400 ${Math.round(footerH * 0.26)}px Arial, sans-serif`;
+  ctx.fillStyle = '#a89880';
+  ctx.textAlign = 'right';
+  ctx.fillText('powered by', markCX - markSz * 0.5 - gap, fY);
+
   return canvas.toDataURL('image/png');
 }
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
