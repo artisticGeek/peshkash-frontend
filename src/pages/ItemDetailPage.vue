@@ -87,21 +87,21 @@
         </div>
       </div>
 
-      <div class="my-4 d-flex flex-column align-items-center">
-        <span class="mb-2">Rate this item</span>
-        <div class="d-flex">
-          <button
-            v-for="n in 5"
-            :key="n"
-            type="button"
-            class="btn btn-sm me-1"
-            :class="n <= rating ? 'btn-primary' : 'btn-outline-primary'"
-            @click="setRating(n)"
-          >
-            <i class="bi bi-star-fill"></i>
-            <span class="visually-hidden">{{ n }} star</span>
-          </button>
-        </div>
+      <div class="pk-engage-bar" aria-label="Item actions">
+        <button class="pk-engage-btn" :class="{ active: userReaction === 'like' }" @click="toggleReaction('like')" aria-label="Like this item">
+          <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
+          <span>Like</span>
+        </button>
+        <div class="pk-engage-sep" aria-hidden="true"></div>
+        <button class="pk-engage-btn" :class="{ active: userReaction === 'dislike', 'is-dislike': true }" @click="toggleReaction('dislike')" aria-label="Dislike this item">
+          <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
+          <span>Dislike</span>
+        </button>
+        <div class="pk-engage-sep" aria-hidden="true"></div>
+        <button class="pk-engage-btn" :class="{ active: isBookmarked }" @click="toggleBookmark" aria-label="Bookmark this item">
+          <i :class="isBookmarked ? 'bi bi-bookmark-fill' : 'bi bi-bookmark'"></i>
+          <span>Save</span>
+        </button>
       </div>
     </div>
 
@@ -161,18 +161,52 @@ const itemSectionIcon = computed(() => {
   return ITEM_SECTION_MAP[t]?.icon ?? 'bi-info-circle'
 })
 const error = ref<string | null>(null)
-const rating = ref<number>(0)
 const feedback = ref('')
 const showFeedback = ref(false)
 const analytics = useAnalytics()
 
-const setRating = (n: number) => {
-  rating.value = n
-  feedback.value = `Thanks for rating ${n} star${n > 1 ? 's' : ''}!`
-  showFeedback.value = true
-  setTimeout(() => {
-    showFeedback.value = false
-  }, 2000)
+const userReaction = ref<'like' | 'dislike' | null>(null)
+const isBookmarked = ref(false)
+
+function reactionKey() { return `pk-reaction-${itemName}` }
+function bookmarkKey() { return `pk-bookmark-${itemName}` }
+
+function loadEngagement() {
+  try {
+    const r = localStorage.getItem(reactionKey())
+    if (r === 'like' || r === 'dislike') userReaction.value = r
+    isBookmarked.value = localStorage.getItem(bookmarkKey()) === '1'
+  } catch {}
+}
+
+function toggleReaction(type: 'like' | 'dislike') {
+  const next = userReaction.value === type ? null : type
+  userReaction.value = next
+  try {
+    if (next) localStorage.setItem(reactionKey(), next)
+    else localStorage.removeItem(reactionKey())
+  } catch {}
+  analytics.track(next ? `item_${type}` : `item_un${type}`, {
+    vendorId: itemData.value?.event?.vendor?.id,
+    eventId: itemData.value?.event?.id,
+    menuId: itemData.value?.menu?.id,
+    itemId: itemData.value?.numericId,
+  })
+}
+
+function toggleBookmark() {
+  isBookmarked.value = !isBookmarked.value
+  try {
+    if (isBookmarked.value) localStorage.setItem(bookmarkKey(), '1')
+    else localStorage.removeItem(bookmarkKey())
+  } catch {}
+  analytics.track('item_bookmark', {
+    bookmarked: isBookmarked.value,
+    vendorId: itemData.value?.event?.vendor?.id,
+    eventId: itemData.value?.event?.id,
+    menuId: itemData.value?.menu?.id,
+    itemId: itemData.value?.numericId,
+  })
 }
 
 function shareItem() {
@@ -186,6 +220,7 @@ function shareItem() {
 }
 
 onMounted(async () => {
+  loadEngagement()
   try {
     const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}/item/${itemName}`)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -279,6 +314,47 @@ onMounted(async () => {
 .pk-share-fab:hover {
   transform: scale(1.1);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+.pk-engage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1.5rem auto;
+  max-width: 300px;
+  background: rgba(26, 20, 16, 0.55);
+  border: 1px solid rgba(189, 148, 90, 0.22);
+  border-radius: 100px;
+  padding: 0.3rem;
+  gap: 0;
+}
+
+.pk-engage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0.45rem 1rem;
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(245, 242, 238, 0.5);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.pk-engage-btn:hover { color: #bd945a; }
+.pk-engage-btn.active {
+  background: rgba(189, 148, 90, 0.14);
+  color: #bd945a;
+}
+
+.pk-engage-sep {
+  width: 1px;
+  height: 1.1rem;
+  background: rgba(189, 148, 90, 0.2);
+  flex-shrink: 0;
 }
 </style>
 
