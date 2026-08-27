@@ -268,6 +268,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, type Ref } from 'vue';
+import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
@@ -281,6 +282,7 @@ const LOGO_CX1 = 335, LOGO_CX2 = 1312, LOGO_CY1 = 164, LOGO_CY2 = 415;
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
 const embedded = computed(() => props.embedded);
+const route = useRoute();
 const mode = ref<'library' | 'editor'>('library');
 const search = ref('');
 const activeCategory = ref('all');
@@ -610,13 +612,6 @@ function syncHeight(): void {
   design.widthMm = Math.max(24, Math.min(1000, Number(design.widthMm) || 120));
   design.heightMm = design.widthMm * (activeTemplate.value.canvas.height / activeTemplate.value.canvas.width);
 }
-function localDesigns(): StudioDesign[] { try { return JSON.parse(localStorage.getItem('peshkash_qr_studio_designs_v2') || '[]') as StudioDesign[]; } catch { return []; } }
-function persistLocal(next: StudioDesign): StudioDesign {
-  const all = localDesigns();
-  const saved = { ...next, id: typeof next.id === 'string' ? next.id : `local-${Date.now()}`, updatedAt: new Date().toISOString() };
-  const index = all.findIndex((item) => item.id === saved.id); if (index >= 0) all[index] = saved; else all.unshift(saved);
-  localStorage.setItem('peshkash_qr_studio_designs_v2', JSON.stringify(all.slice(0, 30))); return saved;
-}
 function fromApi(row: Record<string, unknown>): StudioDesign {
   const settings = (row.settings || {}) as Partial<StudioDesign>;
   const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object' ? row.elements[0] as Partial<StudioDesign> : {};
@@ -628,11 +623,10 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
     heightMm: Number(row.heightMm || settings.heightMm || 70), updatedAt: String(row.updatedAt || '') };
 }
 async function loadDesigns(): Promise<void> {
-  const local = localDesigns();
   try {
     const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
-    savedDesigns.value = [...data.map(fromApi), ...local.filter((item) => !data.some((row) => String(row.id) === String(item.id)))];
-  } catch { savedDesigns.value = local; }
+    savedDesigns.value = data.map(fromApi);
+  } catch { savedDesigns.value = []; }
 }
 async function saveDesign(): Promise<void> {
   if (!destinationValid.value || !activeTemplate.value) return;
@@ -644,8 +638,10 @@ async function saveDesign(): Promise<void> {
     const isRemote = typeof design.id === 'number';
     const { data } = await axios.request<Record<string, unknown>>({ url: `${API_BASE_URL}/admin/qr-templates${isRemote ? `/${design.id}` : ''}`, method: isRemote ? 'PUT' : 'POST', data: payload });
     Object.assign(design, fromApi(data)); notice.value = 'Design saved to your Peshkash workspace.';
-  } catch { Object.assign(design, persistLocal({ ...design })); notice.value = 'Backend unavailable — design saved safely in this browser.'; }
-  finally { saving.value = false; await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 3600); }
+  } catch {
+    notice.value = 'Couldn\'t save — check your connection and try again.';
+  }
+  finally { saving.value = false; await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); }
 }
 function safeFilename(ext: string): string { return `${(design.name || 'peshkash-qr').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.${ext}`; }
 function triggerDownload(href: string, name: string): void { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
@@ -660,7 +656,16 @@ async function downloadPng(): Promise<void> {
 }
 
 watch(activeTemplate, () => { if (activeTemplate.value) { initElPos(activeTemplate.value); nextTick(updateCanvasScale); } });
-onMounted(() => { window.addEventListener('resize', updateCanvasScale); loadDesigns(); });
+onMounted(async () => {
+  window.addEventListener('resize', updateCanvasScale);
+  await loadDesigns();
+  // ?edit=:id — opened from Print Studio "Edit Template" button: jump straight to editor
+  const editId = route.query.edit;
+  if (editId) {
+    const target = savedDesigns.value.find((d) => String(d.id) === String(editId));
+    if (target) editSaved(target);
+  }
+});
 onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onWindowUp(); });
 </script>
 
