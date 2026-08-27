@@ -105,24 +105,22 @@
                 </template>
               </div>
 
-              <!-- Copy block: drag handle at top when selected, text always editable -->
+              <!-- Copy block: grab anywhere to drag (Canva-style); double-click a line to edit it -->
               <div class="canvas-el el--copy"
-                   :class="{ selected: selectedEl === 'copy' }"
+                   :class="{ selected: selectedEl === 'copy', 'is-editing-text': editingKey }"
                    :style="copyElStyle"
+                   @pointerdown="onBlockPointerDown('copy', $event)"
                    @click.stop="selectedEl = 'copy'">
-                <div v-if="selectedEl === 'copy'"
-                     class="el-drag-handle"
-                     @pointerdown.stop="startElDrag('copy', $event)"
-                     title="Drag to move">
-                  <i class="bi bi-grip-horizontal"></i><span>Move</span>
-                </div>
                 <div v-if="vis.eyebrow"
                      class="t-line t-eyebrow"
                      :style="eyebrowStyle"
                      :key="'ey-' + designKey"
                      ref="eyebrowEl"
-                     contenteditable="true"
+                     :contenteditable="editingKey === 'eyebrow'"
                      spellcheck="false"
+                     @dblclick.stop="startTextEdit('eyebrow', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.eyebrow = ($event.target as HTMLElement).innerText"
                 >{{ design.eyebrow }}</div>
                 <div v-if="vis.headline"
@@ -130,8 +128,11 @@
                      :style="headlineStyle"
                      :key="'hl-' + designKey"
                      ref="headlineEl"
-                     contenteditable="true"
+                     :contenteditable="editingKey === 'headline'"
                      spellcheck="false"
+                     @dblclick.stop="startTextEdit('headline', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.headline = ($event.target as HTMLElement).innerText"
                 >{{ design.headline }}</div>
                 <div v-if="vis.descriptor"
@@ -139,8 +140,11 @@
                      :style="descriptorStyle"
                      :key="'ds-' + designKey"
                      ref="descriptorEl"
-                     contenteditable="true"
+                     :contenteditable="editingKey === 'descriptor'"
                      spellcheck="false"
+                     @dblclick.stop="startTextEdit('descriptor', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.descriptor = ($event.target as HTMLElement).innerText"
                 >{{ design.descriptor }}</div>
                 <div v-if="vis.cta"
@@ -148,8 +152,11 @@
                      :style="ctaStyle"
                      :key="'ct-' + designKey"
                      ref="ctaEl"
-                     contenteditable="true"
+                     :contenteditable="editingKey === 'cta'"
                      spellcheck="false"
+                     @dblclick.stop="startTextEdit('cta', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.cta = ($event.target as HTMLElement).innerText"
                 >{{ design.cta }}</div>
                 <div v-if="selectedEl === 'copy'" class="sel-ring"></div>
@@ -158,21 +165,19 @@
               <!-- Merchant name element -->
               <div v-if="vis.merchantName"
                    class="canvas-el el--merchant"
-                   :class="{ selected: selectedEl === 'merchant' }"
+                   :class="{ selected: selectedEl === 'merchant', 'is-editing-text': editingKey === 'merchantName' }"
                    :style="merchantElStyle"
+                   @pointerdown="onBlockPointerDown('merchant', $event)"
                    @click.stop="selectedEl = 'merchant'">
-                <div v-if="selectedEl === 'merchant'"
-                     class="el-drag-handle el-drag-handle--bottom"
-                     @pointerdown.stop="startElDrag('merchant', $event)"
-                     title="Drag to move">
-                  <i class="bi bi-grip-horizontal"></i><span>Move</span>
-                </div>
                 <div class="t-line t-merchant"
                      :style="merchantTextStyle"
                      :key="'mn-' + designKey"
                      ref="merchantEl"
-                     contenteditable="true"
+                     :contenteditable="editingKey === 'merchantName'"
                      spellcheck="false"
+                     @dblclick.stop="startTextEdit('merchantName', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.merchantName = ($event.target as HTMLElement).innerText"
                 >{{ design.merchantName }}</div>
                 <div v-if="selectedEl === 'merchant'" class="sel-ring"></div>
@@ -188,7 +193,7 @@
 
             </div><!-- /canvas-root -->
           </div><!-- /canvas-wrap -->
-          <div class="preview-caption"><span class="live-dot"></span> Drag elements · Click text to edit · Resize QR from corner</div>
+          <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it · Double-click text to edit · Resize QR from corner</div>
         </section>
 
         <!-- ── Properties panel ───────────────────────────── -->
@@ -254,7 +259,7 @@
               <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
               <p class="panel-kicker">COPY BLOCK</p>
             </div>
-            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Click any text on the canvas to edit it directly.</p>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the block to move it. Double-click any line to edit it directly.</p>
             <section>
               <p class="panel-kicker" style="margin-bottom:10px">ELEMENTS</p>
               <div class="vis-toggles">
@@ -280,7 +285,7 @@
               <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
               <p class="panel-kicker">BRAND NAME</p>
             </div>
-            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Click the name on the canvas to edit it directly.</p>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the name to move it. Double-click it to edit directly.</p>
             <section>
               <div class="vis-toggles" style="margin-bottom:14px">
                 <button :class="['vis-btn', { active: vis.merchantName }]" @click="toggleVis('merchantName')">
@@ -371,6 +376,9 @@ const canvasWrapRef = ref<HTMLElement>();
 const canvasScale = ref(0.5);
 const designKey = ref(0);
 const selectedEl = ref<'qr' | 'copy' | 'merchant' | null>(null);
+// Which text line is currently in edit mode (contenteditable) — null means every element on the
+// canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
+const editingKey = ref<ElementKey | null>(null);
 
 interface ElRect { x: number; y: number; w: number; h: number }
 const elPos = ref({
@@ -586,24 +594,77 @@ function startDragListeners(): void {
   window.addEventListener('pointerup', onWindowUp);
   window.addEventListener('pointercancel', onWindowUp);
 }
+// Pointer capture is a best-effort enhancement (keeps receiving events if the pointer leaves the
+// element); it can throw NotFoundError in some environments. A throw here must never abort the
+// rest of drag setup — window-level listeners are what actually drive the drag.
+function safeSetPointerCapture(el: Element | null, pointerId: number): void {
+  try { el?.setPointerCapture(pointerId); } catch { /* capture is optional */ }
+}
 function startQrDrag(e: PointerEvent): void {
   if (resizeState.value) return;
   selectedEl.value = 'qr';
   dragState.value = { id: 'qr', startCX: e.clientX, startCY: e.clientY, origX: elPos.value.qr.x, origY: elPos.value.qr.y };
-  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
 function startQrResize(e: PointerEvent): void {
   resizeState.value = { startCX: e.clientX, startCY: e.clientY, origW: elPos.value.qr.w, origH: elPos.value.qr.h };
-  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
 function startElDrag(id: 'copy' | 'merchant', e: PointerEvent): void {
   selectedEl.value = id;
   const { x, y } = elPos.value[id];
   dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: x, origY: y };
-  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
+}
+// Grab-anywhere drag for the copy block / merchant name — Canva-style: pointerdown on the block
+// body starts a drag immediately, unless it landed on the one line currently in text-edit mode
+// (isContentEditable), in which case native cursor placement/selection takes over instead.
+function onBlockPointerDown(id: 'copy' | 'merchant', e: PointerEvent): void {
+  if ((e.target as HTMLElement).isContentEditable) return;
+  startElDrag(id, e);
+}
+function textElFor(key: ElementKey): HTMLElement | undefined {
+  switch (key) {
+    case 'eyebrow': return eyebrowEl.value;
+    case 'headline': return headlineEl.value;
+    case 'descriptor': return descriptorEl.value;
+    case 'cta': return ctaEl.value;
+    case 'merchantName': return merchantEl.value;
+    default: return undefined;
+  }
+}
+function startTextEdit(key: ElementKey, e: MouseEvent): void {
+  editingKey.value = key;
+  const clientX = e.clientX, clientY = e.clientY;
+  nextTick(() => {
+    const el = textElFor(key);
+    if (!el) return;
+    el.focus();
+    placeCaretAt(el, clientX, clientY);
+  });
+}
+function endTextEdit(): void { editingKey.value = null; }
+function placeCaretAt(el: HTMLElement, x: number, y: number): void {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  let range: Range | null = null;
+  if (doc.caretRangeFromPoint) {
+    range = doc.caretRangeFromPoint(x, y);
+  } else if (doc.caretPositionFromPoint) {
+    const pos = doc.caretPositionFromPoint(x, y);
+    if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
+  }
+  if (range && el.contains(range.startContainer)) {
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    range.collapse(true);
+    sel?.addRange(range);
+  }
 }
 function applyMove(e: PointerEvent): void {
   const t = activeTemplate.value; if (!t) return;
@@ -973,23 +1034,17 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 /* QR reset mini-button */
 .qr-reset-btn{position:absolute;top:-26px;right:0;border:1px solid var(--gold);background:rgba(26,20,16,.75);color:var(--gold);font-size:10px;padding:3px 7px;cursor:pointer;display:flex;align-items:center;gap:4px}
 
-/* Drag handle for copy/merchant */
-.el-drag-handle{position:absolute;top:-26px;left:0;right:0;height:24px;background:rgba(26,20,16,.82);color:var(--gold);font-size:10px;display:flex;align-items:center;justify-content:center;gap:6px;cursor:move;user-select:none;z-index:3}
-.el-drag-handle--bottom{top:auto;bottom:-26px}
-
-/* Copy block element hover */
-.el--copy,.el--merchant{cursor:default}
+/* Copy / merchant blocks — grab anywhere to drag, like the QR element */
+.el--copy,.el--merchant{cursor:grab;will-change:left,top}
 .el--copy:hover:not(.selected),.el--merchant:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
 .el--copy.selected,.el--merchant.selected{outline:none}
+.canvas-wrap.is-dragging .el--copy,.canvas-wrap.is-dragging .el--merchant{cursor:grabbing}
 
-/* Text lines — always contenteditable */
-.t-line{min-height:1.2em;word-break:break-word}
+/* Text lines — plain text by default (drags with the block); double-click enters edit mode */
+.t-line{min-height:1.2em;word-break:break-word;cursor:grab}
 .t-line:focus{outline:2px solid rgba(189,148,90,.35);outline-offset:1px}
-.t-eyebrow{cursor:text}
-.t-headline{cursor:text}
-.t-descriptor{cursor:text}
-.t-cta{cursor:text}
-.t-merchant{cursor:text}
+.t-line[contenteditable="true"]{cursor:text}
+.canvas-wrap.is-dragging .t-line{cursor:grabbing}
 
 /* Brand mark (locked) */
 .el--brandmark{pointer-events:none;overflow:hidden}
