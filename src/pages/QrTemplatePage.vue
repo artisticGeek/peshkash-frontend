@@ -114,7 +114,36 @@ function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
   return base;
 }
 
-// ─── Trendy Preset Templates ──────────────────────────────────────────────────
+// ─── Brand bracket helper ─────────────────────────────────────────────────────
+// Generates the 8 rect elements that form the four L-shaped corner brackets
+// — the signature Peshkash framing motif from the brand kit.
+// arm   = length of each bracket arm in mm (default 7)
+// margin = distance from canvas edge to bracket corner in mm (default 4)
+// color  = fill color (use #C79C62 on dark bg, #BB9057 on light bg)
+// s      = stroke thickness in mm (default 0.45)
+function makeBrackets(
+  w: number, h: number,
+  arm = 7, margin = 4,
+  color = '#C79C62', s = 0.45,
+): RectEl[] {
+  const b = (x: number, y: number, bw: number, bh: number): RectEl => ({
+    id: uid(), type: 'rect' as const, name: 'Bracket',
+    x, y, width: bw, height: bh,
+    locked: true, fill: color, stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1,
+  });
+  return [
+    b(margin,       margin,       arm, s  ),  // TL — horizontal arm
+    b(margin,       margin,       s,   arm),  // TL — vertical arm
+    b(w-margin-arm, margin,       arm, s  ),  // TR — horizontal arm
+    b(w-margin-s,   margin,       s,   arm),  // TR — vertical arm
+    b(margin,       h-margin-s,   arm, s  ),  // BL — horizontal arm
+    b(margin,       h-margin-arm, s,   arm),  // BL — vertical arm
+    b(w-margin-arm, h-margin-s,   arm, s  ),  // BR — horizontal arm
+    b(w-margin-s,   h-margin-arm, s,   arm),  // BR — vertical arm
+  ];
+}
+
+// ─── Preset Template Library ──────────────────────────────────────────────────
 
 interface PresetTemplate {
   name: string;
@@ -124,106 +153,171 @@ interface PresetTemplate {
 }
 
 const PRESET_TEMPLATES: PresetTemplate[] = [
+  // ── Business Card format (85 × 54 mm) ──────────────────────────────────────
   {
-    name: 'Classic Business Card',
+    name: 'Dark Card',
+    icon: 'bi-moon-stars-fill',
+    desc: '85 × 54 mm · Near-black · Gold brackets · Cream QR',
+    create: () => ({
+      name: 'Dark Card', widthMm: 85, heightMm: 54,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 54, 6.5, 3.5, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Cream Card',
     icon: 'bi-credit-card',
-    desc: '85 × 54 mm · Brand cream · Gold border',
+    desc: '85 × 54 mm · Cream · Gold brackets · Dark QR',
     create: () => ({
-      name: 'Classic Business Card', widthMm: 85, heightMm: 54,
+      name: 'Cream Card', widthMm: 85, heightMm: 54,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '#BD945A', strokeWidth: 0.6, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 41, width: 75, height: 8, locked: false, content: 'Venue Name', fontFamily: 'Urbanist', fontSize: 10, fontWeight: '600', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 54, 6.5, 3.5, '#BB9057'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Dark Luxury',
-    icon: 'bi-moon-stars',
-    desc: '85 × 54 mm · Near-black & gold · Upscale',
+    name: 'Gold Strip Card',
+    icon: 'bi-stripe',
+    desc: '85 × 54 mm · Cream · Solid gold footer strip',
     create: () => ({
-      name: 'Dark Luxury', widthMm: 85, heightMm: 54,
+      name: 'Gold Strip Card', widthMm: 85, heightMm: 54,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#1A1410', stroke: '#1A1410', strokeWidth: 0, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Strip', x: 0, y: 44, width: 85, height: 10, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 46, width: 77, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Urbanist', fontSize: 7, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Footer', x: 0, y: 43, width: 85, height: 11, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 43, 6, 3.5, '#1A1410'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 9, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 37.5, width: 75, height: 4.5, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '600', color: '#8C7667', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 5, y: 45.5, width: 75, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Urbanist', fontSize: 7, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
+      ]
+    })
+  },
+
+  // ── Square format (80 × 80 mm) ─────────────────────────────────────────────
+  {
+    name: 'Dark Square',
+    icon: 'bi-moon-fill',
+    desc: '80 × 80 mm · Near-black · Gold brackets · Cream QR',
+    create: () => ({
+      name: 'Dark Square', widthMm: 80, heightMm: 80,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(80, 80, 7, 4, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Acrylic Portrait',
-    icon: 'bi-layout-text-window',
-    desc: '90 × 120 mm · Portrait stand · Dark header',
+    name: 'Cream Square',
+    icon: 'bi-square',
+    desc: '80 × 80 mm · Cream · Gold brackets · Dark QR',
     create: () => ({
-      name: 'Acrylic Portrait', widthMm: 90, heightMm: 120,
+      name: 'Cream Square', widthMm: 80, heightMm: 80,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#F5F2EE', stroke: '#E8DBCE', strokeWidth: 0.4, borderRadius: 3, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Header Bar', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'image' as const, name: 'Logo', x: 29, y: 4, width: 32, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 87, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 13, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 103, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(80, 80, 7, 4, '#BB9057'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#1A1410', textAlign: 'center' as const },
+      ]
+    })
+  },
+
+  // ── Portrait Stand (90 × 120 mm) ────────────────────────────────────────────
+  {
+    name: 'Dark Portrait Stand',
+    icon: 'bi-phone-fill',
+    desc: '90 × 120 mm · Near-black · Dark header · Logo slot',
+    create: () => ({
+      name: 'Dark Portrait Stand', widthMm: 90, heightMm: 120,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(90, 120, 8, 5, '#C79C62'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Modern Square',
-    icon: 'bi-stop-btn',
-    desc: '80 × 80 mm · Cream · Gold accent stripe',
+    name: 'Cream Portrait Stand',
+    icon: 'bi-phone',
+    desc: '90 × 120 mm · Cream · Dark header · Logo slot',
     create: () => ({
-      name: 'Modern Square', widthMm: 80, heightMm: 80,
+      name: 'Cream Portrait Stand', widthMm: 90, heightMm: 120,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#F5F2EE', stroke: '#E8DBCE', strokeWidth: 0.5, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Accent Bar', x: 0, y: 0, width: 80, height: 4, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 67, width: 70, height: 9, locked: false, content: 'Venue Name', fontFamily: 'Urbanist', fontSize: 11, fontWeight: '500', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Dark Header', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(90, 120, 8, 5, '#BB9057'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
+
+  // ── Mini Square (60 × 60 mm) ───────────────────────────────────────────────
   {
-    name: 'Compact Label',
-    icon: 'bi-tag',
-    desc: '50 × 30 mm · Small format · QR + text',
+    name: 'Dark Mini',
+    icon: 'bi-aspect-ratio-fill',
+    desc: '60 × 60 mm · Near-black · Compact acrylic',
     create: () => ({
-      name: 'Compact Label', widthMm: 50, heightMm: 30,
+      name: 'Dark Mini', widthMm: 60, heightMm: 60,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 50, height: 30, locked: true, fill: '#F5F2EE', stroke: '#C5AF9D', strokeWidth: 0.4, borderRadius: 1.5, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Divider', x: 29, y: 4, width: 0.5, height: 22, locked: true, fill: '#E8DBCE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 31, y: 10, width: 16, height: 10, locked: false, content: 'Scan for menu', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '500', color: '#8C7667', textAlign: 'left' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 60, height: 60, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(60, 60, 6, 3.5, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 11, y: 11, width: 38, height: 38, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 3, y: 51.5, width: 54, height: 6, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 7.5, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
       ]
     })
   },
+
+  // ── Label / Sticker (70 × 30 mm) ───────────────────────────────────────────
   {
-    name: 'Gold Serif Event',
-    icon: 'bi-stars',
-    desc: '100 × 100 mm · Near-black · Gold serif headline',
+    name: 'Cream Label',
+    icon: 'bi-tag-fill',
+    desc: '70 × 30 mm · Cream · QR left · Name right',
     create: () => ({
-      name: 'Gold Serif Event', widthMm: 100, heightMm: 100,
+      name: 'Cream Label', widthMm: 70, heightMm: 30,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 100, height: 100, locked: true, fill: '#1A1410', stroke: '#1A1410', strokeWidth: 0, borderRadius: 4, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Frame Top', x: 6, y: 6, width: 88, height: 0.6, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Frame Bottom', x: 6, y: 93.4, width: 88, height: 0.6, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 6, y: 10, width: 88, height: 14, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#BD945A', textAlign: 'center' as const },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 25, y: 26, width: 50, height: 50, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 6, y: 80, width: 88, height: 8, locked: false, content: 'Scan to explore the menu', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 70, height: 30, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(70, 30, 5, 3, '#BB9057', 0.4),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 4, y: 5, width: 20, height: 20, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Divider', x: 27, y: 4, width: 0.4, height: 22, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 29.5, y: 7.5, width: 36, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '600', color: '#1A1410', textAlign: 'left' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 29.5, y: 17, width: 36, height: 6, locked: false, content: 'Scan for menu', fontFamily: 'Urbanist', fontSize: 6.5, fontWeight: '400', color: '#8C7667', textAlign: 'left' as const },
       ]
     })
   },
+
+  // ── Large Display (100 × 140 mm) ────────────────────────────────────────────
   {
-    name: 'Cream Serif Portrait',
-    icon: 'bi-file-earmark-text',
-    desc: '60 × 90 mm · Cream · Serif title · Mushroom text',
+    name: 'Dark Display',
+    icon: 'bi-display-fill',
+    desc: '100 × 140 mm · Near-black · Large event display',
     create: () => ({
-      name: 'Cream Serif Portrait', widthMm: 60, heightMm: 90,
+      name: 'Dark Display', widthMm: 100, heightMm: 140,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 60, height: 90, locked: true, fill: '#F5F2EE', stroke: '#BD945A', strokeWidth: 0.5, borderRadius: 3, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Rule Top', x: 8, y: 10, width: 44, height: 0.5, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Rule Bottom', x: 8, y: 79.5, width: 44, height: 0.5, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 4, y: 12, width: 52, height: 10, locked: false, content: 'Vendor Name', fontFamily: 'Rufina', fontSize: 11, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 10, y: 26, width: 40, height: 40, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 69, width: 52, height: 8, locked: false, content: 'Scan for menu', fontFamily: 'Urbanist', fontSize: 7, fontWeight: '500', color: '#8C7667', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 100, height: 140, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 28, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Footer Rule', x: 0, y: 131.4, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(100, 140, 9, 5.5, '#C79C62'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 33, y: 7.5, width: 34, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 34, width: 65, height: 65, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 6, y: 103, width: 88, height: 16, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 17, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 6, y: 121, width: 88, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8.5, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
