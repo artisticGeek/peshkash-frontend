@@ -7,11 +7,14 @@
           <span>{{ savedDesigns.length }} design{{ savedDesigns.length === 1 ? '' : 's' }}</span>
         </div>
         <div class="saved-strip">
-          <button v-for="saved in savedDesigns" :key="saved.id" class="saved-card" @click="editSaved(saved)">
-            <span class="saved-monogram">{{ saved.name.slice(0, 1).toUpperCase() }}</span>
-            <span><b>{{ saved.name }}</b><small>{{ templateById(saved.libraryTemplateId)?.label || 'Library template' }}</small></span>
-            <i class="bi bi-arrow-up-right"></i>
-          </button>
+          <div v-for="saved in savedDesigns" :key="saved.id" class="saved-card">
+            <button class="saved-card-body" @click="editSaved(saved)">
+              <span class="saved-monogram">{{ saved.name.slice(0, 1).toUpperCase() }}</span>
+              <span><b>{{ saved.name }}</b><small>{{ templateById(saved.libraryTemplateId)?.label || 'Library template' }}</small></span>
+              <i class="bi bi-arrow-up-right"></i>
+            </button>
+            <button class="saved-delete" :disabled="deleting === saved.id" @click.stop="deleteDesign(saved.id!)" title="Delete design"><i class="bi bi-trash"></i></button>
+          </div>
         </div>
       </section>
 
@@ -22,11 +25,6 @@
         </div>
         <div class="library-toolbar">
           <label class="search-box"><i class="bi bi-search"></i><input v-model="search" type="search" placeholder="Search artist, table menu, product tag…"></label>
-          <div class="style-switch" aria-label="Preview QR signature">
-            <button v-for="(style, id) in qrManifest.qrStyles" :key="id" :class="{ active: previewStyle === id }" @click="previewStyle = id">
-              <span :class="['style-dot', `style-dot--${id}`]"></span>{{ style.label }}
-            </button>
-          </div>
         </div>
         <div class="category-list" aria-label="Template categories">
           <button :class="{ active: activeCategory === 'all' }" @click="activeCategory = 'all'">All use cases</button>
@@ -35,7 +33,7 @@
         <div v-if="filteredTemplates.length" class="template-grid">
           <article v-for="template in filteredTemplates" :key="template.id" class="template-card">
             <button class="template-preview" @click="startWithTemplate(template)">
-              <img :src="assetPath(template)" :alt="`${template.label} with ${styleLabel}`">
+              <img :src="assetPath(template)" :alt="template.label">
               <span class="use-template">Use template <i class="bi bi-arrow-up-right"></i></span>
             </button>
             <div class="template-meta">
@@ -280,17 +278,23 @@ import '../features/qrStudio/qr-template-tokens.css';
 const LOGO_SVG_W = 1536, LOGO_SVG_H = 512;
 const LOGO_CX1 = 335, LOGO_CX2 = 1312, LOGO_CY1 = 164, LOGO_CY2 = 415;
 
-const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
+const props = withDefaults(defineProps<{
+  embedded?: boolean;
+  vendorId?: number;
+  vendorName?: string;
+}>(), { embedded: false });
 const embedded = computed(() => props.embedded);
 const route = useRoute();
 const mode = ref<'library' | 'editor'>('library');
 const search = ref('');
 const activeCategory = ref('all');
-const previewStyle = ref<QrStyleId>('obsidian-ring');
 const activeTemplate = ref<QrTemplateDefinition | null>(null);
 const savedDesigns = ref<StudioDesign[]>([]);
 const saving = ref(false);
+const deleting = ref<number | string | null>(null);
 const notice = ref('');
+// Set from ?destination query param when opened from a QR asset "Design" button
+const destinationHint = ref('');
 
 // ── Canvas state ──────────────────────────────────────────────────────────────
 const stageRef = ref<HTMLElement>();
@@ -567,7 +571,6 @@ watch(() => design.headline, (v) => syncToCanvas(headlineEl, v));
 watch(() => design.descriptor, (v) => syncToCanvas(descriptorEl, v));
 watch(() => design.cta, (v) => syncToCanvas(ctaEl, v));
 watch(() => design.merchantName, (v) => syncToCanvas(merchantEl, v));
-const styleLabel = computed(() => qrManifest.qrStyles[previewStyle.value].label);
 const filteredTemplates = computed(() => {
   const query = search.value.trim().toLowerCase();
   return qrManifest.templates.filter((t) => {
@@ -578,7 +581,7 @@ const filteredTemplates = computed(() => {
 const destinationValid = computed(() => { try { return new URL(design.destination).protocol === 'https:'; } catch { return false; } });
 
 function templateById(id: string): QrTemplateDefinition | undefined { return qrManifest.templates.find((t) => t.id === id); }
-function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles[previewStyle.value].folder}/${template.file}`; }
+function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles['obsidian-ring'].folder}/${template.file}`; }
 function signaturePreview(id: QrStyleId): string { return svgDataUri(renderBrandedQrSvg('https://peshkash.app/scan', id, 480)); }
 
 function applyDesign(next: StudioDesign): void {
@@ -590,11 +593,15 @@ function applyDesign(next: StudioDesign): void {
 function startWithTemplate(template: QrTemplateDefinition): void {
   designKey.value++;
   selectedEl.value = null;
+  const vendorLabel = props.vendorName || template.merchantType;
   applyDesign({
-    ...blankDesign(), name: `${template.label} — ${template.merchantType}`,
+    ...blankDesign(),
+    name: `${vendorLabel} — ${template.label}`,
     libraryTemplateId: template.id, theme: template.defaultTheme,
     widthMm: 120, heightMm: 120 * (template.canvas.height / template.canvas.width),
-    merchantName: template.merchantType, ...template.defaultCopy, destination: template.sampleDestination,
+    merchantName: props.vendorName || template.merchantType,
+    ...template.defaultCopy,
+    destination: destinationHint.value || template.sampleDestination,
   });
   initElPos(template);
   nextTick(updateCanvasScale);
@@ -612,10 +619,12 @@ function syncHeight(): void {
   design.widthMm = Math.max(24, Math.min(1000, Number(design.widthMm) || 120));
   design.heightMm = design.widthMm * (activeTemplate.value.canvas.height / activeTemplate.value.canvas.width);
 }
-function fromApi(row: Record<string, unknown>): StudioDesign {
+function fromApi(row: Record<string, unknown>): StudioDesign & { vendorId?: number } {
   const settings = (row.settings || {}) as Partial<StudioDesign>;
   const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object' ? row.elements[0] as Partial<StudioDesign> : {};
-  return { ...blankDesign(), ...elements, ...settings, id: row.id as number, name: String(row.name || settings.name || 'Untitled design'),
+  return { ...blankDesign(), ...elements, ...settings, id: row.id as number,
+    vendorId: row.vendorId ? Number(row.vendorId) : undefined,
+    name: String(row.name || settings.name || 'Untitled design'),
     libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0].id),
     manifestVersion: String(row.manifestVersion || settings.manifestVersion || qrManifest.version),
     qrStyle: (row.qrStyle || settings.qrStyle || 'obsidian-ring') as QrStyleId,
@@ -625,13 +634,15 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
 async function loadDesigns(): Promise<void> {
   try {
     const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
-    savedDesigns.value = data.map(fromApi);
+    const all = data.map(fromApi);
+    savedDesigns.value = props.vendorId ? all.filter((d) => d.vendorId === props.vendorId) : all;
   } catch { savedDesigns.value = []; }
 }
 async function saveDesign(): Promise<void> {
   if (!destinationValid.value || !activeTemplate.value) return;
   saving.value = true;
   const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
+    vendorId: props.vendorId,
     elements: [{ ...design }], libraryTemplateId: activeTemplate.value.id, manifestVersion: qrManifest.version,
     qrStyle: design.qrStyle, theme: design.theme, settings: { ...design } };
   try {
@@ -642,6 +653,16 @@ async function saveDesign(): Promise<void> {
     notice.value = 'Couldn\'t save — check your connection and try again.';
   }
   finally { saving.value = false; await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); }
+}
+async function deleteDesign(id: number | string): Promise<void> {
+  deleting.value = id;
+  try {
+    await axios.delete(`${API_BASE_URL}/admin/qr-templates/${id}`);
+    await loadDesigns();
+    notice.value = 'Design deleted.';
+    window.setTimeout(() => { notice.value = ''; }, 3000);
+  } catch { notice.value = 'Couldn\'t delete — try again.'; }
+  finally { deleting.value = null; }
 }
 function safeFilename(ext: string): string { return `${(design.name || 'peshkash-qr').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.${ext}`; }
 function triggerDownload(href: string, name: string): void { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
@@ -658,6 +679,8 @@ async function downloadPng(): Promise<void> {
 watch(activeTemplate, () => { if (activeTemplate.value) { initElPos(activeTemplate.value); nextTick(updateCanvasScale); } });
 onMounted(async () => {
   window.addEventListener('resize', updateCanvasScale);
+  // ?destination=:url — opened from a QR asset "Design" button: pre-set destination
+  if (route.query.destination) destinationHint.value = String(route.query.destination);
   await loadDesigns();
   // ?edit=:id — opened from Print Studio "Edit Template" button: jump straight to editor
   const editId = route.query.edit;
@@ -686,24 +709,22 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 .section-heading h2,.library-heading h2{font:400 clamp(28px,3vw,40px)/1.15 Rufina,serif;margin:0}
 .section-heading>span{font-size:12px;color:var(--muted)}
 .saved-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-.saved-card{border:1px solid #d9d0c7;background:#f9f6f2;text-align:left;padding:13px;display:flex;align-items:center;gap:11px;cursor:pointer}
+.saved-card{border:1px solid #d9d0c7;background:#f9f6f2;display:flex;align-items:stretch}
 .saved-card:hover{border-color:var(--gold)}
+.saved-card-body{border:0;background:transparent;text-align:left;padding:13px;display:flex;align-items:center;gap:11px;cursor:pointer;flex:1;min-width:0}
 .saved-monogram{width:42px;height:42px;background:var(--ink);color:var(--gold);display:grid;place-items:center;font:700 20px Rufina,serif;flex-shrink:0}
-.saved-card span:nth-child(2){display:grid;gap:3px;flex:1;min-width:0}
+.saved-card-body span:nth-child(2){display:grid;gap:3px;flex:1;min-width:0}
 .saved-card b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .saved-card small{color:var(--muted);font-size:10px}
+.saved-delete{border:0;border-left:1px solid #e4ddd6;background:transparent;padding:0 13px;cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0}
+.saved-delete:hover:not(:disabled){color:#a44c41;background:#fdf5f4}
+.saved-delete:disabled{opacity:.4;cursor:default}
 .library-count{display:flex;align-items:center;gap:9px}
 .library-count strong{font:400 44px Rufina,serif}
 .library-count span{font-size:11px;color:var(--muted);line-height:1.3}
 .library-toolbar{display:flex;justify-content:space-between;gap:18px;margin-bottom:18px}
 .search-box{height:44px;min-width:min(400px,100%);display:flex;align-items:center;gap:10px;border-bottom:1px solid #c8bdb2}
 .search-box input{border:0;background:transparent;outline:0;flex:1;color:var(--ink)}
-.style-switch{display:flex;padding:3px;background:#e8e1da}
-.style-switch button{border:0;background:transparent;padding:8px 12px;display:flex;gap:7px;align-items:center;font-size:12px;cursor:pointer}
-.style-switch button.active{background:#fff;box-shadow:0 2px 8px rgba(26,20,16,.08)}
-.style-dot{width:13px;height:13px;border-radius:50%;display:inline-block;border:2px solid}
-.style-dot--obsidian-ring{background:var(--ink);border-color:var(--gold)}
-.style-dot--porcelain-cameo{background:var(--cream);border-color:#c5af9d}
 .category-list{display:flex;gap:6px;overflow:auto;padding-bottom:14px;margin-bottom:20px}
 .category-list button{white-space:nowrap;border:1px solid #d4cbc2;background:transparent;padding:7px 11px;font-size:11px;letter-spacing:.04em;cursor:pointer}
 .category-list button.active{background:var(--ink);border-color:var(--ink);color:var(--cream)}

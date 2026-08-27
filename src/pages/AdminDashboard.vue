@@ -549,6 +549,7 @@
                 <div class="event-qr-actions">
                   <a :href="eventQrMapping.shortQrUrl" target="_blank" rel="noreferrer" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right"></i> Test scan</a>
                   <button class="btn btn-outline-secondary btn-sm" @click="openQrEditor(eventQrMapping!)"><i class="bi bi-pencil"></i> Manage</button>
+                  <button class="btn btn-outline-secondary btn-sm" @click="openDesignStudio(eventQrMapping!)"><i class="bi bi-palette"></i> Design</button>
                 </div>
               </div>
             </div>
@@ -1160,6 +1161,7 @@
                     <td class="col-scans">{{ mapping.usageCount || 0 }}</td>
                     <td class="row-actions" @click.stop>
                       <button class="icon-btn" title="Edit" @click.stop="openQrEditor(mapping)"><i class="bi bi-pencil"></i></button>
+                      <button class="icon-btn" title="Design QR template" @click.stop="openDesignStudio(mapping)"><i class="bi bi-palette"></i></button>
                       <button class="icon-btn" title="Print template" @click.stop="openPrintForQr(mapping)"><i class="bi bi-printer"></i></button>
                     </td>
                   </tr>
@@ -1437,7 +1439,7 @@
       </section>
 
       <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
-        <QrTemplatePage :embedded="true" />
+        <QrTemplatePage :embedded="true" :vendor-id="selectedVendorId || undefined" :vendor-name="selectedVendor?.displayName" />
       </section>
 
       <!-- ── Session Management ──────────────────────────────────────────── -->
@@ -3959,6 +3961,11 @@ function openPrintForQr(mapping: QrMapping) {
   selectedQrHashForPrint.value = mapping.qrHash;
   closeQrEditor();
   router.push('/dashboard/qr-templates');
+}
+function openDesignStudio(mapping: QrMapping) {
+  closeQrEditor();
+  const params = mapping.shortQrUrl ? `?destination=${encodeURIComponent(mapping.shortQrUrl)}` : '';
+  router.push(`/dashboard/qr-templates${params}`);
 }
 const selectedQrHashForPrint = ref('');
 
