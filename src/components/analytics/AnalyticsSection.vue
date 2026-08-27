@@ -72,9 +72,9 @@
         </div>
         <div class="col-6 col-md">
           <KpiCard
-            label="Engagement Rate"
-            :value="engagementRate"
-            :subtitle="actionsPerScan > 1 ? actionsPerScan + ' actions/scan' : engagementRate + '% of scans engaged'"
+            label="Actions / Scan"
+            :value="actionsPerScan + '×'"
+            :subtitle="actionsPerScan >= 1 ? 'avg interactions per QR scan' : 'most scans exit without action'"
             icon="bi-arrow-repeat"
             icon-class="text-purple"
           />

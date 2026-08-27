@@ -918,7 +918,7 @@
             <div v-for="item in selectedDesignerTree" :key="item.id" class="tree-root">
               <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
                 <span><i class="bi bi-grip-vertical"></i> <strong>{{ itemLabel(item) }}</strong></span>
-                <small>{{ item.type || 'item' }} · {{ childCount(item) }} children</small>
+                <small>{{ itemTypeLabel(item.type) }} · {{ childCount(item) }} children</small>
                 <button class="icon-button outlined small" title="Move to root" aria-label="Move to root" @click="setItemParent(item, null)"><i class="bi bi-arrow-up-square"></i></button>
               </div>
               <textarea v-model="designerNotes[item.id]" class="form-control admin-note" rows="1" placeholder="Private admin/vendor note"></textarea>
@@ -933,7 +933,7 @@
                   @drop.stop="dropOnDesignedItem(child)"
                 >
                   <span><i class="bi bi-grip-vertical"></i> {{ itemLabel(child) }}</span>
-                  <small>{{ child.enumType || child.type }}</small>
+                  <small>{{ itemTypeLabel(child.type) }}{{ child.enumType ? ' · ' + child.enumType : '' }}</small>
                   <button class="icon-button outlined small" title="Move under this item" aria-label="Move under this item" @click="setItemParent(child, item.id)"><i class="bi bi-arrow-return-right"></i></button>
                 </div>
               </div>
@@ -1783,7 +1783,7 @@
             @dragstart="dragLibraryItem(item)"
             @click="copyItemToDesignedMenu(item); showItemPoolDrawer = false"
           >
-            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ item.type || 'item' }}</small></span>
+            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ itemTypeLabel(item.type) }}</small></span>
             <i class="bi bi-plus-lg"></i>
           </button>
           <p v-if="!availableDesignerItems.length" class="muted pool-empty">{{ designerSearch ? 'No items match your search.' : 'All items are already in this menu.' }}</p>
@@ -2705,6 +2705,8 @@ function eventChecklist(event: EventRow) {
   ];
 }
 
+const NON_SCANNABLE_TYPES = new Set(['category', 'serving', 'dishtype', 'modifier', 'addon']);
+
 function eventQrTargets(event: EventRow) {
   const menusForEvent = eventMenus(event.id);
   return [
@@ -2715,13 +2717,17 @@ function eventQrTargets(event: EventRow) {
       type: 'Menu',
       path: menuPathFor(event, menu),
     })),
-    ...menusForEvent.flatMap((menu) => menuItems(menu.id).map((item) => ({
-      key: `item-${item.id}`,
-      label: itemLabel(item),
-      context: menu.displayName,
-      type: item.type || 'Item',
-      path: itemPathFor(event, item),
-    }))),
+    ...menusForEvent.flatMap((menu) =>
+      menuItems(menu.id)
+        .filter((item) => !NON_SCANNABLE_TYPES.has((item.type || '').toLowerCase()))
+        .map((item) => ({
+          key: `item-${item.id}`,
+          label: itemLabel(item),
+          context: menu.displayName,
+          type: itemTypeLabel(item.type),
+          path: itemPathFor(event, item),
+        }))
+    ),
   ];
 }
 
@@ -3359,6 +3365,23 @@ function parentName(parentId?: number) {
 
 function itemLabel(item: ItemRow) {
   return item.displayName?.trim() || item.name;
+}
+
+const ITEM_TYPE_LABEL: Record<string, string> = {
+  item:      'Item',
+  category:  'Category',
+  dish:      'Dish',
+  dishtype:  'Dish Type',
+  serving:   'Serving Size',
+  product:   'Product',
+  service:   'Service',
+  art:       'Art Piece',
+  modifier:  'Modifier',
+  addon:     'Add-on',
+};
+function itemTypeLabel(type?: string): string {
+  if (!type) return 'Item';
+  return ITEM_TYPE_LABEL[type.toLowerCase()] ?? type;
 }
 
 function menuName(menuId: number) {

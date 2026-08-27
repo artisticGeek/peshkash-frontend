@@ -14,6 +14,9 @@
     </div>
     <div v-else-if="error" class="text-danger">{{ error }}</div>
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
+      <button v-if="canGoBack" class="pk-back-btn" @click="router.back()" aria-label="Go back">
+        <i class="bi bi-chevron-left"></i> Back
+      </button>
       <div class="text-center mb-4">
         <h1 class="fw-bold mb-1">{{ itemData?.name }}</h1>
          <small class="d-block">
@@ -117,16 +120,22 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import PublicNav from '../components/PublicNav.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
 
 const route = useRoute()
+const router = useRouter()
 const eventName = route.params.eventName as string
 const menuName = route.params.menuName as string
 const itemName = route.params.itemName as string
+
+// Only show a back button if user navigated here from within the app
+// (i.e. not a direct QR scan landing). history.length > 2 is a proxy for
+// "there's somewhere to go back to in this session".
+const canGoBack = computed(() => window.history.length > 2)
 
 const { setMeta, resetMeta } = usePageMeta()
 onUnmounted(resetMeta)
@@ -224,6 +233,23 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.pk-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  padding: 0.3rem 0;
+  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #bd945a;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.pk-back-btn:hover { opacity: 1; }
+
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }

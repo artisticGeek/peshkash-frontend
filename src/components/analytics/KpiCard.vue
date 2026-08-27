@@ -20,13 +20,14 @@ import { computed } from 'vue';
 
 const props = defineProps<{
   label: string;
-  value: number;
+  value: number | string;
   icon: string;
   iconClass?: string;
   subtitle?: string;
 }>();
 
 const formattedValue = computed(() => {
+  if (typeof props.value === 'string') return props.value;
   if (props.value >= 1_000_000) return (props.value / 1_000_000).toFixed(1) + 'M';
   if (props.value >= 1_000) return (props.value / 1_000).toFixed(1) + 'K';
   return String(props.value);
