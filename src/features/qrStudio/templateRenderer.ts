@@ -1,10 +1,12 @@
 import { renderBrandedQrSvg, svgDataUri } from './qrRenderer';
-import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility } from './types';
+import { svgPolygonPoints } from './elementPresets';
+import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement } from './types';
 
 export interface TemplateRenderOptions extends StudioContent {
   qrStyle: QrStyleId;
   theme: StudioTheme;
   visibility?: ElementVisibility;
+  canvasElements?: CanvasElement[];
 }
 
 export interface RenderOverrides {
@@ -98,6 +100,35 @@ function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark:
   const imgY = bottomY - cy2 * scale;
   const href = dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg';
   return `<image href="${href}" x="${imgX.toFixed(2)}" y="${imgY.toFixed(2)}" width="${imgW.toFixed(2)}" height="${imgH.toFixed(2)}"/>`;
+}
+
+// Freeform element bank layer — shapes and CTA badges the user dropped onto the canvas. Rendered
+// on top of everything else, matching the live editor's DOM order.
+function renderCanvasElements(elements: CanvasElement[] | undefined): string {
+  if (!elements || !elements.length) return '';
+  return elements.map((el) => {
+    const opacity = el.opacity ?? 1;
+    if (el.kind === 'shape') {
+      if (el.shape === 'circle') {
+        const rx = el.w / 2, ry = el.h / 2;
+        return `<ellipse cx="${(el.x + rx).toFixed(1)}" cy="${(el.y + ry).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+      }
+      if (el.shape === 'rect' || el.shape === 'line') {
+        const rx = el.shape === 'rect' ? (el.radius ?? 0) : Math.min(el.h, el.w) / 2;
+        return `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${rx.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+      }
+      const pts = svgPolygonPoints(el.shape, el.x, el.y, el.w, el.h);
+      return pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : '';
+    }
+    // CTA: background shape + centered label
+    const shapeSvg = el.style === 'tag'
+      ? (() => { const pts = svgPolygonPoints('tag', el.x, el.y, el.w, el.h); return pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : ''; })()
+      : `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${(el.h / 2).toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+    const fontSize = Math.max(10, el.h * 0.4);
+    const textX = el.style === 'tag' ? el.x + el.w * 0.38 : el.x + el.w / 2;
+    const textSvg = `<text x="${textX.toFixed(1)}" y="${(el.y + el.h / 2 + fontSize * 0.32).toFixed(1)}" text-anchor="middle" font-family="Urbanist,Arial,sans-serif" font-weight="700" font-size="${fontSize.toFixed(1)}" fill="${el.textColor}">${esc(el.text)}</text>`;
+    return shapeSvg + textSvg;
+  }).join('');
 }
 
 export function renderTemplateSvg(
@@ -200,6 +231,8 @@ export function renderTemplateSvg(
     `<image href="${svgDataUri(qrSvg)}" x="${qrX.toFixed(2)}" y="${qrY.toFixed(2)}" width="${qrSize.toFixed(2)}" height="${qrSize.toFixed(2)}" filter="url(#qr-shadow)"/>` +
     // Copy block
     copy +
+    // Freeform shapes / CTA badges — topmost layer, matching the live editor
+    renderCanvasElements(options.canvasElements) +
     `</g></svg>`
   );
 }

@@ -73,7 +73,7 @@
           <div class="canvas-wrap" ref="canvasWrapRef" :class="{ 'is-dragging': isDragging }">
             <div class="canvas-root"
                  :style="{ width: displayW + 'px', height: displayH + 'px' }"
-                 @click.self="selectedEl = null">
+                 @click.self="selectedEl = null; selectedElementId = null">
 
               <!-- Background layers (pointer-events:none) -->
               <div class="canvas-bg" :style="{ background: bgColor }"></div>
@@ -199,6 +199,33 @@
                   draggable="false">
               </div>
 
+              <!-- Element bank: freeform shapes / CTA badges -->
+              <div v-for="el in (design.canvasElements || [])" :key="el.id"
+                   class="canvas-el el--dyn"
+                   :class="{ selected: selectedElementId === el.id }"
+                   :style="dynElStyle(el)"
+                   @pointerdown="onCanvasElPointerDown(el.id, $event)"
+                   @click.stop="selectElement(el.id)">
+                <div class="dyn-shape" :style="dynShapeStyle(el)">
+                  <div v-if="el.kind === 'cta'"
+                       class="dyn-cta-text"
+                       :data-cta-text="el.id"
+                       :contenteditable="editingElementId === el.id"
+                       spellcheck="false"
+                       :style="dynCtaTextStyle(el)"
+                       @dblclick.stop="startCtaTextEdit(el.id, $event)"
+                       @blur="endCtaTextEdit"
+                       @keydown.escape="($event.target as HTMLElement).blur()"
+                       @input="el.text = ($event.target as HTMLElement).innerText"
+                  >{{ el.text }}</div>
+                </div>
+                <template v-if="selectedElementId === el.id">
+                  <div class="sel-ring"></div>
+                  <div class="resize-handle" @pointerdown.stop="startCanvasElResize(el.id, $event)" title="Drag to resize"></div>
+                  <button class="el-delete-btn" @click.stop="deleteElement(el.id)" title="Delete"><i class="bi bi-trash"></i></button>
+                </template>
+              </div>
+
               <!-- Canva-style center snap guides -->
               <div v-if="snapGuides.centerX" class="snap-guide snap-guide--v" :style="{ left: (displayW / 2) + 'px' }"></div>
               <div v-if="snapGuides.centerY" class="snap-guide snap-guide--h" :style="{ top: (displayH / 2) + 'px' }"></div>
@@ -212,7 +239,7 @@
         <aside class="properties-panel" @click.stop>
 
           <!-- Default: global design settings -->
-          <template v-if="!selectedEl">
+          <template v-if="!selectedEl && !selectedElementId">
             <section>
               <p class="panel-kicker">DESIGN</p>
               <label>Design name<input v-model="design.name" maxlength="80"></label>
@@ -243,6 +270,16 @@
                 <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
                   <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
                   Peshkash mark
+                </button>
+              </div>
+            </section>
+            <section>
+              <p class="panel-kicker">ELEMENT BANK</p>
+              <p class="field-hint" style="margin-bottom:10px">Shapes and CTA badges — click to drop one on the canvas, then drag, resize or edit it.</p>
+              <div class="element-bank">
+                <button v-for="preset in ELEMENT_PRESETS" :key="preset.id" class="bank-item" @click="addElement(preset.id)" :title="'Add ' + preset.label">
+                  <span class="bank-icon" v-html="preset.icon"></span>
+                  <span>{{ preset.label }}</span>
                 </button>
               </div>
             </section>
@@ -309,6 +346,23 @@
             </section>
           </template>
 
+          <!-- Freeform shape / CTA badge selected -->
+          <template v-else-if="selectedElementId && selectedElement">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedElementId = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">{{ selectedElement.kind === 'cta' ? 'CTA BADGE' : 'SHAPE' }}</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta'">, double-click the label to edit it</span>.</p>
+            <section>
+              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
+              <label>Fill color<input type="color" v-model="selectedElement.fill" class="color-input"></label>
+              <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
+              <label v-if="selectedElement.kind === 'shape' && selectedElement.shape === 'rect'">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+            </section>
+            <button class="reset-btn" @click="deleteElement(selectedElementId)"><i class="bi bi-trash"></i> Delete element</button>
+          </template>
+
         </aside>
       </main>
     </template>
@@ -351,8 +405,9 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec } from '../features/qrStudio/types';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement } from '../features/qrStudio/types';
 import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
+import { ELEMENT_PRESETS, clipPathFor } from '../features/qrStudio/elementPresets';
 import '../features/qrStudio/qr-template-tokens.css';
 
 // Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
@@ -392,6 +447,18 @@ const selectedEl = ref<'qr' | 'copy' | 'merchant' | null>(null);
 // canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
 const editingKey = ref<ElementKey | null>(null);
 
+// ── Freeform element bank (shapes / CTA badges) — separate selection track from the fixed slots
+const selectedElementId = ref<string | null>(null);
+const editingElementId = ref<string | null>(null);
+function findCanvasEl(id: string): CanvasElement | undefined {
+  return design.canvasElements?.find((el) => el.id === id);
+}
+const selectedElement = computed(() => selectedElementId.value ? findCanvasEl(selectedElementId.value) : undefined);
+const selectedElementOpacity = computed<number>({
+  get: () => selectedElement.value?.opacity ?? 1,
+  set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
+});
+
 interface ElRect { x: number; y: number; w: number; h: number }
 const elPos = ref({
   qr: { x: 0, y: 0, w: 0, h: 0 } as ElRect,
@@ -408,8 +475,8 @@ const qrWasEdited = computed(() => {
 interface DragState { id: string; startCX: number; startCY: number; origX: number; origY: number }
 const dragState = ref<DragState | null>(null);
 // axis 'square' resizes both dimensions equally (QR); 'width' resizes only width (text blocks,
-// whose height is driven by content)
-interface ResizeState { id: 'qr' | 'copy' | 'merchant'; axis: 'square' | 'width'; startCX: number; startCY: number; origW: number; origH: number }
+// whose height is driven by content); 'free' resizes both independently (freeform shapes/CTAs)
+interface ResizeState { id: string; axis: 'square' | 'width' | 'free'; startCX: number; startCY: number; origW: number; origH: number }
 const resizeState = ref<ResizeState | null>(null);
 const isDragging = ref(false);
 // Canva-style center snap guides — which axis the dragged element is currently snapped to
@@ -620,6 +687,7 @@ function safeSetPointerCapture(el: Element | null, pointerId: number): void {
 function startQrDrag(e: PointerEvent): void {
   if (resizeState.value) return;
   selectedEl.value = 'qr';
+  selectedElementId.value = null;
   dragState.value = { id: 'qr', startCX: e.clientX, startCY: e.clientY, origX: elPos.value.qr.x, origY: elPos.value.qr.y };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
@@ -631,6 +699,7 @@ function startQrResize(e: PointerEvent): void {
 }
 function startElDrag(id: 'copy' | 'merchant', e: PointerEvent): void {
   selectedEl.value = id;
+  selectedElementId.value = null;
   const { x, y } = elPos.value[id];
   dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: x, origY: y };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
@@ -649,6 +718,93 @@ function startElResize(id: 'copy' | 'merchant', e: PointerEvent): void {
 function onBlockPointerDown(id: 'copy' | 'merchant', e: PointerEvent): void {
   if ((e.target as HTMLElement).isContentEditable) return;
   startElDrag(id, e);
+}
+
+// ── Element bank (freeform shapes / CTA badges) ───────────────────────────────
+function addElement(presetId: string): void {
+  const preset = ELEMENT_PRESETS.find((p) => p.id === presetId);
+  const t = activeTemplate.value;
+  if (!preset || !t) return;
+  const el = preset.build(t.canvas.width, t.canvas.height);
+  if (!design.canvasElements) design.canvasElements = [];
+  design.canvasElements.push(el);
+  selectedEl.value = null;
+  selectedElementId.value = el.id;
+}
+function deleteElement(id: string): void {
+  if (!design.canvasElements) return;
+  design.canvasElements = design.canvasElements.filter((el) => el.id !== id);
+  if (selectedElementId.value === id) selectedElementId.value = null;
+  if (editingElementId.value === id) editingElementId.value = null;
+}
+function selectElement(id: string): void {
+  selectedElementId.value = id;
+  selectedEl.value = null;
+}
+function startCanvasElDrag(id: string, e: PointerEvent): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  selectElement(id);
+  dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: el.x, origY: el.y };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+function startCanvasElResize(id: string, e: PointerEvent): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  resizeState.value = { id, axis: 'free', startCX: e.clientX, startCY: e.clientY, origW: el.w, origH: el.h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Grab-anywhere drag for freeform elements, same pattern as the copy/merchant blocks — CTA labels
+// stay editable via double-click without fighting the drag.
+function onCanvasElPointerDown(id: string, e: PointerEvent): void {
+  if ((e.target as HTMLElement).isContentEditable) return;
+  startCanvasElDrag(id, e);
+}
+function startCtaTextEdit(id: string, e: MouseEvent): void {
+  editingElementId.value = id;
+  const clientX = e.clientX, clientY = e.clientY;
+  nextTick(() => {
+    const el = document.querySelector<HTMLElement>(`[data-cta-text="${id}"]`);
+    if (!el) return;
+    el.focus();
+    placeCaretAt(el, clientX, clientY);
+  });
+}
+function endCtaTextEdit(): void { editingElementId.value = null; }
+// Live-canvas positioning for a freeform element, in the same display-px space as the fixed slots.
+function dynElStyle(el: CanvasElement): Record<string, string> {
+  const s = canvasScale.value;
+  return { position: 'absolute', left: `${el.x * s}px`, top: `${el.y * s}px`, width: `${el.w * s}px`, height: `${el.h * s}px` };
+}
+// CTA label text style — font size tracks element height (matching the SVG export's 0.4 ratio)
+// scaled by the current canvas zoom, so it looks right at any display size.
+function dynCtaTextStyle(el: CanvasElement): Record<string, string> {
+  if (el.kind !== 'cta') return {};
+  const s = canvasScale.value;
+  const fontSize = Math.max(9, el.h * 0.4 * s);
+  return {
+    color: el.textColor,
+    fontSize: `${fontSize}px`,
+    justifyContent: el.style === 'tag' ? 'flex-start' : 'center',
+    paddingLeft: el.style === 'tag' ? '14%' : '0',
+  };
+}
+function dynShapeStyle(el: CanvasElement): Record<string, string> {
+  const style: Record<string, string> = { width: '100%', height: '100%', background: el.fill, opacity: String(el.opacity ?? 1) };
+  if (el.kind === 'shape') {
+    if (el.shape === 'circle') style.borderRadius = '50%';
+    else if (el.shape === 'rect') style.borderRadius = `${el.radius ?? 0}px`;
+    else if (el.shape === 'line') style.borderRadius = '999px';
+    const clip = clipPathFor(el.shape);
+    if (clip) style.clipPath = clip;
+  } else {
+    if (el.style === 'button') style.borderRadius = '999px';
+    const clip = el.style === 'tag' ? clipPathFor('tag') : undefined;
+    if (clip) style.clipPath = clip;
+  }
+  return style;
 }
 function textElFor(key: ElementKey): HTMLElement | undefined {
   switch (key) {
@@ -690,45 +846,62 @@ function placeCaretAt(el: HTMLElement, x: number, y: number): void {
     sel?.addRange(range);
   }
 }
+// Resolves the mutable {x,y,w,h} for any draggable/resizable id — the three fixed slots (backed
+// by elPos) or a freeform canvas element (backed by its own object in design.canvasElements).
+function getMutableRect(id: string): ElRect | undefined {
+  if (id === 'qr' || id === 'copy' || id === 'merchant') return elPos.value[id];
+  return findCanvasEl(id);
+}
 function applyMove(e: PointerEvent): void {
   const t = activeTemplate.value; if (!t) return;
   const s = canvasScale.value;
   if (dragState.value) {
     const { id, startCX, startCY, origX, origY } = dragState.value;
-    const el = elPos.value[id as 'qr' | 'copy' | 'merchant'];
-    const maxX = t.canvas.width - el.w;
-    const maxY = t.canvas.height - el.h;
-    let nx = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
-    let ny = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
+    const el = getMutableRect(id);
+    if (el) {
+      const maxX = t.canvas.width - el.w;
+      const maxY = t.canvas.height - el.h;
+      let nx = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
+      let ny = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
 
-    // Canva-style center snapping — snap the element's center to the canvas center on each axis
-    // independently, within a small tolerance, and surface which axis snapped for the guide lines.
-    const sh = Math.min(t.canvas.width, t.canvas.height);
-    const tol = sh * SNAP_FRAC;
-    const canvasCX = t.canvas.width / 2, canvasCY = t.canvas.height / 2;
-    const snapX = Math.abs(nx + el.w / 2 - canvasCX) < tol;
-    const snapY = Math.abs(ny + el.h / 2 - canvasCY) < tol;
-    if (snapX) nx = canvasCX - el.w / 2;
-    if (snapY) ny = canvasCY - el.h / 2;
-    snapGuides.value = { centerX: snapX, centerY: snapY };
+      // Canva-style center snapping — snap the element's center to the canvas center on each axis
+      // independently, within a small tolerance, and surface which axis snapped for the guide lines.
+      const sh = Math.min(t.canvas.width, t.canvas.height);
+      const tol = sh * SNAP_FRAC;
+      const canvasCX = t.canvas.width / 2, canvasCY = t.canvas.height / 2;
+      const snapX = Math.abs(nx + el.w / 2 - canvasCX) < tol;
+      const snapY = Math.abs(ny + el.h / 2 - canvasCY) < tol;
+      if (snapX) nx = canvasCX - el.w / 2;
+      if (snapY) ny = canvasCY - el.h / 2;
+      snapGuides.value = { centerX: snapX, centerY: snapY };
 
-    el.x = nx;
-    el.y = ny;
+      el.x = nx;
+      el.y = ny;
+    }
   }
   if (resizeState.value) {
     const rs = resizeState.value;
-    const el = elPos.value[rs.id];
-    if (rs.axis === 'square') {
-      const sh = Math.min(t.canvas.width, t.canvas.height);
-      const dCanvas = (e.clientX - rs.startCX) / s;
-      const newW = Math.max(sh * 0.08, Math.min(sh * 0.72, rs.origW + dCanvas));
-      el.w = newW;
-      el.h = newW;
-    } else {
-      const dCanvas = (e.clientX - rs.startCX) / s;
-      const maxW = t.canvas.width - el.x;
-      const newW = Math.max(t.canvas.width * 0.12, Math.min(maxW, rs.origW + dCanvas));
-      el.w = newW;
+    const el = getMutableRect(rs.id);
+    if (el) {
+      if (rs.axis === 'square') {
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const newW = Math.max(sh * 0.08, Math.min(sh * 0.72, rs.origW + dCanvas));
+        el.w = newW;
+        el.h = newW;
+      } else if (rs.axis === 'width') {
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const maxW = t.canvas.width - el.x;
+        const newW = Math.max(t.canvas.width * 0.12, Math.min(maxW, rs.origW + dCanvas));
+        el.w = newW;
+      } else {
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const minSize = sh * 0.03;
+        const dX = (e.clientX - rs.startCX) / s;
+        const dY = (e.clientY - rs.startCY) / s;
+        el.w = Math.max(minSize, Math.min(t.canvas.width - el.x, rs.origW + dX));
+        el.h = Math.max(minSize, Math.min(t.canvas.height - el.y, rs.origH + dY));
+      }
     }
   }
 }
@@ -753,21 +926,31 @@ function onWindowUp(): void {
   window.removeEventListener('pointercancel', onWindowUp);
 }
 
-// ── Keyboard nudge — arrow keys move the selected element by a small step, Shift for a bigger one
+// ── Keyboard nudge — arrow keys move the selected element by a small step, Shift for a bigger one.
+// Delete/Backspace removes the selected freeform element (fixed slots use visibility toggles instead).
 function onCanvasKeydown(e: KeyboardEvent): void {
-  if (mode.value !== 'editor' || editingKey.value || !selectedEl.value) return;
+  const activeId = selectedEl.value ?? selectedElementId.value;
+  if (mode.value !== 'editor' || editingKey.value || editingElementId.value || !activeId) return;
   const active = document.activeElement as HTMLElement | null;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+  if (selectedElementId.value && (e.key === 'Delete' || e.key === 'Backspace')) {
+    e.preventDefault();
+    deleteElement(selectedElementId.value);
+    return;
+  }
+
   const delta: Record<string, [number, number]> = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   };
   const d = delta[e.key];
   if (!d) return;
   const t = activeTemplate.value; if (!t) return;
+  const el = getMutableRect(activeId);
+  if (!el) return;
   e.preventDefault();
   const sh = Math.min(t.canvas.width, t.canvas.height);
   const step = sh * (e.shiftKey ? 0.02 : 0.004);
-  const el = elPos.value[selectedEl.value];
   const maxX = t.canvas.width - el.w, maxY = t.canvas.height - el.h;
   el.x = Math.max(0, Math.min(maxX, el.x + d[0] * step));
   el.y = Math.max(0, Math.min(maxY, el.y + d[1] * step));
@@ -779,6 +962,7 @@ const blankDesign = (): StudioDesign => ({
   qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70,
   merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app',
   visibility: {},
+  canvasElements: [],
 });
 const design = reactive<StudioDesign>(blankDesign());
 
@@ -1129,6 +1313,16 @@ onUnmounted(() => {
 .snap-guide--v{top:0;bottom:0;width:1px}
 .snap-guide--h{left:0;right:0;height:1px}
 
+/* Freeform element bank items on the canvas (shapes / CTA badges) */
+.el--dyn{cursor:grab}
+.el--dyn:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
+.canvas-wrap.is-dragging .el--dyn{cursor:grabbing}
+.dyn-shape{display:flex;align-items:center;overflow:hidden}
+.dyn-cta-text{width:100%;height:100%;display:flex;align-items:center;font-weight:700;letter-spacing:.02em;font-family:Urbanist,Arial,sans-serif;white-space:nowrap;overflow:hidden;outline:none;cursor:grab}
+.dyn-cta-text[contenteditable="true"]{cursor:text}
+.el-delete-btn{position:absolute;top:-26px;left:0;border:1px solid #a44c41;background:rgba(26,20,16,.75);color:#e8887c;font-size:10px;padding:3px 7px;cursor:pointer;display:flex;align-items:center;gap:4px}
+.el-delete-btn:hover{background:#a44c41;color:#fff}
+
 /* ── Properties panel ── */
 .properties-panel{background:#fbf9f6;padding:22px 20px;overflow-y:auto;border-left:1px solid #dfd7d0;display:flex;flex-direction:column;gap:0}
 .properties-panel section+section{border-top:1px solid #e4ddd6;margin-top:22px;padding-top:20px}
@@ -1171,6 +1365,13 @@ onUnmounted(() => {
 .vis-btn:hover{border-color:var(--gold);color:var(--ink)}
 .vis-btn i{font-size:11px}
 .properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+
+/* ── Element bank ── */
+.element-bank{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bank-item{border:1px solid #ddd4cc;background:#fff;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-size:10px;color:var(--muted);text-align:center}
+.bank-item:hover{border-color:var(--gold);color:var(--ink);background:#fdf8f2}
+.bank-icon{color:var(--ink);display:flex}
+.color-input{padding:2px 4px;height:34px;cursor:pointer}
 
 /* ── Notice ── */
 .notice{position:fixed;right:22px;bottom:22px;background:var(--ink);color:var(--cream);padding:12px 17px;box-shadow:0 10px 28px rgba(0,0,0,.24);z-index:50;display:flex;gap:8px;align-items:center}

@@ -89,6 +89,36 @@ export interface CustomTemplateSpec {
   ratio: string;
 }
 
+// ── Freeform element bank: shapes and CTA badges the user drops onto the canvas ────────────────
+// Geometry (x/y/w/h) lives in the same canvas-px coordinate space as the fixed elements' elPos.
+export type ShapeKind = 'rect' | 'circle' | 'line' | 'triangle' | 'star' | 'tag';
+
+export interface CanvasElementBase {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity?: number;
+}
+
+export interface ShapeElement extends CanvasElementBase {
+  kind: 'shape';
+  shape: ShapeKind;
+  fill: string;
+  radius?: number; // corner radius, 'rect' only
+}
+
+export interface CtaElement extends CanvasElementBase {
+  kind: 'cta';
+  style: 'button' | 'tag';
+  text: string;
+  fill: string;
+  textColor: string;
+}
+
+export type CanvasElement = ShapeElement | CtaElement;
+
 export interface StudioDesign extends StudioContent {
   id?: number | string;
   name: string;
@@ -100,6 +130,7 @@ export interface StudioDesign extends StudioContent {
   heightMm: number;
   visibility?: ElementVisibility;
   customTemplate?: CustomTemplateSpec;
+  canvasElements?: CanvasElement[];
   updatedAt?: string;
 }
 
