@@ -4635,7 +4635,7 @@ async function deleteVendorById(id: number, name: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .ps-workspace {

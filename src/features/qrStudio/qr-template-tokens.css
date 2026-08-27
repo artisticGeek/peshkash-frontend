@@ -1,0 +1,33 @@
+:root {
+  --peshkash-qr-ink: #1A1410;
+  --peshkash-qr-paper: #FFFFFF;
+  --peshkash-surface-light: #F5F2EE;
+  --peshkash-surface-dark: #1A1410;
+  --peshkash-accent: #BB9057;
+  --peshkash-text-muted: #564C40;
+  --peshkash-quiet-zone-modules: 4;
+  --peshkash-qr-module-radius: 0.28;
+  --peshkash-qr-finder-radius: 1.35;
+  --peshkash-qr-medallion-ratio: 0.185;
+  --peshkash-qr-medallion-icon-ratio: 0.60;
+}
+
+[data-qr-style="obsidian-ring"] {
+  --peshkash-qr-module-radius: 0.28;
+  --peshkash-qr-finder-radius: 1.35;
+  --peshkash-qr-medallion-fill: #1A1410;
+  --peshkash-qr-medallion-stroke: #BB9057;
+  --peshkash-qr-medallion-ratio: 0.12;
+  --peshkash-qr-medallion-icon-ratio: 0.64;
+  --peshkash-qr-finder-core: #6F4A2C;
+}
+
+[data-qr-style="porcelain-cameo"] {
+  --peshkash-qr-module-radius: 0.27;
+  --peshkash-qr-finder-radius: 1.35;
+  --peshkash-qr-medallion-fill: #F5F2EE;
+  --peshkash-qr-medallion-stroke: #C5AF9D;
+  --peshkash-qr-medallion-ratio: 0.172;
+  --peshkash-qr-medallion-icon-ratio: 0.62;
+  --peshkash-qr-finder-core: #1A1410;
+}
