@@ -245,7 +245,7 @@ onMounted(() => { loadTemplates(); });
 <style scoped>
 .ps-empty {
   align-items: center;
-  color: #9a8870;
+  color: #8C7667;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -266,8 +266,8 @@ onMounted(() => { loadTemplates(); });
 /* Topbar */
 .ps-topbar {
   align-items: center;
-  background: #fffcf7;
-  border: 1px solid #e8dccb;
+  background: #F5F2EE;
+  border: 1px solid #E8DBCE;
   border-radius: 8px;
   display: flex;
   flex-wrap: wrap;
@@ -286,9 +286,9 @@ onMounted(() => { loadTemplates(); });
 .ps-event-pill i { color: #BD945A; }
 
 .ps-count-badge {
-  background: #f0ece6;
+  background: #F5F2EE;
   border-radius: 999px;
-  color: #7a6a52;
+  color: #8C7667;
   font-size: 0.72rem;
   padding: 1px 8px;
 }
@@ -305,7 +305,7 @@ onMounted(() => { loadTemplates(); });
   display: flex;
   gap: 6px;
   font-size: 0.82rem;
-  color: #7a6a52;
+  color: #8C7667;
 }
 
 .ps-template-picker select { min-width: 200px; }
@@ -313,10 +313,10 @@ onMounted(() => { loadTemplates(); });
 /* Size hint */
 .ps-size-hint {
   align-items: center;
-  background: #f5f0e8;
-  border: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border: 1px solid #E8DBCE;
   border-radius: 6px;
-  color: #7a6a52;
+  color: #8C7667;
   display: flex;
   font-size: 0.8rem;
   gap: 7px;
@@ -324,12 +324,12 @@ onMounted(() => { loadTemplates(); });
   padding: 8px 14px;
 }
 
-.ps-size-hint strong { color: #4a3f2e; }
+.ps-size-hint strong { color: #1A1410; }
 
 /* Generating */
 .ps-generating {
   align-items: center;
-  color: #9a8870;
+  color: #8C7667;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -350,8 +350,8 @@ onMounted(() => { loadTemplates(); });
 }
 
 .ps-card {
-  background: #fffcf7;
-  border: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border: 1px solid #E8DBCE;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -366,8 +366,8 @@ onMounted(() => { loadTemplates(); });
 }
 
 .ps-card-preview {
-  background: #f5f0e8;
-  border-bottom: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border-bottom: 1px solid #E8DBCE;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -385,7 +385,7 @@ onMounted(() => { loadTemplates(); });
 
 .ps-preview-placeholder {
   align-items: center;
-  color: #c9a96e;
+  color: #BD945A;
   display: flex;
   font-size: 2.4rem;
   height: 100px;
@@ -402,39 +402,39 @@ onMounted(() => { loadTemplates(); });
 }
 
 .ps-card-label {
-  color: #15191e;
+  color: #1A1410;
   font-size: 0.85rem;
   font-weight: 600;
   line-height: 1.3;
 }
 
 .ps-card-sub {
-  color: #9a8870;
+  color: #8C7667;
   font-size: 0.72rem;
 }
 
 .ps-card-hash {
-  background: #f0ece6;
+  background: #F5F2EE;
   border-radius: 3px;
-  color: #5a4a32;
+  color: #1A1410;
   font-size: 0.68rem;
   padding: 1px 5px;
   word-break: break-all;
 }
 
 .ps-card-direct {
-  background: #f0f4ff;
+  background: rgba(189, 148, 90, 0.08);
   border-radius: 3px;
-  color: #4a6a9a;
+  color: #8C7667;
   font-size: 0.68rem;
   padding: 1px 5px;
 }
 
 .ps-card-dl {
   align-items: center;
-  background: #fff;
+  background: #F5F2EE;
   border: 0;
-  border-top: 1px solid #ede8df;
+  border-top: 1px solid #E8DBCE;
   color: #BD945A;
   cursor: pointer;
   display: flex;
@@ -446,7 +446,7 @@ onMounted(() => { loadTemplates(); });
   width: 100%;
 }
 
-.ps-card-dl:hover:not(:disabled) { background: #fdf5e8; }
+.ps-card-dl:hover:not(:disabled) { background: #F5F2EE; }
 .ps-card-dl:disabled { color: #ccc; cursor: default; }
 
 .btn { font-size: 0.84rem; }
