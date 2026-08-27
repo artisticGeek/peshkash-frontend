@@ -18,7 +18,7 @@
         <i class="bi bi-chevron-left"></i> Back
       </button>
       <div class="text-center mb-4">
-        <h1 class="fw-bold mb-1">{{ itemData?.name }}</h1>
+        <h1 class="fw-bold mb-1">{{ itemData?.displayName || itemData?.name }}</h1>
          <small class="d-block">
         <RouterLink
           v-if="itemData?.event?.vendor?.hasContactPage"
@@ -37,7 +37,7 @@
       <div class="d-flex justify-content-center mb-3">
         <div class="col-12 col-md-10 col-lg-8">
           <div class="ratio ratio-16x9">
-            <img :src="itemData?.image" :alt="itemData?.name" class="w-100 h-100 rounded shadow pk-hero-img" loading="lazy" />
+            <img :src="itemData?.image" :alt="itemData?.displayName || itemData?.name" class="w-100 h-100 rounded shadow pk-hero-img" loading="lazy" />
           </div>
         </div>
       </div>
@@ -60,9 +60,9 @@
         </ol>
       </nav>
 
-      <div class="card bg-light border-0 mb-4 shadow-sm">
+      <div class="card pk-detail-card mb-4">
         <div class="card-body">
-          <h2 class="h5 mb-3 text-primary">
+          <h2 class="h5 mb-3 pk-detail-heading">
             <i :class="['bi', 'me-2', itemSectionIcon]"></i>{{ itemSectionLabel }}
           </h2>
           <p class="mb-3">{{ itemData?.description }}</p>
@@ -228,7 +228,7 @@ onMounted(async () => {
     itemData.value = data
 
     // Dynamic SEO
-    const itemDisplay  = data?.name || itemName
+    const itemDisplay  = data?.displayName || data?.name || itemName
     const vendorDisplay = data?.event?.vendor?.displayName || ''
     setMeta(
       vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
@@ -289,6 +289,12 @@ onMounted(async () => {
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }
 .pk-beige-text { color: beige; }
+
+.pk-detail-card {
+  background: var(--rx-surface-color, #ebe7e1);
+  border: 1px solid var(--rx-border-color, #d8d2c8);
+}
+.pk-detail-heading { color: #bd945a; }
 
 .vendor-name,
 .event-name {
