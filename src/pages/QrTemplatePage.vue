@@ -65,7 +65,7 @@
             <span>{{ activeTemplate.ratio }}</span>
             <span>{{ Math.round(design.widthMm) }} × {{ Math.round(design.heightMm) }} mm</span>
           </div>
-          <div class="canvas-wrap" ref="canvasWrapRef">
+          <div class="canvas-wrap" ref="canvasWrapRef" :class="{ 'is-dragging': isDragging }">
             <div class="canvas-root"
                  :style="{ width: displayW + 'px', height: displayH + 'px' }"
                  @click.self="selectedEl = null">
@@ -111,7 +111,8 @@
                      title="Drag to move">
                   <i class="bi bi-grip-horizontal"></i><span>Move</span>
                 </div>
-                <div class="t-line t-eyebrow"
+                <div v-if="vis.eyebrow"
+                     class="t-line t-eyebrow"
                      :style="eyebrowStyle"
                      :key="'ey-' + designKey"
                      ref="eyebrowEl"
@@ -119,7 +120,8 @@
                      spellcheck="false"
                      @input="design.eyebrow = ($event.target as HTMLElement).innerText"
                 >{{ design.eyebrow }}</div>
-                <div class="t-line t-headline"
+                <div v-if="vis.headline"
+                     class="t-line t-headline"
                      :style="headlineStyle"
                      :key="'hl-' + designKey"
                      ref="headlineEl"
@@ -127,7 +129,8 @@
                      spellcheck="false"
                      @input="design.headline = ($event.target as HTMLElement).innerText"
                 >{{ design.headline }}</div>
-                <div class="t-line t-descriptor"
+                <div v-if="vis.descriptor"
+                     class="t-line t-descriptor"
                      :style="descriptorStyle"
                      :key="'ds-' + designKey"
                      ref="descriptorEl"
@@ -135,7 +138,8 @@
                      spellcheck="false"
                      @input="design.descriptor = ($event.target as HTMLElement).innerText"
                 >{{ design.descriptor }}</div>
-                <div class="t-line t-cta"
+                <div v-if="vis.cta"
+                     class="t-line t-cta"
                      :style="ctaStyle"
                      :key="'ct-' + designKey"
                      ref="ctaEl"
@@ -147,7 +151,8 @@
               </div>
 
               <!-- Merchant name element -->
-              <div class="canvas-el el--merchant"
+              <div v-if="vis.merchantName"
+                   class="canvas-el el--merchant"
                    :class="{ selected: selectedEl === 'merchant' }"
                    :style="merchantElStyle"
                    @click.stop="selectedEl = 'merchant'">
@@ -169,7 +174,7 @@
               </div>
 
               <!-- Brand mark: locked, not interactive -->
-              <div class="canvas-el el--brandmark" :style="bmContainerStyle">
+              <div v-if="vis.brandmark" class="canvas-el el--brandmark" :style="bmContainerStyle">
                 <img
                   :src="dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg'"
                   :style="bmImgStyle"
@@ -210,6 +215,15 @@
                 <ul><li>Error correction H</li><li>4-module quiet zone</li><li>Rounded modules + anchors</li><li>Peshkash brand mark</li></ul>
               </div>
             </section>
+            <section>
+              <p class="panel-kicker">ELEMENTS</p>
+              <div class="vis-toggles">
+                <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
+                  <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  Peshkash mark
+                </button>
+              </div>
+            </section>
             <div class="zone-hint"><i class="bi bi-cursor"></i> Click any element on the canvas to select and edit it</div>
           </template>
 
@@ -237,10 +251,21 @@
             </div>
             <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Click any text on the canvas to edit it directly.</p>
             <section>
-              <label>Eyebrow<input v-model="design.eyebrow" maxlength="40" placeholder="e.g. ORIGINAL WORK"></label>
-              <label>Headline<textarea v-model="design.headline" rows="2" maxlength="90" placeholder="e.g. Study No. 14"></textarea></label>
-              <label>Descriptor<input v-model="design.descriptor" maxlength="100" placeholder="e.g. Process · provenance · available pieces"></label>
-              <label>Call to action<input v-model="design.cta" maxlength="40" placeholder="e.g. Scan to explore"></label>
+              <p class="panel-kicker" style="margin-bottom:10px">ELEMENTS</p>
+              <div class="vis-toggles">
+                <button v-for="key in (['eyebrow','headline','descriptor','cta'] as ElementKey[])" :key="key"
+                        :class="['vis-btn', { active: vis[key] }]"
+                        @click="toggleVis(key)" :title="vis[key] ? 'Hide ' + key : 'Show ' + key">
+                  <i :class="vis[key] ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  {{ key.charAt(0).toUpperCase() + key.slice(1) }}
+                </button>
+              </div>
+            </section>
+            <section>
+              <label>Eyebrow<input v-model="design.eyebrow" maxlength="40" placeholder="e.g. ORIGINAL WORK" :disabled="!vis.eyebrow"></label>
+              <label>Headline<textarea v-model="design.headline" rows="2" maxlength="90" placeholder="e.g. Study No. 14" :disabled="!vis.headline"></textarea></label>
+              <label>Descriptor<input v-model="design.descriptor" maxlength="100" placeholder="e.g. Process · provenance · available pieces" :disabled="!vis.descriptor"></label>
+              <label>Call to action<input v-model="design.cta" maxlength="40" placeholder="e.g. Scan to explore" :disabled="!vis.cta"></label>
             </section>
           </template>
 
@@ -252,7 +277,13 @@
             </div>
             <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Click the name on the canvas to edit it directly.</p>
             <section>
-              <label>Business or maker<input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio"></label>
+              <div class="vis-toggles" style="margin-bottom:14px">
+                <button :class="['vis-btn', { active: vis.merchantName }]" @click="toggleVis('merchantName')">
+                  <i :class="vis.merchantName ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  Show name
+                </button>
+              </div>
+              <label>Business or maker<input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName"></label>
             </section>
           </template>
 
@@ -271,7 +302,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign } from '../features/qrStudio/types';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey } from '../features/qrStudio/types';
 import '../features/qrStudio/qr-template-tokens.css';
 
 // Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
@@ -320,6 +351,11 @@ interface DragState { id: string; startCX: number; startCY: number; origX: numbe
 const dragState = ref<DragState | null>(null);
 interface ResizeState { startCX: number; startCY: number; origW: number; origH: number }
 const resizeState = ref<ResizeState | null>(null);
+const isDragging = ref(false);
+
+// RAF-throttled pointer tracking — avoids flooding Vue's reactivity on every mousemove
+let _rafId: number | null = null;
+let _lastMoveEvent: PointerEvent | null = null;
 
 // Text element refs for DOM sync
 const eyebrowEl = ref<HTMLElement>();
@@ -506,35 +542,39 @@ function resetQrPos(): void {
 }
 
 // ── Drag & Resize ─────────────────────────────────────────────────────────────
+function startDragListeners(): void {
+  isDragging.value = true;
+  window.addEventListener('pointermove', onWindowMove, { passive: true });
+  window.addEventListener('pointerup', onWindowUp);
+  window.addEventListener('pointercancel', onWindowUp);
+}
 function startQrDrag(e: PointerEvent): void {
   if (resizeState.value) return;
   selectedEl.value = 'qr';
   dragState.value = { id: 'qr', startCX: e.clientX, startCY: e.clientY, origX: elPos.value.qr.x, origY: elPos.value.qr.y };
-  window.addEventListener('pointermove', onWindowMove);
-  window.addEventListener('pointerup', onWindowUp);
-  window.addEventListener('pointercancel', onWindowUp);
+  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  startDragListeners();
 }
 function startQrResize(e: PointerEvent): void {
   resizeState.value = { startCX: e.clientX, startCY: e.clientY, origW: elPos.value.qr.w, origH: elPos.value.qr.h };
-  window.addEventListener('pointermove', onWindowMove);
-  window.addEventListener('pointerup', onWindowUp);
-  window.addEventListener('pointercancel', onWindowUp);
+  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  startDragListeners();
 }
 function startElDrag(id: 'copy' | 'merchant', e: PointerEvent): void {
   selectedEl.value = id;
   const { x, y } = elPos.value[id];
   dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: x, origY: y };
-  window.addEventListener('pointermove', onWindowMove);
-  window.addEventListener('pointerup', onWindowUp);
-  window.addEventListener('pointercancel', onWindowUp);
+  (e.currentTarget as Element)?.setPointerCapture(e.pointerId);
+  startDragListeners();
 }
-function onWindowMove(e: PointerEvent): void {
+function applyMove(e: PointerEvent): void {
   const t = activeTemplate.value; if (!t) return;
   const s = canvasScale.value;
   if (dragState.value) {
     const { id, startCX, startCY, origX, origY } = dragState.value;
     const el = elPos.value[id as 'qr' | 'copy' | 'merchant'];
-    const maxX = t.canvas.width - el.w; const maxY = t.canvas.height - el.h;
+    const maxX = t.canvas.width - el.w;
+    const maxY = t.canvas.height - el.h;
     el.x = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
     el.y = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
   }
@@ -546,8 +586,21 @@ function onWindowMove(e: PointerEvent): void {
     elPos.value.qr.h = newW;
   }
 }
+function onWindowMove(e: PointerEvent): void {
+  _lastMoveEvent = e;
+  if (_rafId === null) {
+    _rafId = requestAnimationFrame(() => {
+      _rafId = null;
+      if (_lastMoveEvent) applyMove(_lastMoveEvent);
+    });
+  }
+}
 function onWindowUp(): void {
-  dragState.value = null; resizeState.value = null;
+  if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null; }
+  if (_lastMoveEvent) { applyMove(_lastMoveEvent); _lastMoveEvent = null; }
+  isDragging.value = false;
+  dragState.value = null;
+  resizeState.value = null;
   window.removeEventListener('pointermove', onWindowMove);
   window.removeEventListener('pointerup', onWindowUp);
   window.removeEventListener('pointercancel', onWindowUp);
@@ -558,8 +611,24 @@ const blankDesign = (): StudioDesign => ({
   name: '', libraryTemplateId: '', manifestVersion: qrManifest.version,
   qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70,
   merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app',
+  visibility: {},
 });
 const design = reactive<StudioDesign>(blankDesign());
+
+// Helper: true = visible (default), false = hidden
+const vis = computed(() => ({
+  eyebrow:      design.visibility?.eyebrow      !== false,
+  headline:     design.visibility?.headline     !== false,
+  descriptor:   design.visibility?.descriptor   !== false,
+  cta:          design.visibility?.cta          !== false,
+  merchantName: design.visibility?.merchantName !== false,
+  brandmark:    design.visibility?.brandmark    !== false,
+}));
+
+function toggleVis(key: ElementKey): void {
+  if (!design.visibility) design.visibility = {};
+  design.visibility[key] = design.visibility[key] === false ? true : false;
+}
 
 // ── Sync panel text fields → canvas contenteditable ──────────────────────────
 function syncToCanvas(elRef: Ref<HTMLElement | undefined>, val: string): void {
@@ -779,9 +848,12 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 .canvas-el.selected>.sel-ring{display:block}
 
 /* QR element */
-.el--qr{cursor:move}
+.el--qr{cursor:grab;will-change:left,top,width,height}
 .el--qr:hover::after{content:'';position:absolute;inset:-2px;border:1.5px dashed rgba(189,148,90,.5)}
 .el--qr.selected::after{display:none}
+/* Grabbing state — applied to canvas-wrap during active drag */
+.canvas-wrap.is-dragging{cursor:grabbing}
+.canvas-wrap.is-dragging .el--qr{cursor:grabbing}
 
 /* Selection ring */
 .sel-ring{display:none;position:absolute;inset:-3px;border:2px solid var(--gold);pointer-events:none}
@@ -848,6 +920,14 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 .reset-btn{width:100%;border:1px solid #ddd4cc;background:transparent;padding:9px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:7px;justify-content:center;margin-top:4px}
 .reset-btn:hover{border-color:var(--gold)}
 .zone-hint{margin-top:auto;padding-top:18px;font-size:10px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e4ddd6}
+
+/* ── Visibility toggles ── */
+.vis-toggles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.vis-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid #d9d0c7;background:#fff;font-size:10px;font-weight:600;letter-spacing:.03em;cursor:pointer;color:var(--muted);transition:border-color .15s,color .15s,background .15s}
+.vis-btn.active{border-color:var(--gold);color:var(--ink);background:#fdf8f2}
+.vis-btn:hover{border-color:var(--gold);color:var(--ink)}
+.vis-btn i{font-size:11px}
+.properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
 
 /* ── Notice ── */
 .notice{position:fixed;right:22px;bottom:22px;background:var(--ink);color:var(--cream);padding:12px 17px;box-shadow:0 10px 28px rgba(0,0,0,.24);z-index:50;display:flex;gap:8px;align-items:center}

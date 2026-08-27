@@ -77,6 +77,9 @@ export interface StudioContent {
   destination: string;
 }
 
+export type ElementKey = 'eyebrow' | 'headline' | 'descriptor' | 'cta' | 'merchantName' | 'brandmark';
+export type ElementVisibility = Partial<Record<ElementKey, boolean>>;
+
 export interface StudioDesign extends StudioContent {
   id?: number | string;
   name: string;
@@ -86,6 +89,7 @@ export interface StudioDesign extends StudioContent {
   theme: StudioTheme;
   widthMm: number;
   heightMm: number;
+  visibility?: ElementVisibility;
   updatedAt?: string;
 }
 
