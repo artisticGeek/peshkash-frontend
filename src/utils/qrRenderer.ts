@@ -103,8 +103,8 @@ export async function renderTemplateToCanvas(
 
   const ctx = canvas.getContext('2d')!;
 
-  // ── Template background
-  ctx.fillStyle = '#ffffff';
+  // ── Template background (brand cream fallback — templates normally supply their own background rect)
+  ctx.fillStyle = '#F5F2EE';
   ctx.fillRect(0, 0, pw, ph);
 
   // ── Template elements
@@ -132,7 +132,7 @@ export async function renderTemplateToCanvas(
 
     } else if (el.type === 'text') {
       const fs = el.fontSize * (EXPORT_SCALE / BASE_SCALE);
-      ctx.font = `${el.fontWeight || '400'} ${fs}px ${el.fontFamily || 'Inter'}, sans-serif`;
+      ctx.font = `${el.fontWeight || '400'} ${fs}px ${el.fontFamily || 'Urbanist'}, sans-serif`;
       ctx.fillStyle = el.color || '#000';
       ctx.textAlign = el.textAlign || 'left';
       ctx.textBaseline = 'middle';
@@ -180,9 +180,9 @@ export async function renderTemplateToCanvas(
     ctx.restore();
   }
 
-  // ── Branded footer — no separator, right-aligned one line
+  // ── Branded footer — brand cream strip with gold Peshkash wordmark
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#f5f1eb';
+  ctx.fillStyle = '#F5F2EE';
   ctx.fillRect(0, ph, pw, FOOTER_H);
 
   const fCY      = ph + FOOTER_H / 2;
@@ -193,7 +193,7 @@ export async function renderTemplateToCanvas(
   ctx.textBaseline = 'middle';
   ctx.textAlign    = 'right';
 
-  ctx.font      = `600 ${Math.round(FOOTER_H * 0.40)}px Georgia, "Times New Roman", serif`;
+  ctx.font      = `600 ${Math.round(FOOTER_H * 0.40)}px Rufina, Georgia, serif`;
   ctx.fillStyle = '#BD945A';
   const wmW = ctx.measureText('peshkash').width;
   ctx.fillText('peshkash', rightEdge, fCY);
@@ -201,8 +201,8 @@ export async function renderTemplateToCanvas(
   const markCX2 = rightEdge - wmW - iconGap - markH2 * 0.5;
   drawPeshkashMark(ctx, markCX2, fCY, markH2);
 
-  ctx.font      = `400 ${Math.round(FOOTER_H * 0.28)}px Arial, sans-serif`;
-  ctx.fillStyle = '#9a8870';
+  ctx.font      = `400 ${Math.round(FOOTER_H * 0.28)}px Urbanist, Arial, sans-serif`;
+  ctx.fillStyle = '#8C7667';
   ctx.textAlign = 'right';
   ctx.fillText('powered by', markCX2 - markH2 * 0.5 - iconGap, fCY);
 }

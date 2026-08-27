@@ -77,7 +77,7 @@ const PRESETS = [
   { label: 'Custom', w: 0, h: 0 },
 ];
 
-const FONTS = ['Inter', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New', 'Playfair Display'];
+const FONTS = ['Rufina', 'Urbanist', 'Inter', 'Playfair Display', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New'];
 const BASE_SCALE = 3.78; // px per mm at 100% zoom
 
 // Mini layout preview for the list-page preset cards
@@ -97,6 +97,9 @@ function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
     if ((r.strokeWidth ?? 0) > 0) base.border = `1px solid ${r.stroke}`;
     if ((r.borderRadius ?? 0) > 0) base.borderRadius = '2px';
     base.opacity = String(r.opacity ?? 1);
+    // Hairline bracket rects (s≈0.45mm) render sub-pixel at thumbnail scale — clamp to 1px
+    base.minWidth = '1px';
+    base.minHeight = '1px';
   } else if (el.type === 'qr') {
     base.background = '#e8e8e8';
     base.backgroundImage = 'repeating-conic-gradient(#c0c0c0 0% 25%, #e8e8e8 0% 50%)';
@@ -114,7 +117,36 @@ function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
   return base;
 }
 
-// ─── Trendy Preset Templates ──────────────────────────────────────────────────
+// ─── Brand bracket helper ─────────────────────────────────────────────────────
+// Generates the 8 rect elements that form the four L-shaped corner brackets
+// — the signature Peshkash framing motif from the brand kit.
+// arm   = length of each bracket arm in mm (default 7)
+// margin = distance from canvas edge to bracket corner in mm (default 4)
+// color  = fill color (use #C79C62 on dark bg, #BB9057 on light bg)
+// s      = stroke thickness in mm (default 0.45)
+function makeBrackets(
+  w: number, h: number,
+  arm = 7, margin = 4,
+  color = '#C79C62', s = 0.45,
+): RectEl[] {
+  const b = (x: number, y: number, bw: number, bh: number): RectEl => ({
+    id: uid(), type: 'rect' as const, name: 'Bracket',
+    x, y, width: bw, height: bh,
+    locked: true, fill: color, stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1,
+  });
+  return [
+    b(margin,       margin,       arm, s  ),  // TL — horizontal arm
+    b(margin,       margin,       s,   arm),  // TL — vertical arm
+    b(w-margin-arm, margin,       arm, s  ),  // TR — horizontal arm
+    b(w-margin-s,   margin,       s,   arm),  // TR — vertical arm
+    b(margin,       h-margin-s,   arm, s  ),  // BL — horizontal arm
+    b(margin,       h-margin-arm, s,   arm),  // BL — vertical arm
+    b(w-margin-arm, h-margin-s,   arm, s  ),  // BR — horizontal arm
+    b(w-margin-s,   h-margin-arm, s,   arm),  // BR — vertical arm
+  ];
+}
+
+// ─── Preset Template Library ──────────────────────────────────────────────────
 
 interface PresetTemplate {
   name: string;
@@ -124,74 +156,171 @@ interface PresetTemplate {
 }
 
 const PRESET_TEMPLATES: PresetTemplate[] = [
+  // ── Business Card format (85 × 54 mm) ──────────────────────────────────────
   {
-    name: 'Classic Business Card',
+    name: 'Dark Card',
+    icon: 'bi-moon-stars-fill',
+    desc: '85 × 54 mm · Near-black · Gold brackets · Cream QR',
+    create: () => ({
+      name: 'Dark Card', widthMm: 85, heightMm: 54,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 54, 6.5, 3.5, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
+      ]
+    })
+  },
+  {
+    name: 'Cream Card',
     icon: 'bi-credit-card',
-    desc: '85 × 54 mm · Warm cream · Gold border',
+    desc: '85 × 54 mm · Cream · Gold brackets · Dark QR',
     create: () => ({
-      name: 'Classic Business Card', widthMm: 85, heightMm: 54,
+      name: 'Cream Card', widthMm: 85, heightMm: 54,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#faf8f3', stroke: '#c9a96e', strokeWidth: 0.6, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 9, width: 29, height: 29, locked: false, fgColor: '#1a1a1a', bgColor: '#faf8f3', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 41, width: 75, height: 8, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 10, fontWeight: '600', color: '#4a3f2e', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 54, 6.5, 3.5, '#BB9057'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Dark Luxury',
-    icon: 'bi-moon-stars',
-    desc: '85 × 54 mm · Charcoal & gold · Upscale',
+    name: 'Gold Strip Card',
+    icon: 'bi-stripe',
+    desc: '85 × 54 mm · Cream · Solid gold footer strip',
     create: () => ({
-      name: 'Dark Luxury', widthMm: 85, heightMm: 54,
+      name: 'Gold Strip Card', widthMm: 85, heightMm: 54,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#15191e', stroke: '#15191e', strokeWidth: 0, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Strip', x: 0, y: 44, width: 85, height: 10, locked: true, fill: '#c9a96e', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 28, y: 8, width: 29, height: 29, locked: false, fgColor: '#f5f0e8', bgColor: '#15191e', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 4, y: 46, width: 77, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Inter', fontSize: 7, fontWeight: '700', color: '#15191e', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Footer', x: 0, y: 43, width: 85, height: 11, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(85, 43, 6, 3.5, '#1A1410'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 9, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 37.5, width: 75, height: 4.5, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '600', color: '#8C7667', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 5, y: 45.5, width: 75, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Urbanist', fontSize: 7, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
+      ]
+    })
+  },
+
+  // ── Square format (80 × 80 mm) ─────────────────────────────────────────────
+  {
+    name: 'Dark Square',
+    icon: 'bi-moon-fill',
+    desc: '80 × 80 mm · Near-black · Gold brackets · Cream QR',
+    create: () => ({
+      name: 'Dark Square', widthMm: 80, heightMm: 80,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(80, 80, 7, 4, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Acrylic Portrait',
-    icon: 'bi-layout-text-window',
-    desc: '90 × 120 mm · Portrait stand · Bold header',
+    name: 'Cream Square',
+    icon: 'bi-square',
+    desc: '80 × 80 mm · Cream · Gold brackets · Dark QR',
     create: () => ({
-      name: 'Acrylic Portrait', widthMm: 90, heightMm: 120,
+      name: 'Cream Square', widthMm: 80, heightMm: 80,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#ffffff', stroke: '#e8dccb', strokeWidth: 0.4, borderRadius: 3, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Header Bar', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1a1a1a', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'image' as const, name: 'Logo', x: 29, y: 4, width: 32, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 20, y: 32, width: 50, height: 50, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 87, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Playfair Display', fontSize: 13, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 103, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Inter', fontSize: 8, fontWeight: '400', color: '#9a8870', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(80, 80, 7, 4, '#BB9057'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#1A1410', textAlign: 'center' as const },
+      ]
+    })
+  },
+
+  // ── Portrait Stand (90 × 120 mm) ────────────────────────────────────────────
+  {
+    name: 'Dark Portrait Stand',
+    icon: 'bi-phone-fill',
+    desc: '90 × 120 mm · Near-black · Dark header · Logo slot',
+    create: () => ({
+      name: 'Dark Portrait Stand', widthMm: 90, heightMm: 120,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(90, 120, 8, 5, '#C79C62'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
   {
-    name: 'Modern Square',
-    icon: 'bi-stop-btn',
-    desc: '80 × 80 mm · Minimal white · Accent stripe',
+    name: 'Cream Portrait Stand',
+    icon: 'bi-phone',
+    desc: '90 × 120 mm · Cream · Dark header · Logo slot',
     create: () => ({
-      name: 'Modern Square', widthMm: 80, heightMm: 80,
+      name: 'Cream Portrait Stand', widthMm: 90, heightMm: 120,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#ffffff', stroke: '#e8e0d4', strokeWidth: 0.5, borderRadius: 2, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Accent Bar', x: 0, y: 0, width: 80, height: 4, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 16, y: 14, width: 48, height: 48, locked: false, fgColor: '#15191e', bgColor: '#ffffff', margin: 1, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Venue Name', x: 5, y: 67, width: 70, height: 9, locked: false, content: 'Venue Name', fontFamily: 'Inter', fontSize: 11, fontWeight: '500', color: '#15191e', textAlign: 'center' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Dark Header', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(90, 120, 8, 5, '#BB9057'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
+
+  // ── Mini Square (60 × 60 mm) ───────────────────────────────────────────────
   {
-    name: 'Compact Label',
-    icon: 'bi-tag',
-    desc: '50 × 30 mm · Small format · QR + text',
+    name: 'Dark Mini',
+    icon: 'bi-aspect-ratio-fill',
+    desc: '60 × 60 mm · Near-black · Compact acrylic',
     create: () => ({
-      name: 'Compact Label', widthMm: 50, heightMm: 30,
+      name: 'Dark Mini', widthMm: 60, heightMm: 60,
       elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 50, height: 30, locked: true, fill: '#ffffff', stroke: '#d8d0c4', strokeWidth: 0.4, borderRadius: 1.5, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Divider', x: 29, y: 4, width: 0.5, height: 22, locked: true, fill: '#e0d8cc', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 3, y: 3, width: 24, height: 24, locked: false, fgColor: '#1a1a1a', bgColor: '#ffffff', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 31, y: 10, width: 16, height: 10, locked: false, content: 'Scan for menu', fontFamily: 'Inter', fontSize: 6, fontWeight: '500', color: '#4a3f2e', textAlign: 'left' as const },
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 60, height: 60, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(60, 60, 6, 3.5, '#C79C62'),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 11, y: 11, width: 38, height: 38, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 3, y: 51.5, width: 54, height: 6, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 7.5, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
+      ]
+    })
+  },
+
+  // ── Label / Sticker (70 × 30 mm) ───────────────────────────────────────────
+  {
+    name: 'Cream Label',
+    icon: 'bi-tag-fill',
+    desc: '70 × 30 mm · Cream · QR left · Name right',
+    create: () => ({
+      name: 'Cream Label', widthMm: 70, heightMm: 30,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 70, height: 30, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(70, 30, 5, 3, '#BB9057', 0.4),
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 4, y: 5, width: 20, height: 20, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Divider', x: 27, y: 4, width: 0.4, height: 22, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 29.5, y: 7.5, width: 36, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '600', color: '#1A1410', textAlign: 'left' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 29.5, y: 17, width: 36, height: 6, locked: false, content: 'Scan for menu', fontFamily: 'Urbanist', fontSize: 6.5, fontWeight: '400', color: '#8C7667', textAlign: 'left' as const },
+      ]
+    })
+  },
+
+  // ── Large Display (100 × 140 mm) ────────────────────────────────────────────
+  {
+    name: 'Dark Display',
+    icon: 'bi-display-fill',
+    desc: '100 × 140 mm · Near-black · Large event display',
+    create: () => ({
+      name: 'Dark Display', widthMm: 100, heightMm: 140,
+      elements: [
+        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 100, height: 140, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 28, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'rect' as const, name: 'Gold Footer Rule', x: 0, y: 131.4, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
+        ...makeBrackets(100, 140, 9, 5.5, '#C79C62'),
+        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 33, y: 7.5, width: 34, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
+        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 34, width: 65, height: 65, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
+        { id: uid(), type: 'text' as const, name: 'Event Name', x: 6, y: 103, width: 88, height: 16, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 17, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
+        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 6, y: 121, width: 88, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8.5, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
       ]
     })
   },
@@ -333,11 +462,11 @@ watch(
 function makeQr(): QrEl {
   const cx = tpl.widthMm / 2 - 15;
   const cy = tpl.heightMm / 2 - 15;
-  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#000000', bgColor: '#ffffff', margin: 1, errorLevel: 'H', borderRadius: 0 };
+  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 1, errorLevel: 'H', borderRadius: 0 };
 }
 
 function makeText(): TextEl {
-  return { id: uid(), type: 'text', name: 'Text', x: 5, y: tpl.heightMm - 12, width: tpl.widthMm - 10, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Inter', fontSize: 10, fontWeight: '500', color: '#1a1a1a', textAlign: 'center' };
+  return { id: uid(), type: 'text', name: 'Text', x: 5, y: tpl.heightMm - 12, width: tpl.widthMm - 10, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 10, fontWeight: '500', color: '#1A1410', textAlign: 'center' };
 }
 
 function makeImage(): ImageEl {
@@ -345,7 +474,7 @@ function makeImage(): ImageEl {
 }
 
 function makeRect(): RectEl {
-  return { id: uid(), type: 'rect', name: 'Shape', x: 0, y: 0, width: tpl.widthMm, height: tpl.heightMm, locked: false, fill: '#f5f0e8', stroke: '#d4b07a', strokeWidth: 0, borderRadius: 0, opacity: 1 };
+  return { id: uid(), type: 'rect', name: 'Shape', x: 0, y: 0, width: tpl.widthMm, height: tpl.heightMm, locked: false, fill: '#F5F2EE', stroke: '#BD945A', strokeWidth: 0, borderRadius: 0, opacity: 1 };
 }
 
 function addElement(type: ElementType) {
@@ -762,8 +891,14 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
     <!-- Hero banner -->
     <div class="qrt-hero">
+      <!-- Decorative corner brackets -->
+      <svg class="qrt-hero-bracket qrt-hero-bracket--tl" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M2 16 L2 2 L16 2" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+      <svg class="qrt-hero-bracket qrt-hero-bracket--tr" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M16 2 L30 2 L30 16" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+      <svg class="qrt-hero-bracket qrt-hero-bracket--bl" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M2 16 L2 30 L16 30" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+      <svg class="qrt-hero-bracket qrt-hero-bracket--br" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M16 30 L30 30 L30 16" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+
       <div class="qrt-hero-mark">
-        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="52" width="38">
+        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="64" width="46">
           <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
           <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
           <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
@@ -771,8 +906,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
         </svg>
       </div>
       <div class="qrt-hero-text">
-        <h2>QR Template Studio</h2>
-        <p>Design once. Share your Peshkash everywhere.<br>Every QR is automatically branded with the Peshkash mark — at 300 DPI, print-ready.</p>
+        <div class="qrt-hero-eyebrow">QR Template Studio</div>
+        <h2>Design once.<br>Print everywhere.</h2>
+        <p>Every template ships with the Peshkash brand mark — 300 DPI, print-ready. The only thing vendors get from you physically, should look the part.</p>
       </div>
       <button class="btn btn-primary qrt-hero-cta" @click="newTemplate">
         <i class="bi bi-plus-lg"></i> Blank Canvas
@@ -781,7 +917,12 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
     <!-- Presets -->
     <div class="qrt-presets-section">
-      <p class="qrt-section-title"><i class="bi bi-stars"></i> Start from a preset</p>
+      <div class="qrt-section-header">
+        <div>
+          <p class="qrt-section-title">Template Library</p>
+          <p class="qrt-section-sub">{{ PRESET_TEMPLATES.length }} print-ready designs — all brand-framed with corner brackets at 300 DPI</p>
+        </div>
+      </div>
       <div class="qrt-presets-grid">
         <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
           <!-- Real layout preview thumbnail -->
@@ -797,7 +938,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
             <strong>{{ p.name }}</strong>
             <span>{{ p.desc }}</span>
           </div>
-          <div class="qrt-preset-use-btn">Use this →</div>
+          <div class="qrt-preset-cta">
+            <i class="bi bi-pencil-square"></i> Customise
+          </div>
         </div>
       </div>
     </div>
@@ -862,10 +1005,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
       <aside class="qrt-sidebar-left" :class="{ 'panel-hidden': !leftPanelOpen }">
         <p class="qrt-sidebar-section-label">Add Element</p>
         <div class="qrt-add-grid">
-          <button class="qrt-add-btn" @click="addElement('qr')"><i class="bi bi-qr-code"></i><span>QR Code</span></button>
-          <button class="qrt-add-btn" @click="addElement('text')"><i class="bi bi-type"></i><span>Text</span></button>
-          <button class="qrt-add-btn" @click="addElement('image')"><i class="bi bi-image"></i><span>Logo</span></button>
-          <button class="qrt-add-btn" @click="addElement('rect')"><i class="bi bi-square"></i><span>Shape</span></button>
+          <button class="qrt-add-btn" @click="addElement('qr')"><i class="bi bi-qr-code"></i><span>QR Code</span><span class="qrt-add-hint">scannable</span></button>
+          <button class="qrt-add-btn" @click="addElement('text')"><i class="bi bi-type"></i><span>Text</span><span class="qrt-add-hint">label</span></button>
+          <button class="qrt-add-btn" @click="addElement('image')"><i class="bi bi-image"></i><span>Logo</span><span class="qrt-add-hint">url</span></button>
+          <button class="qrt-add-btn" @click="addElement('rect')"><i class="bi bi-square"></i><span>Shape</span><span class="qrt-add-hint">block</span></button>
         </div>
 
         <p class="qrt-sidebar-section-label">Layers <span class="qrt-layer-count">{{ tpl.elements.length }}</span></p>
@@ -1294,9 +1437,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 <style scoped>
 /* ─── List page ─────────────────────────────────────────────────────────────── */
 .qrt-list-page {
-  background: #f7f4ef;
+  background: #EDE8E0;
   min-height: 100vh;
-  padding: 0 0 48px;
+  padding: 0 0 64px;
 }
 
 .qrt-list-page--embedded {
@@ -1308,16 +1451,29 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 /* Hero banner */
 .qrt-hero {
   align-items: center;
-  background: linear-gradient(135deg, #1a1410 0%, #2a1f14 100%);
+  background: #1A1410;
   display: flex;
-  gap: 20px;
-  padding: 32px 40px;
+  gap: 28px;
+  padding: 40px 48px;
   flex-wrap: wrap;
+  position: relative;
+  overflow: hidden;
 }
+
+/* Decorative corner brackets on the hero */
+.qrt-hero-bracket {
+  opacity: 0.6;
+  pointer-events: none;
+  position: absolute;
+}
+.qrt-hero-bracket--tl { top: 16px; left: 16px; }
+.qrt-hero-bracket--tr { top: 16px; right: 16px; }
+.qrt-hero-bracket--bl { bottom: 16px; left: 16px; }
+.qrt-hero-bracket--br { bottom: 16px; right: 16px; }
 
 .qrt-hero-mark {
   flex-shrink: 0;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .qrt-hero-text {
@@ -1325,18 +1481,31 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   min-width: 0;
 }
 
-.qrt-hero-text h2 {
-  color: #f5f1eb;
-  font-size: 1.35rem;
+.qrt-hero-eyebrow {
+  color: #BD945A;
+  font-family: 'Urbanist', sans-serif;
+  font-size: 0.7rem;
   font-weight: 700;
-  margin: 0 0 6px;
+  letter-spacing: 0.1em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.qrt-hero-text h2 {
+  color: #F5F2EE;
+  font-family: 'Rufina', Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 10px;
 }
 
 .qrt-hero-text p {
-  color: #a89070;
-  font-size: 0.84rem;
-  line-height: 1.55;
+  color: #8C7667;
+  font-size: 0.85rem;
+  line-height: 1.6;
   margin: 0;
+  max-width: 460px;
 }
 
 .qrt-hero-cta {
@@ -1344,17 +1513,17 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .hint {
-  color: #7a6a52;
-  font-size: 0.84rem;
+  color: #8C7667;
+  font-size: 0.82rem;
   margin: 0;
 }
 
 .qrt-empty {
   align-items: center;
-  background: #fff;
-  border: 1px dashed #d4b07a;
+  background: #F5F2EE;
+  border: 1px dashed #E8DBCE;
   border-radius: 8px;
-  color: #a07c4a;
+  color: #8C7667;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1369,27 +1538,28 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 .qrt-card {
-  background: #fff;
-  border: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border: 1px solid #E8DBCE;
   border-radius: 8px;
   cursor: pointer;
   overflow: hidden;
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.15s, transform 0.12s, border-color 0.15s;
 }
 
 .qrt-card:hover {
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+  border-color: #BD945A;
+  box-shadow: 0 8px 28px rgba(189, 148, 90, 0.18);
   transform: translateY(-2px);
 }
 
 .qrt-card-thumb {
-  background: #f5f0e8;
-  border-bottom: 1px solid #e6dfd4;
+  background: #E8DBCE;
+  border-bottom: 1px solid #E8DBCE;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1397,9 +1567,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-card-canvas-preview {
-  background: #fff;
+  background: #F5F2EE;
   border-radius: 3px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1421,18 +1591,18 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-card-info strong {
-  color: #15191e;
+  color: #1A1410;
   font-size: 0.9rem;
 }
 
 .qrt-card-size {
-  color: #9a8870;
+  color: #8C7667;
   font-size: 0.78rem;
 }
 
 .qrt-card-actions {
   align-items: center;
-  border-top: 1px solid #ede8df;
+  border-top: 1px solid #E8DBCE;
   display: flex;
   gap: 4px;
   justify-content: flex-end;
@@ -1441,7 +1611,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 /* ─── Editor shell ────────────────────────────────────────────────────────── */
 .qrt-editor {
-  background: #f0ece6;
+  background: #E8DBCE;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -1452,15 +1622,15 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   height: 100%;
 }
 
-/* Header */
+/* Header — dark, branded */
 .qrt-header {
   align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #e6dfd4;
+  background: #1A1410;
+  border-bottom: 1px solid #2E241C;
   display: flex;
   flex-shrink: 0;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 9px 14px;
   z-index: 10;
 }
 
@@ -1469,57 +1639,74 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   background: transparent;
   border: 0;
   border-radius: 5px;
-  color: #15191e;
+  color: #C5AF9D;
   cursor: pointer;
   display: inline-flex;
   font-size: 1rem;
-  height: 34px;
+  height: 32px;
   justify-content: center;
   padding: 0 8px;
+  transition: background 0.12s, color 0.12s;
 }
 
-.qrt-back-btn:hover { background: #f4f1ed; }
+.qrt-back-btn:hover { background: rgba(197,175,157,0.12); color: #F5F2EE; }
 
 .qrt-header-brand {
   align-items: center;
   display: flex;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .qrt-name-input {
   background: transparent;
   border: 0;
-  border-bottom: 1.5px solid transparent;
+  border-bottom: 1.5px solid rgba(197,175,157,0.25);
   border-radius: 0;
-  color: #15191e;
+  color: #F5F2EE;
   flex: 1;
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  max-width: 320px;
+  max-width: 300px;
   outline: none;
   padding: 4px 2px;
   transition: border-color 0.15s;
 }
 
+.qrt-name-input::placeholder { color: #4A3F2E; }
 .qrt-name-input:focus { border-bottom-color: #BD945A; }
 
 .qrt-header-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 7px;
   margin-left: auto;
+}
+
+/* Override icon buttons and Bootstrap buttons for dark header */
+.qrt-header .qrt-icon-btn { color: #C5AF9D; }
+.qrt-header .qrt-icon-btn:hover:not(:disabled) { background: rgba(197,175,157,0.12); color: #F5F2EE; }
+.qrt-header .qrt-icon-btn:disabled { color: #3A2E24; cursor: default; }
+
+.qrt-header .btn-outline-secondary {
+  --bs-btn-color: #C5AF9D;
+  --bs-btn-border-color: #3A2E24;
+  --bs-btn-hover-bg: rgba(197,175,157,0.1);
+  --bs-btn-hover-border-color: #8C7667;
+  --bs-btn-hover-color: #F5F2EE;
+  --bs-btn-active-bg: rgba(197,175,157,0.15);
+  --bs-btn-active-color: #F5F2EE;
 }
 
 .qrt-save-status {
   align-items: center;
   display: inline-flex;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   gap: 4px;
 }
 
-.qrt-save-status.saved { color: #3a9c6a; }
-.qrt-save-status.error { color: #c05050; }
+.qrt-save-status.saved { color: #6BBF8C; }
+.qrt-save-status.error { color: #E07070; }
 
 /* Body */
 .qrt-body {
@@ -1532,59 +1719,63 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 /* Left sidebar */
 .qrt-sidebar-left {
-  background: #fbfaf8;
-  border-right: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border-right: 1px solid #E8DBCE;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  padding: 14px 12px;
+  padding: 14px 10px;
 }
 
 .qrt-sidebar-section-label {
   align-items: center;
-  color: #a07c4a;
+  color: #8C7667;
   display: flex;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   gap: 6px;
-  letter-spacing: 0.06em;
-  margin: 10px 0 8px;
+  letter-spacing: 0.08em;
+  margin: 14px 0 7px;
   text-transform: uppercase;
 }
 
 .qrt-sidebar-section-label:first-child { margin-top: 0; }
 
 .qrt-layer-count {
-  background: #ede8df;
+  background: #E8DBCE;
   border-radius: 10px;
-  color: #7a6a52;
-  font-size: 0.7rem;
+  color: #8C7667;
+  font-size: 0.67rem;
   padding: 1px 6px;
 }
 
 .qrt-add-grid {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .qrt-add-btn {
   align-items: center;
   background: #fff;
-  border: 1px solid #ddd8ce;
+  border: 1px solid #E8DBCE;
   border-radius: 6px;
-  color: #5a4a32;
+  color: #1A1410;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  font-size: 0.76rem;
-  gap: 4px;
-  padding: 10px 6px;
-  transition: background 0.12s, border-color 0.12s;
+  flex-direction: row;
+  font-size: 0.8rem;
+  font-weight: 500;
+  gap: 9px;
+  padding: 8px 10px;
+  text-align: left;
+  transition: background 0.1s, border-color 0.12s;
 }
 
-.qrt-add-btn i { font-size: 1.1rem; color: #BD945A; }
-.qrt-add-btn:hover { background: #fdf5e8; border-color: #BD945A; }
+.qrt-add-btn i { color: #BD945A; flex-shrink: 0; font-size: 1rem; }
+.qrt-add-hint { color: #C5AF9D; font-size: 0.68rem; font-weight: 400; margin-left: auto; }
+.qrt-add-btn:hover { background: #fff; border-color: #BD945A; }
+.qrt-add-btn:hover .qrt-add-hint { color: #BD945A; }
 
 .qrt-layers {
   display: flex;
@@ -1593,26 +1784,27 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-layers-empty {
-  color: #b0a090;
+  color: #C5AF9D;
   font-size: 0.78rem;
-  padding: 8px 4px;
+  padding: 10px 4px;
   text-align: center;
 }
 
 .qrt-layer-row {
   align-items: center;
-  border-radius: 5px;
+  border-left: 2px solid transparent;
+  border-radius: 0 5px 5px 0;
   cursor: pointer;
   display: flex;
-  font-size: 0.8rem;
+  font-size: 0.79rem;
   gap: 7px;
-  padding: 5px 6px;
-  transition: background 0.1s;
+  padding: 5px 6px 5px 5px;
+  transition: background 0.1s, border-color 0.1s;
 }
 
-.qrt-layer-row i { color: #a07c4a; flex-shrink: 0; font-size: 0.85rem; }
-.qrt-layer-row:hover { background: #f0ece6; }
-.qrt-layer-row.selected { background: #fdf5e8; color: #7a5520; font-weight: 600; }
+.qrt-layer-row i { color: #BD945A; flex-shrink: 0; font-size: 0.82rem; }
+.qrt-layer-row:hover { background: #E8DBCE; }
+.qrt-layer-row.selected { background: rgba(189,148,90,0.10); border-left-color: #BD945A; color: #1A1410; font-weight: 600; }
 
 .qrt-layer-name {
   flex: 1;
@@ -1635,24 +1827,25 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   background: transparent;
   border: 0;
   border-radius: 3px;
-  color: #9a8870;
+  color: #8C7667;
   cursor: pointer;
   font-size: 0.7rem;
   padding: 2px 4px;
 }
 
-.qrt-layer-btn:hover { background: #ede8df; }
+.qrt-layer-btn:hover { background: #E8DBCE; }
 
 /* Canvas area */
 .qrt-canvas-area {
   align-items: center;
+  background-color: #D6CEBC;
+  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
+  background-size: 20px 20px;
   display: flex;
   justify-content: center;
   overflow: auto;
-  padding: 40px;
+  padding: 48px;
   position: relative;
-  background-image: radial-gradient(circle, #c8b99a33 1px, transparent 1px);
-  background-size: 20px 20px;
 }
 
 .qrt-canvas-wrap {
@@ -1661,17 +1854,18 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-canvas {
   background: #fff;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0,0,0,0.1);
   overflow: hidden;
 }
 
 .qrt-canvas-badge {
-  background: rgba(0,0,0,0.45);
-  border-radius: 0 0 4px 4px;
-  color: #fff;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
+  background: rgba(26,20,16,0.60);
+  border-radius: 0 0 5px 5px;
+  color: #E8DBCE;
+  font-size: 0.67rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
   position: absolute;
   top: 100%;
   left: 50%;
@@ -1716,7 +1910,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-brand-name {
   color: #BD945A;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Rufina', Georgia, 'Times New Roman', serif;
   font-size: 0.72rem;
   font-weight: 600;
 }
@@ -1755,8 +1949,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 /* Right sidebar */
 .qrt-sidebar-right {
-  background: #fbfaf8;
-  border-left: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border-left: 1px solid #E8DBCE;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1765,7 +1959,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-props-group {
-  border-bottom: 1px solid #ede8df;
+  border-bottom: 1px solid #E8DBCE;
   padding-bottom: 12px;
   margin-bottom: 12px;
 }
@@ -1774,21 +1968,21 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-props-label {
   align-items: center;
-  color: #a07c4a;
+  color: #8C7667;
   display: flex;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   gap: 6px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   margin: 0 0 8px;
   text-transform: uppercase;
 }
 
 .qrt-type-badge {
-  background: #f0ece6;
+  background: #E8DBCE;
   border-radius: 4px;
-  color: #8a7060;
-  font-size: 0.65rem;
+  color: #8C7667;
+  font-size: 0.64rem;
   font-weight: 500;
   padding: 1px 5px;
   text-transform: none;
@@ -1812,12 +2006,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   min-width: 0;
 }
 
-.qrt-prop-field span { color: #7a6a52; font-size: 0.72rem; }
+.qrt-prop-field span { color: #8C7667; font-size: 0.71rem; }
 .qrt-prop-field.wide { flex: 1 1 100%; }
 
 .qrt-unit-input {
   align-items: center;
-  border: 1px solid #d8d0c4;
+  background: #fff;
+  border: 1px solid #E8DBCE;
   border-radius: 4px;
   display: flex;
   overflow: hidden;
@@ -1827,24 +2022,24 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   background: transparent;
   border: none;
   flex: 1;
-  font-size: 0.8rem;
+  font-size: 0.79rem;
   min-width: 0;
   outline: none;
-  padding: 3px 5px;
+  padding: 4px 5px;
   width: 100%;
 }
 
 .qrt-unit-input span {
-  background: #f0ece6;
-  border-left: 1px solid #d8d0c4;
-  color: #9a8870;
-  font-size: 0.68rem;
-  padding: 3px 5px;
+  background: #F5F2EE;
+  border-left: 1px solid #E8DBCE;
+  color: #8C7667;
+  font-size: 0.67rem;
+  padding: 4px 6px;
   white-space: nowrap;
 }
 
 .qrt-color-input {
-  border: 1px solid #d8d0c4;
+  border: 1px solid #E8DBCE;
   border-radius: 4px;
   cursor: pointer;
   height: 28px;
@@ -1861,9 +2056,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-align-btns button {
   align-items: center;
   background: #fff;
-  border: 1px solid #ddd8ce;
+  border: 1px solid #E8DBCE;
   border-radius: 4px;
-  color: #7a6a52;
+  color: #8C7667;
   cursor: pointer;
   display: inline-flex;
   font-size: 0.82rem;
@@ -1872,11 +2067,11 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   width: 28px;
 }
 
-.qrt-align-btns button:hover { background: #fdf5e8; border-color: #BD945A; color: #BD945A; }
+.qrt-align-btns button:hover { background: rgba(189,148,90,0.08); border-color: #BD945A; color: #BD945A; }
 
 .qrt-no-selection {
   align-items: center;
-  color: #b0a090;
+  color: #C5AF9D;
   display: flex;
   flex-direction: column;
   font-size: 0.8rem;
@@ -1889,16 +2084,16 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-no-selection p { margin: 0; }
 
 .input-hint {
-  color: #9a8870;
-  font-size: 0.7rem;
+  color: #8C7667;
+  font-size: 0.69rem;
   margin-top: 2px;
 }
 
 /* Footer toolbar */
 .qrt-footer {
   align-items: center;
-  background: #fff;
-  border-top: 1px solid #e6dfd4;
+  background: #F5F2EE;
+  border-top: 1px solid #E8DBCE;
   display: flex;
   flex-shrink: 0;
   gap: 20px;
@@ -1913,10 +2108,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-zoom-pct {
-  background: #f4f1ed;
+  background: #E8DBCE;
   border: 0;
   border-radius: 4px;
-  color: #5a4a32;
+  color: #1A1410;
   cursor: pointer;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1925,7 +2120,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   text-align: center;
 }
 
-.qrt-zoom-pct:hover { background: #ede8df; }
+.qrt-zoom-pct:hover { background: #C5AF9D; color: #1A1410; }
 
 .qrt-unit-toggle {
   align-items: center;
@@ -1934,13 +2129,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-unit-toggle > span {
-  color: #9a8870;
+  color: #8C7667;
   font-size: 0.76rem;
 }
 
 .qrt-unit-btns {
   display: flex;
-  border: 1px solid #ddd8ce;
+  border: 1px solid #E8DBCE;
   border-radius: 5px;
   overflow: hidden;
 }
@@ -1948,7 +2143,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .qrt-unit-btns button {
   background: transparent;
   border: none;
-  color: #7a6a52;
+  color: #8C7667;
   cursor: pointer;
   font-size: 0.74rem;
   padding: 3px 9px;
@@ -1962,7 +2157,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-footer-hint {
   align-items: center;
-  color: #b0a090;
+  color: #C5AF9D;
   display: flex;
   font-size: 0.72rem;
   gap: 5px;
@@ -1975,19 +2170,20 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   background: transparent;
   border: 0;
   border-radius: 5px;
-  color: #5a4a32;
+  color: #1A1410;
   cursor: pointer;
   display: inline-flex;
   font-size: 0.9rem;
   height: 30px;
   justify-content: center;
   width: 30px;
+  transition: background 0.1s, color 0.1s;
 }
 
-.qrt-icon-btn:hover:not(:disabled) { background: #f0ece6; }
-.qrt-icon-btn:disabled { color: #ccc; cursor: default; }
+.qrt-icon-btn:hover:not(:disabled) { background: #E8DBCE; }
+.qrt-icon-btn:disabled { color: #C5AF9D; cursor: default; }
 .qrt-icon-btn.danger { color: #c05050; }
-.qrt-icon-btn.danger:hover { background: #fce8e8; }
+.qrt-icon-btn.danger:hover { background: rgba(192,80,80,0.08); }
 .qrt-icon-btn.sm { height: 26px; width: 26px; font-size: 0.8rem; }
 
 /* Reuse bootstrap btn styles */
@@ -1995,38 +2191,47 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 .btn-sm { font-size: 0.78rem; padding: 4px 10px; }
 
 /* ─── Preset & saved sections ────────────────────────────────────────────── */
-.qrt-section-title {
-  align-items: center;
-  color: #7a6a52;
+.qrt-section-header {
+  align-items: flex-end;
   display: flex;
-  font-size: 0.72rem;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.qrt-section-title {
+  color: #1A1410;
+  font-family: 'Rufina', Georgia, serif;
+  font-size: 1.1rem;
   font-weight: 700;
-  gap: 6px;
-  letter-spacing: 0.06em;
-  margin: 0 0 16px;
-  text-transform: uppercase;
+  margin: 0 0 3px;
+}
+
+.qrt-section-sub {
+  color: #8C7667;
+  font-size: 0.78rem;
+  margin: 0;
 }
 
 .qrt-presets-section {
-  margin-bottom: 40px;
-  padding: 32px 40px 0;
+  margin-bottom: 48px;
+  padding: 40px 48px 0;
 }
 
 .qrt-saved-section {
   margin-bottom: 24px;
-  padding: 0 40px;
+  padding: 0 48px;
 }
 
 .qrt-presets-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
 }
 
-/* Preset card — vertical layout with real layout preview */
+/* Preset card */
 .qrt-preset-card {
-  background: #fff;
-  border: 1.5px solid #e6dfd4;
+  background: #F5F2EE;
+  border: 1.5px solid #E8DBCE;
   border-radius: 10px;
   cursor: pointer;
   display: flex;
@@ -2037,61 +2242,66 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-preset-card:hover {
   border-color: #BD945A;
-  box-shadow: 0 8px 28px rgba(189, 148, 90, 0.2);
-  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(189, 148, 90, 0.22);
+  transform: translateY(-3px);
 }
 
 /* Layout preview area */
 .qrt-preset-visual-wrap {
   align-items: center;
-  background: #f0ece6;
-  background-image: radial-gradient(circle, #c8b99a33 1px, transparent 1px);
-  background-size: 10px 10px;
+  background: #D6CEBC;
+  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
+  background-size: 8px 8px;
   display: flex;
   justify-content: center;
-  min-height: 110px;
-  padding: 16px;
+  min-height: 130px;
+  padding: 20px;
 }
 
 .qrt-preset-visual {
-  box-shadow: 0 2px 12px rgba(0,0,0,0.14);
-  max-height: 90px;
+  box-shadow: 0 3px 16px rgba(0,0,0,0.22);
+  max-height: 100px;
   max-width: 100%;
+  overflow: hidden;
   position: relative;
   width: 100%;
 }
 
 .qrt-preset-info {
-  border-top: 1px solid #f0ece6;
+  border-top: 1px solid #E8DBCE;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 10px 12px 4px;
+  padding: 10px 12px 6px;
 }
 
 .qrt-preset-info strong {
-  color: #15191e;
+  color: #1A1410;
   font-size: 0.86rem;
   font-weight: 600;
 }
 
 .qrt-preset-info span {
-  color: #9a8870;
-  font-size: 0.72rem;
+  color: #8C7667;
+  font-size: 0.71rem;
   line-height: 1.35;
 }
 
-.qrt-preset-use-btn {
+.qrt-preset-cta {
+  align-items: center;
+  border-top: 1px solid #E8DBCE;
   color: #BD945A;
-  font-size: 0.72rem;
+  display: flex;
+  font-size: 0.75rem;
   font-weight: 600;
+  gap: 6px;
   letter-spacing: 0.01em;
-  padding: 6px 12px 10px;
   opacity: 0;
+  padding: 7px 12px 9px;
   transition: opacity 0.15s;
 }
 
-.qrt-preset-card:hover .qrt-preset-use-btn { opacity: 1; }
+.qrt-preset-card:hover .qrt-preset-cta { opacity: 1; }
 
 /* ─── Preview modal ──────────────────────────────────────────────────────── */
 .qrt-preview-backdrop {
@@ -2109,36 +2319,41 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .qrt-preview-modal {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  background: #F5F2EE;
+  border-radius: 12px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
-  max-width: 680px;
+  max-width: 700px;
   overflow: hidden;
   width: 100%;
 }
 
 .qrt-preview-header {
   align-items: flex-start;
-  border-bottom: 1px solid #e8dccb;
+  background: #1A1410;
+  border-bottom: 1px solid #2E241C;
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 14px 20px;
 }
 
 .qrt-preview-header h3 {
-  color: #15191e;
+  color: #F5F2EE;
+  font-family: 'Rufina', Georgia, serif;
   font-size: 1rem;
   font-weight: 700;
   margin: 0 0 2px;
 }
 
+.qrt-preview-header .qrt-icon-btn { color: #C5AF9D; }
+.qrt-preview-header .qrt-icon-btn:hover { background: rgba(197,175,157,0.12); color: #F5F2EE; }
+
 .qrt-preview-qr-row {
   align-items: flex-end;
-  border-bottom: 1px solid #f0ece6;
+  border-bottom: 1px solid #E8DBCE;
   display: flex;
   gap: 10px;
   padding: 12px 20px;
@@ -2152,31 +2367,31 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   gap: 4px;
 }
 
-.qrt-preview-qr-label span { color: #7a6a52; font-weight: 500; }
+.qrt-preview-qr-label span { color: #8C7667; font-weight: 500; }
 
 .qrt-preview-canvas-area {
   align-items: center;
-  background: #f5f0e8;
-  background-image: radial-gradient(circle, #c8b99a44 1px, transparent 1px);
+  background-color: #D6CEBC;
+  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
   background-size: 16px 16px;
   display: flex;
   flex: 1;
   justify-content: center;
   min-height: 200px;
   overflow: auto;
-  padding: 24px;
+  padding: 32px;
 }
 
 .qrt-preview-loading {
   align-items: center;
-  color: #9a8870;
+  color: #8C7667;
   display: flex;
   font-size: 0.88rem;
   gap: 8px;
 }
 
 .qrt-preview-img {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
   max-height: 440px;
   max-width: 100%;
   object-fit: contain;
@@ -2184,11 +2399,14 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .qrt-preview-footer {
   align-items: center;
-  border-top: 1px solid #e8dccb;
+  background: #F5F2EE;
+  border-top: 1px solid #E8DBCE;
   display: flex;
   justify-content: space-between;
   padding: 12px 20px;
 }
+
+.qrt-preview-footer .hint { color: #8C7667; font-size: 0.82rem; }
 
 .qrt-preview-footer-actions {
   display: flex;
@@ -2201,7 +2419,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 /* ─── Tablet layout (< 1100px) ─────────────────────────────────────────────── */
 @media (max-width: 1099px) {
   .qrt-panel-btn { display: inline-flex; }
-  .qrt-panel-btn.active { background: #f0ece6; color: #BD945A; }
+  .qrt-panel-btn.active { background: rgba(197,175,157,0.16); color: #BD945A; }
 
   .qrt-body {
     grid-template-columns: 1fr;
@@ -2217,17 +2435,17 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     transition: transform 0.22s ease;
     width: 220px;
     z-index: 50;
-    box-shadow: 0 0 20px rgba(0,0,0,0.12);
+    box-shadow: 0 0 32px rgba(0,0,0,0.18);
   }
   .qrt-sidebar-left {
     left: 0;
     transform: translateX(0);
-    border-right: 1px solid #e6dfd4;
+    border-right: 1px solid #E8DBCE;
   }
   .qrt-sidebar-right {
     right: 0;
     transform: translateX(0);
-    border-left: 1px solid #e6dfd4;
+    border-left: 1px solid #E8DBCE;
   }
   .qrt-sidebar-left.panel-hidden { transform: translateX(-100%); }
   .qrt-sidebar-right.panel-hidden { transform: translateX(100%); }
@@ -2246,10 +2464,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
   .qrt-sidebar-left,
   .qrt-sidebar-right { width: 200px; }
 
-  .qrt-hero { padding: 20px 16px; }
-  .qrt-hero-text h2 { font-size: 1.1rem; }
-  .qrt-presets-section { padding: 20px 16px 0; }
-  .qrt-saved-section { padding: 0 16px !important; }
-  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .qrt-hero { padding: 24px 20px; }
+  .qrt-hero-text h2 { font-size: 1.3rem; }
+  .qrt-presets-section { padding: 24px 20px 0; }
+  .qrt-saved-section { padding: 0 20px !important; }
+  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 }
 </style>
