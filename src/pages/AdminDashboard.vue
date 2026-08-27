@@ -224,7 +224,7 @@
                 <!-- Section: Identity -->
                 <p class="form-section-label"><i class="bi bi-building"></i> Identity</p>
                 <div class="form-grid">
-                  <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
+                  <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @input="fillVendorSlug" @blur="fillVendorSlug" /></label>
                   <label>
                     Public identifier
                     <div class="handle-input-wrap">
@@ -455,7 +455,7 @@
           <form v-if="showEventEditor" class="inline-editor" @submit.prevent="saveEvent">
             <p class="eyebrow">{{ eventForm.id ? `Editing: ${eventForm.displayName}` : 'New Event' }}</p>
             <div class="form-grid">
-              <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
+              <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @input="fillEventSlug" @blur="fillEventSlug" /></label>
               <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
               <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
               <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
@@ -687,7 +687,7 @@
         <form class="panel" @submit.prevent="saveMenu">
           <h3>{{ menuForm.id ? 'Edit Menu' : 'Create Menu' }}</h3>
           <div class="form-grid">
-            <label>Menu Name<input v-model.trim="menuForm.displayName" class="form-control" placeholder="Maharaja Menu" @blur="fillMenuSlug" /></label>
+            <label>Menu Name<input v-model.trim="menuForm.displayName" class="form-control" placeholder="Maharaja Menu" @input="fillMenuSlug" @blur="fillMenuSlug" /></label>
             <label>Slug<input v-model.trim="menuForm.name" class="form-control" placeholder="maharaja-menu" /></label>
             <label class="check"><input v-model="menuForm.isActive" type="checkbox" /> Active</label>
             <label class="wide">Description<textarea v-model.trim="menuForm.description" rows="2" class="form-control"></textarea></label>
