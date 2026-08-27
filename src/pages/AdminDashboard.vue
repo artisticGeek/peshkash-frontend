@@ -166,13 +166,19 @@
         <div class="panel">
           <div class="panel-heading">
             <h3>Vendors</h3>
-            <button class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
+            <div class="d-flex align-items-center gap-2">
+              <div class="position-relative">
+                <i class="bi bi-search position-absolute top-50 translate-middle-y ms-2 text-muted" style="pointer-events:none;font-size:0.8rem;"></i>
+                <input v-model="vendorSearch" type="search" class="form-control form-control-sm ps-4" placeholder="Search vendors…" style="min-width:160px;" />
+              </div>
+              <button class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
+            </div>
           </div>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table vendors-table">
               <thead><tr><th>Vendor</th><th>Description</th><th>Events</th><th>Contact Card</th><th>Login</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="vendor in vendors" :key="vendor.id" class="clickable-row" @click="openVendorEditor(vendor)">
+                <tr v-for="vendor in filteredVendors" :key="vendor.id" class="clickable-row" @click="openVendorEditor(vendor)">
                   <td>
                     <strong>{{ vendor.displayName }}</strong>
                     <span v-if="vendor.id === selectedVendorId" class="workspace-badge" title="Current workspace">●</span>
@@ -193,7 +199,9 @@
                     <button class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
-                <tr v-if="!vendors.length"><td colspan="6" class="muted">No vendors yet.</td></tr>
+                <tr v-if="!filteredVendors.length">
+                  <td colspan="6" class="muted">{{ vendorSearch ? 'No vendors match your search.' : 'No vendors yet.' }}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -793,7 +801,7 @@
 
       <!-- ── Analytics Dashboard ─────────────────────────────────────── -->
       <section v-if="activeSection === 'insights'" class="panel" style="min-height: 80vh;">
-        <AnalyticsSection />
+        <AnalyticsSection :initial-vendor-id="selectedVendorId || undefined" />
       </section>
 
       <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
@@ -818,7 +826,7 @@
                 <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
                   <option :value="0">Select menu</option>
                   <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                    {{ isMenuLinked(menu.id) ? '∞ ' : '' }}{{ menu.displayName }}{{ menu.type === 'personalized' ? ' ✦' : '' }}
+                    {{ menu.displayName }}{{ isMenuLinked(menu.id) ? ' [linked]' : '' }}{{ menu.type === 'personalized' ? ' [personalized]' : '' }}
                   </option>
                 </select>
                 <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
@@ -910,7 +918,7 @@
             <div v-for="item in selectedDesignerTree" :key="item.id" class="tree-root">
               <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
                 <span><i class="bi bi-grip-vertical"></i> <strong>{{ itemLabel(item) }}</strong></span>
-                <small>{{ item.type || 'item' }} · {{ childCount(item) }} children</small>
+                <small>{{ itemTypeLabel(item.type) }} · {{ childCount(item) }} children</small>
                 <button class="icon-button outlined small" title="Move to root" aria-label="Move to root" @click="setItemParent(item, null)"><i class="bi bi-arrow-up-square"></i></button>
               </div>
               <textarea v-model="designerNotes[item.id]" class="form-control admin-note" rows="1" placeholder="Private admin/vendor note"></textarea>
@@ -925,7 +933,7 @@
                   @drop.stop="dropOnDesignedItem(child)"
                 >
                   <span><i class="bi bi-grip-vertical"></i> {{ itemLabel(child) }}</span>
-                  <small>{{ child.enumType || child.type }}</small>
+                  <small>{{ itemTypeLabel(child.type) }}{{ child.enumType ? ' · ' + child.enumType : '' }}</small>
                   <button class="icon-button outlined small" title="Move under this item" aria-label="Move under this item" @click="setItemParent(child, item.id)"><i class="bi bi-arrow-return-right"></i></button>
                 </div>
               </div>
@@ -1431,6 +1439,76 @@
       <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
         <QrTemplatePage :embedded="true" />
       </section>
+
+      <!-- ── Session Management ──────────────────────────────────────────── -->
+      <section v-if="activeSection === 'sessions'" class="stack-layout">
+        <!-- Force logout a specific user -->
+        <div class="panel">
+          <div class="panel-heading">
+            <h3><i class="bi bi-person-lock me-2"></i>Force Re-login</h3>
+            <p class="hint">Invalidate a specific user's session. They will be signed out on their next request.</p>
+          </div>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input
+              v-model.trim="forceLogoutPhone"
+              class="form-control form-control-sm"
+              style="max-width:220px"
+              placeholder="+919xxxxxxxxx"
+              type="tel"
+            />
+            <button class="btn btn-sm btn-warning" :disabled="!forceLogoutPhone || sessionActing" @click="doForceLogout">
+              <i class="bi bi-person-x me-1"></i> Force Re-login
+            </button>
+          </div>
+        </div>
+
+        <!-- Force logout all users -->
+        <div class="panel">
+          <div class="panel-heading">
+            <h3><i class="bi bi-people me-2"></i>Force All Users to Re-login</h3>
+            <p class="hint">Invalidates every active session globally. All users — customers, vendors, and admins — will be signed out on their next request. Use with caution.</p>
+          </div>
+          <button class="btn btn-sm btn-danger" :disabled="sessionActing" @click="doForceLogoutAll">
+            <i class="bi bi-shield-exclamation me-1"></i> Force All to Re-login
+          </button>
+        </div>
+
+        <!-- Active invalidations -->
+        <div class="panel">
+          <div class="panel-heading d-flex justify-content-between align-items-center">
+            <h3><i class="bi bi-list-check me-2"></i>Active Invalidations</h3>
+            <button class="btn btn-sm btn-outline-secondary" @click="loadSessionInvalidations">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <p v-if="!sessionInvalidations.length" class="hint">No active invalidations — all sessions are running normally.</p>
+          <table v-else class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Phone / Scope</th>
+                <th>Invalidated After</th>
+                <th>Set At</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in sessionInvalidations" :key="row.phone">
+                <td>
+                  <span v-if="row.phone === '__global__'" class="badge bg-danger">All Users</span>
+                  <code v-else>{{ row.phone }}</code>
+                </td>
+                <td class="small text-muted">{{ formatDate(row.invalidate_before) }}</td>
+                <td class="small text-muted">{{ formatDate(row.created_at) }}</td>
+                <td>
+                  <button class="btn btn-xs btn-outline-secondary" @click="doClearInvalidation(row.phone)">
+                    <i class="bi bi-x-circle"></i> Clear
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1705,7 +1783,7 @@
             @dragstart="dragLibraryItem(item)"
             @click="copyItemToDesignedMenu(item); showItemPoolDrawer = false"
           >
-            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ item.type || 'item' }}</small></span>
+            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ itemTypeLabel(item.type) }}</small></span>
             <i class="bi bi-plus-lg"></i>
           </button>
           <p v-if="!availableDesignerItems.length" class="muted pool-empty">{{ designerSearch ? 'No items match your search.' : 'All items are already in this menu.' }}</p>
@@ -1830,7 +1908,7 @@ import { API_BASE_URL } from '../config';
 
 const authStore = useAuthStore();
 
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items';
+type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
@@ -1847,11 +1925,12 @@ const sections = [
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
   { key: 'qr-templates',  label: 'Print Templates',   icon: 'bi bi-layout-wtf' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
+  { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
-// Vendors section is only visible to admins
+// Some sections are only visible to admins
 const visibleSections = computed(() =>
-  authStore.isAdmin ? sections : sections.filter(s => s.key !== 'vendors')
+  authStore.isAdmin ? sections : sections.filter(s => s.key !== 'vendors' && s.key !== 'sessions')
 );
 
 const route = useRoute();
@@ -1873,6 +1952,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
   insights:       '/dashboard/analytics',
+  sessions:       '/dashboard/sessions',
 };
 
 function sectionFromPath(path: string): SectionKey {
@@ -1890,6 +1970,7 @@ function sectionFromPath(path: string): SectionKey {
   if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
   if (path.startsWith('/dashboard/qr')) return 'qr';
   if (path.startsWith('/dashboard/analytics')) return 'insights';
+  if (path.startsWith('/dashboard/sessions')) return 'sessions';
   return 'home';
 }
 
@@ -1986,6 +2067,14 @@ const menuRenameValue = ref('');
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
+const vendorSearch = ref('');
+const filteredVendors = computed(() => {
+  const q = vendorSearch.value.trim().toLowerCase();
+  if (!q) return vendors.value;
+  return vendors.value.filter(v =>
+    v.displayName.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)
+  );
+});
 const events = ref<EventRow[]>([]);
 const menus = ref<MenuRow[]>([]);
 const items = ref<ItemRow[]>([]);
@@ -2346,6 +2435,7 @@ const activeSubtitle = computed(() => {
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
     'qr-templates': 'Design print-ready layouts once — reuse them for every event or vendor.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
+    sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
   return copy[activeSection.value];
 });
@@ -2564,6 +2654,7 @@ const BACK_DEST: Partial<Record<SectionKey, { label: string; path: string }>> = 
   qr:              { label: 'Dashboard',     path: '/dashboard/home' },
   'qr-templates':  { label: 'QR Bank',       path: '/dashboard/qr' },
   insights:        { label: 'Dashboard',     path: '/dashboard/home' },
+  sessions:        { label: 'Dashboard',     path: '/dashboard/home' },
 };
 
 const backDestLabel = computed(() => BACK_DEST[activeSection.value]?.label ?? '');
@@ -2614,6 +2705,8 @@ function eventChecklist(event: EventRow) {
   ];
 }
 
+const NON_SCANNABLE_TYPES = new Set(['category', 'serving', 'dishtype', 'modifier', 'addon']);
+
 function eventQrTargets(event: EventRow) {
   const menusForEvent = eventMenus(event.id);
   return [
@@ -2624,13 +2717,17 @@ function eventQrTargets(event: EventRow) {
       type: 'Menu',
       path: menuPathFor(event, menu),
     })),
-    ...menusForEvent.flatMap((menu) => menuItems(menu.id).map((item) => ({
-      key: `item-${item.id}`,
-      label: itemLabel(item),
-      context: menu.displayName,
-      type: item.type || 'Item',
-      path: itemPathFor(event, item),
-    }))),
+    ...menusForEvent.flatMap((menu) =>
+      menuItems(menu.id)
+        .filter((item) => !NON_SCANNABLE_TYPES.has((item.type || '').toLowerCase()))
+        .map((item) => ({
+          key: `item-${item.id}`,
+          label: itemLabel(item),
+          context: menu.displayName,
+          type: itemTypeLabel(item.type),
+          path: itemPathFor(event, item),
+        }))
+    ),
   ];
 }
 
@@ -3268,6 +3365,23 @@ function parentName(parentId?: number) {
 
 function itemLabel(item: ItemRow) {
   return item.displayName?.trim() || item.name;
+}
+
+const ITEM_TYPE_LABEL: Record<string, string> = {
+  item:      'Item',
+  category:  'Category',
+  dish:      'Dish',
+  dishtype:  'Dish Type',
+  serving:   'Serving Size',
+  product:   'Product',
+  service:   'Service',
+  art:       'Art Piece',
+  modifier:  'Modifier',
+  addon:     'Add-on',
+};
+function itemTypeLabel(type?: string): string {
+  if (!type) return 'Item';
+  return ITEM_TYPE_LABEL[type.toLowerCase()] ?? type;
 }
 
 function menuName(menuId: number) {
@@ -3970,6 +4084,53 @@ async function removeAdminUser(phone: string) {
 watch(showWsModal, (open) => {
   if (open && authStore.isAdmin) loadAdminUsers();
 });
+
+// ── Session management ───────────────────────────────────────────────────────
+type SessionInvalidation = { phone: string; invalidate_before: string; created_at: string };
+const sessionInvalidations = ref<SessionInvalidation[]>([]);
+const forceLogoutPhone = ref('');
+const sessionActing = ref(false);
+
+async function loadSessionInvalidations() {
+  if (!authStore.isAdmin) return;
+  try {
+    const { data } = await axios.get<SessionInvalidation[]>(adminUrl('/session/invalidations'));
+    sessionInvalidations.value = data;
+  } catch { /* silent */ }
+}
+
+async function doForceLogout() {
+  const phone = forceLogoutPhone.value.trim();
+  if (!phone) return;
+  sessionActing.value = true;
+  try {
+    await axios.post(adminUrl('/session/force-logout'), { phone });
+    forceLogoutPhone.value = '';
+    await loadSessionInvalidations();
+  } catch (err) { setError(err); }
+  finally { sessionActing.value = false; }
+}
+
+async function doForceLogoutAll() {
+  if (!window.confirm('Force all users (customers, vendors, admins) to re-login? They will be signed out on their next request.')) return;
+  sessionActing.value = true;
+  try {
+    await axios.post(adminUrl('/session/force-logout-all'));
+    await loadSessionInvalidations();
+  } catch (err) { setError(err); }
+  finally { sessionActing.value = false; }
+}
+
+async function doClearInvalidation(phone: string) {
+  try {
+    await axios.delete(adminUrl(`/session/invalidations/${encodeURIComponent(phone)}`));
+    await loadSessionInvalidations();
+  } catch (err) { setError(err); }
+}
+
+watch(activeSection, (s) => {
+  if (s === 'sessions') loadSessionInvalidations();
+}, { immediate: true });
 
 function isMenuLinked(menuId: number): boolean {
   return events.value.some((ev) => eventMenus(ev.id).some((m) => m.id === menuId));

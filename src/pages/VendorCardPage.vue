@@ -1,13 +1,16 @@
 <template>
-  <Navbar />
+  <PublicNav />
 
   <div v-if="isLoading" class="pk-page-loader">
     <peshkash-loader size="110" theme="light" label="Loading" />
   </div>
 
-  <div v-else-if="error" class="container py-5">
-    <div class="alert alert-danger" role="alert">
-      <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+  <div v-else-if="error" class="pk-not-found">
+    <div class="pk-not-found-inner">
+      <i class="bi bi-qr-code pk-not-found-icon"></i>
+      <h2 class="pk-not-found-title">Page not available</h2>
+      <p class="pk-not-found-body">This vendor page doesn't exist or hasn't been set up yet. If you scanned a QR code, please let the vendor know.</p>
+      <a href="https://peshkash.app" class="pk-not-found-cta">Learn about Peshkash</a>
     </div>
   </div>
 
@@ -171,7 +174,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import Navbar from '../components/Navbar.vue'
+import PublicNav from '../components/PublicNav.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
@@ -455,6 +458,56 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ── Not-found state ─────────────────────────────────────────────────────── */
+.pk-not-found {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+  background: #F5F2EE;
+}
+.pk-not-found-inner {
+  text-align: center;
+  max-width: 360px;
+}
+.pk-not-found-icon {
+  font-size: 2.8rem;
+  color: #BD945A;
+  opacity: 0.4;
+  display: block;
+  margin-bottom: 1.25rem;
+}
+.pk-not-found-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1A1410;
+  margin-bottom: 0.6rem;
+}
+.pk-not-found-body {
+  font-size: 0.875rem;
+  color: #6B5E4E;
+  line-height: 1.55;
+  margin-bottom: 1.5rem;
+}
+.pk-not-found-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #BD945A;
+  text-decoration: none;
+  padding: 0.4rem 1rem;
+  border: 1px solid rgba(189,148,90,0.4);
+  border-radius: 100px;
+  transition: all 0.2s;
+}
+.pk-not-found-cta:hover {
+  background: rgba(189,148,90,0.08);
+  border-color: #BD945A;
+}
+
 /* ── Page layout ─────────────────────────────────────────────────────────── */
 .vendor-card-page {
   min-height: calc(100vh - 60px);

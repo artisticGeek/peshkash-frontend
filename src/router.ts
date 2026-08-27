@@ -121,6 +121,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/AdminDashboard.vue'),
   },
   {
+    path: '/dashboard/sessions',
+    name: 'DashboardSessions',
+    component: () => import('./pages/AdminDashboard.vue'),
+  },
+  {
     path: '/admin',
     redirect: '/dashboard/home',
   },

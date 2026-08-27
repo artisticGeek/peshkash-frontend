@@ -1,5 +1,5 @@
 <template>
-  <Navbar />
+  <PublicNav />
 
   <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
   <LoginModal
@@ -125,7 +125,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import Navbar from '../components/Navbar.vue'
+import PublicNav from '../components/PublicNav.vue'
 import MenuTree from '../components/MenuTree.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
@@ -285,15 +285,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Force default fonts - prevent navbar font inheritance */
-.container,
-h1,
+/* Force body fonts on interactive elements — h1 inherits Rufina from global styles */
 .vendor-name,
 .event-name,
 .menu-item-description,
 .search-input,
 .filter-tag {
-  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .pk-reveal { 
@@ -327,7 +325,7 @@ h1,
 
 .menu-item-description {
   font-size: 0.775rem;
-  color: #6c757d;
+  color: var(--pk-mushroom);
   line-height: 1.4;
   margin-top: 2px;
 }
@@ -356,7 +354,7 @@ h1,
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
+  color: var(--pk-mushroom);
   font-size: 0.9rem;
   pointer-events: none;
 }
@@ -364,7 +362,7 @@ h1,
 .search-input {
   width: 100%;
   border: none;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(189, 148, 90, 0.25);
   padding: 8px 8px 8px 24px;
   font-size: 0.9rem;
   outline: none;
@@ -377,7 +375,7 @@ h1,
 }
 
 .search-input::placeholder {
-  color: #9ca3af;
+  color: var(--pk-mushroom);
 }
 
 .filter-tags {
@@ -392,7 +390,7 @@ h1,
   border: none;
   padding: 4px 0;
   font-size: 0.85rem;
-  color: #6c757d;
+  color: var(--pk-mushroom);
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease;
@@ -400,7 +398,7 @@ h1,
 }
 
 .filter-tag:hover {
-  color: #495057;
+  color: var(--pk-stone-beige);
 }
 
 .filter-tag.active {

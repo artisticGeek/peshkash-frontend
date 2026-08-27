@@ -72,9 +72,9 @@
         </div>
         <div class="col-6 col-md">
           <KpiCard
-            label="Engagement Rate"
-            :value="engagementRate"
-            :subtitle="actionsPerScan > 1 ? actionsPerScan + ' actions/scan' : engagementRate + '% of scans engaged'"
+            label="Actions / Scan"
+            :value="actionsPerScan + '×'"
+            :subtitle="actionsPerScan >= 1 ? 'avg interactions per QR scan' : 'most scans exit without action'"
             icon="bi-arrow-repeat"
             icon-class="text-purple"
           />
@@ -398,6 +398,8 @@ interface Summary {
   }>;
 }
 
+const props = defineProps<{ initialVendorId?: number }>();
+
 const authStore = useAuthStore();
 const isVendorRole = computed(() => authStore.role === 'vendor');
 
@@ -405,7 +407,7 @@ const loading = ref(false);
 const error = ref(false);
 const summary = ref<Summary | null>(null);
 const vendors = ref<Vendor[]>([]);
-const selectedVendorId = ref<number | undefined>(undefined);
+const selectedVendorId = ref<number | undefined>(props.initialVendorId || undefined);
 
 const { exportVendor, loading: exportLoading, error: exportError } = useAnalyticsExport();
 
@@ -437,11 +439,12 @@ const drilldownVendors = computed(() =>
     : vendors.value
 );
 
-const drilldownEvents = computed(() =>
-  selectedVendorId.value
-    ? allEvents.value.filter(e => (e as any).vendorId === selectedVendorId.value)
-    : allEvents.value
-);
+const drilldownEvents = computed(() => {
+  const nonDraft = allEvents.value.filter(e => e.status !== 'draft');
+  return selectedVendorId.value
+    ? nonDraft.filter(e => (e as any).vendorId === selectedVendorId.value)
+    : nonDraft;
+});
 
 // Use topItemsDetailed from the already-loaded summary — the /analytics/items
 // endpoint only returns raw counts, not the enriched shape the UI needs.

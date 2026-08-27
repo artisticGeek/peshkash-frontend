@@ -68,7 +68,7 @@
                 <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
               </div>
               <button class="lm-btn" :disabled="loading" @click="send">
-                <peshkash-loader v-if="loading" size="22" theme="dark" label="Sending" style="display:inline-block;vertical-align:middle;margin-right:8px" />
+                <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
                 {{ loading ? 'Sending OTP…' : 'Send OTP' }}
               </button>
             </template>
@@ -98,7 +98,7 @@
                 <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
               </div>
               <button class="lm-btn" :disabled="loading" @click="verify">
-                <peshkash-loader v-if="loading" size="22" theme="dark" label="Verifying" style="display:inline-block;vertical-align:middle;margin-right:8px" />
+                <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
                 {{ loading ? 'Verifying…' : 'Verify & Sign In' }}
               </button>
             </template>

@@ -340,9 +340,9 @@ const getEnumClass = (enumType: string): string => {
   gap: 8px;
   padding: 11px 12px;
   margin-bottom: 5px;
-  background: white;
+  background: var(--pk-cream);
   border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(26, 20, 16, 0.08);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -375,18 +375,17 @@ const getEnumClass = (enumType: string): string => {
   }
 }
 
-/* Category name in gold/brown color for distinction */
+/* Category name in brand gold */
 .category-name {
   font-weight: 500;
   flex-grow: 1;
-  color: #a37d45;
+  color: var(--pk-gold);
   font-size: 0.875rem;
   line-height: 1.3;
 }
 
 @media (min-width: 768px) {
   .category-name {
-    color: #8b6d3c;
     font-size: 0.975rem;
   }
 }
@@ -399,9 +398,9 @@ const getEnumClass = (enumType: string): string => {
   gap: 8px;
   padding: 11px 12px;
   margin-bottom: 5px;
-  background: white;
+  background: var(--pk-cream);
   border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(26, 20, 16, 0.06);
   transition: all 0.2s ease;
   border-left: 2px solid rgba(189, 148, 90, 0.4);
   cursor: default;
@@ -473,10 +472,10 @@ const getEnumClass = (enumType: string): string => {
   min-width: 0;
 }
 
-/* Dish name in dark black for distinction from categories */
+/* Dish name in brand near-black */
 .menu-item-name {
   font-weight: 600;
-  color: #15191e;
+  color: var(--pk-near-black);
   margin-bottom: 3px;
   font-size: 0.85rem;
   line-height: 1.3;
@@ -492,7 +491,7 @@ const getEnumClass = (enumType: string): string => {
 
 .menu-item-description {
   font-size: 0.775rem;
-  color: #6c757d;
+  color: var(--pk-mushroom);
   line-height: 1.4;
   transition: all 0.2s ease;
   margin-top: 2px;
@@ -612,7 +611,7 @@ const getEnumClass = (enumType: string): string => {
   border-radius: 3px;
   border: 1.5px solid;
   flex-shrink: 0;
-  background-color: white;
+  background-color: var(--pk-cream);
 }
 
 .enum-indicator-square .enum-icon {

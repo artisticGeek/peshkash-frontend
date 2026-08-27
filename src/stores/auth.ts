@@ -1,6 +1,11 @@
 /**
- * Auth store — persists to localStorage with a 2-day TTL.
+ * Auth store — persists to localStorage with a 90-day sliding TTL.
  * Loaded immediately on app boot; all components read from here.
+ *
+ * Session window: 90 days from last use. Every time the app boots with a
+ * valid session that has less than 45 days left, expiresAt is silently
+ * bumped to now + 90 days (sliding window). Users who open the app at least
+ * once every 3 months are never asked to log in again.
  *
  * SECURITY: role/phone/vendorId are ALWAYS decoded from the signed JWT,
  * never read from the plain localStorage fields. Tampering with localStorage
@@ -23,8 +28,9 @@ export interface AuthState {
   expiresAt: number;   // ms since epoch
 }
 
-const STORAGE_KEY = 'peshkash_auth_v1';
-const TTL_MS      = 2 * 24 * 60 * 60 * 1000; // 48 hours
+const STORAGE_KEY          = 'peshkash_auth_v1';
+const TTL_MS               = 90 * 24 * 60 * 60 * 1000; // 90 days
+const SLIDE_THRESHOLD_MS   = 45 * 24 * 60 * 60 * 1000; // slide when < 45 days remain
 
 // ── JWT helpers ───────────────────────────────────────────────────────────────
 
@@ -74,13 +80,21 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.removeItem(STORAGE_KEY);
         return;
       }
+      // Sliding window: bump expiresAt when fewer than 45 days remain
+      const timeLeft = parsed.expiresAt - Date.now();
+      const expiresAt = timeLeft < SLIDE_THRESHOLD_MS
+        ? Date.now() + TTL_MS
+        : parsed.expiresAt;
       state.value = {
         token:     parsed.token,
-        expiresAt: parsed.expiresAt,
+        expiresAt,
         phone:     decoded.phone,
         role:      decoded.role,
         vendorId:  decoded.vendorId,
       };
+      if (expiresAt !== parsed.expiresAt) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, expiresAt }));
+      }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
