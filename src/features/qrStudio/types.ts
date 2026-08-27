@@ -80,6 +80,15 @@ export interface StudioContent {
 export type ElementKey = 'eyebrow' | 'headline' | 'descriptor' | 'cta' | 'merchantName' | 'brandmark';
 export type ElementVisibility = Partial<Record<ElementKey, boolean>>;
 
+// Layout backbone for a template built with the template creator (not part of the fixed
+// manifest library). Saved alongside the design so it can be reconstructed identically on reload.
+export interface CustomTemplateSpec {
+  format: TemplateFormat;
+  canvas: { width: number; height: number };
+  qr: { x: number; y: number; size: number };
+  ratio: string;
+}
+
 export interface StudioDesign extends StudioContent {
   id?: number | string;
   name: string;
@@ -90,6 +99,7 @@ export interface StudioDesign extends StudioContent {
   widthMm: number;
   heightMm: number;
   visibility?: ElementVisibility;
+  customTemplate?: CustomTemplateSpec;
   updatedAt?: string;
 }
 

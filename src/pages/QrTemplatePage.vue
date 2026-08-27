@@ -10,7 +10,7 @@
           <div v-for="saved in savedDesigns" :key="saved.id" class="saved-card">
             <button class="saved-card-body" @click="editSaved(saved)">
               <span class="saved-monogram">{{ saved.name.slice(0, 1).toUpperCase() }}</span>
-              <span><b>{{ saved.name }}</b><small>{{ templateById(saved.libraryTemplateId)?.label || 'Library template' }}</small></span>
+              <span><b>{{ saved.name }}</b><small>{{ templateLabelFor(saved) }}</small></span>
               <i class="bi bi-arrow-up-right"></i>
             </button>
             <button class="saved-delete" :disabled="deleting === saved.id" @click.stop="deleteDesign(saved.id!)" title="Delete design"><i class="bi bi-trash"></i></button>
@@ -30,6 +30,11 @@
           <button :class="{ active: activeCategory === 'all' }" @click="activeCategory = 'all'">All use cases</button>
           <button v-for="(label, id) in qrManifest.categories" :key="id" :class="{ active: activeCategory === id }" @click="activeCategory = id">{{ label }}</button>
         </div>
+        <button class="create-template-cta" @click="showCreator = true">
+          <span class="cta-icon"><i class="bi bi-plus-lg"></i></span>
+          <span class="cta-text"><b>Create a custom template</b><small>Pick a shape and size — it works just like the library, start to finish.</small></span>
+          <i class="bi bi-arrow-up-right"></i>
+        </button>
         <div v-if="filteredTemplates.length" class="template-grid">
           <article v-for="template in filteredTemplates" :key="template.id" class="template-card">
             <button class="template-preview" @click="startWithTemplate(template)">
@@ -292,6 +297,33 @@
     </template>
 
     <div v-if="notice" class="notice" role="status"><i class="bi bi-check2-circle"></i>{{ notice }}</div>
+
+    <!-- ── Template creator ─────────────────────────────── -->
+    <div v-if="showCreator" class="creator-overlay" @click.self="showCreator = false">
+      <div class="creator-modal">
+        <div class="creator-head">
+          <div><p class="eyebrow">NEW TEMPLATE</p><h3>Design a custom template</h3></div>
+          <button class="creator-close" @click="showCreator = false" title="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <label class="creator-name-field">Template name
+          <input v-model="creatorName" maxlength="60" placeholder="e.g. Rooftop Bar Table Tent">
+        </label>
+        <p class="creator-sub">Choose a shape</p>
+        <div class="format-grid">
+          <button v-for="preset in FORMAT_PRESETS" :key="preset.format"
+                  :class="['format-option', { active: creatorFormat === preset.format }]"
+                  @click="creatorFormat = preset.format">
+            <span class="format-swatch" :class="{ round: preset.format === 'round' }" :style="{ aspectRatio: `${preset.aspect.w} / ${preset.aspect.h}` }"></span>
+            <b>{{ preset.label }}</b>
+            <small>{{ preset.description }}</small>
+          </button>
+        </div>
+        <div class="creator-actions">
+          <button class="secondary-action" @click="showCreator = false">Cancel</button>
+          <button class="primary-action" @click="startCustomTemplate">Create template <i class="bi bi-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -302,7 +334,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey } from '../features/qrStudio/types';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec } from '../features/qrStudio/types';
+import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
 import '../features/qrStudio/qr-template-tokens.css';
 
 // Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
@@ -326,6 +359,11 @@ const deleting = ref<number | string | null>(null);
 const notice = ref('');
 // Set from ?destination query param when opened from a QR asset "Design" button
 const destinationHint = ref('');
+
+// ── Template creator (build a template from scratch, compatible with the library) ────────────
+const showCreator = ref(false);
+const creatorFormat = ref<TemplateFormat>('landscape');
+const creatorName = ref('');
 
 // ── Canvas state ──────────────────────────────────────────────────────────────
 const stageRef = ref<HTMLElement>();
@@ -653,9 +691,25 @@ function templateById(id: string): QrTemplateDefinition | undefined { return qrM
 function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles['obsidian-ring'].folder}/${template.file}`; }
 function signaturePreview(id: QrStyleId): string { return svgDataUri(renderBrandedQrSvg('https://peshkash.app/scan', id, 480)); }
 
+// Resolves a design's template definition — from the fixed library, or reconstructed from a
+// saved CustomTemplateSpec when the design was built with the template creator.
+function resolveTemplate(d: StudioDesign): QrTemplateDefinition {
+  const fromLibrary = templateById(d.libraryTemplateId);
+  if (fromLibrary) return fromLibrary;
+  if (d.customTemplate) {
+    return synthesizeCustomTemplate(d.customTemplate, { id: d.libraryTemplateId || 'custom', label: d.name || 'Custom template' });
+  }
+  return qrManifest.templates[0];
+}
+function templateLabelFor(saved: StudioDesign): string {
+  const fromLibrary = templateById(saved.libraryTemplateId);
+  if (fromLibrary) return fromLibrary.label;
+  return saved.customTemplate ? 'Custom template' : 'Library template';
+}
+
 function applyDesign(next: StudioDesign): void {
   Object.assign(design, blankDesign(), next);
-  activeTemplate.value = templateById(design.libraryTemplateId) || qrManifest.templates[0];
+  activeTemplate.value = resolveTemplate(design);
   mode.value = 'editor';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -674,6 +728,31 @@ function startWithTemplate(template: QrTemplateDefinition): void {
   });
   initElPos(template);
   nextTick(updateCanvasScale);
+}
+function startCustomTemplate(): void {
+  const preset = FORMAT_PRESETS.find((p) => p.format === creatorFormat.value) ?? FORMAT_PRESETS[0];
+  const spec: CustomTemplateSpec = buildCustomTemplateSpec(creatorFormat.value);
+  const id = `custom-${Date.now().toString(36)}`;
+  const label = creatorName.value.trim() || 'Custom template';
+  const template = synthesizeCustomTemplate(spec, { id, label, merchantType: props.vendorName });
+  designKey.value++;
+  selectedEl.value = null;
+  applyDesign({
+    ...blankDesign(),
+    name: label,
+    libraryTemplateId: id,
+    customTemplate: spec,
+    theme: template.defaultTheme,
+    widthMm: preset.defaultMm.w,
+    heightMm: preset.defaultMm.h,
+    merchantName: props.vendorName || '',
+    ...template.defaultCopy,
+    destination: destinationHint.value || template.sampleDestination,
+  });
+  initElPos(template);
+  nextTick(updateCanvasScale);
+  showCreator.value = false;
+  creatorName.value = '';
 }
 function editSaved(saved: StudioDesign): void {
   designKey.value++;
@@ -814,6 +893,36 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 .empty-state i{font-size:30px;color:var(--gold)}
 .empty-state h3{font:400 26px Rufina,serif;margin:12px 0 4px}
 .empty-state p{color:var(--muted)}
+
+/* ── Create-template CTA ── */
+.create-template-cta{width:100%;display:flex;align-items:center;gap:16px;border:1.5px dashed #c8bdb2;background:#f6f2ed;padding:16px 18px;margin-bottom:28px;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+.create-template-cta:hover{border-color:var(--gold);background:#fbf7f0}
+.create-template-cta .cta-icon{width:38px;height:38px;flex-shrink:0;border-radius:50%;background:var(--ink);color:var(--gold);display:grid;place-items:center;font-size:14px}
+.create-template-cta .cta-text{flex:1;display:grid;gap:2px}
+.create-template-cta .cta-text b{font-size:14px}
+.create-template-cta .cta-text small{font-size:11px;color:var(--muted)}
+.create-template-cta>i{color:var(--gold);font-size:14px;flex-shrink:0}
+
+/* ── Template creator modal ── */
+.creator-overlay{position:fixed;inset:0;background:rgba(26,20,16,.5);display:grid;place-items:center;z-index:60;padding:24px}
+.creator-modal{background:#fbf9f6;width:min(640px,100%);max-height:88vh;overflow-y:auto;padding:28px 30px;box-shadow:0 24px 60px rgba(26,20,16,.3)}
+.creator-head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.creator-head h3{font:400 24px Rufina,serif;margin:0}
+.creator-close{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;padding:4px}
+.creator-close:hover{color:var(--ink)}
+.creator-name-field{display:grid;gap:6px;font-size:11px;color:var(--muted);margin-bottom:22px}
+.creator-name-field input{border:1px solid #d9d0c7;background:#fff;padding:10px 12px;outline:0;color:var(--ink);font-size:14px}
+.creator-name-field input:focus{border-color:var(--gold)}
+.creator-sub{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 12px}
+.format-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:26px}
+.format-option{border:1.5px solid #ddd4cc;background:#fff;padding:14px 12px;cursor:pointer;text-align:left;display:grid;gap:8px;justify-items:start}
+.format-option:hover{border-color:var(--gold)}
+.format-option.active{border-color:var(--gold);background:#fdf8f2}
+.format-option .format-swatch{width:34px;background:#e4dcd2;border:1px solid #cfc3b8;display:block}
+.format-option .format-swatch.round{border-radius:50%}
+.format-option b{font-size:12px}
+.format-option small{font-size:10px;color:var(--muted);line-height:1.4}
+.creator-actions{display:flex;justify-content:flex-end;gap:10px}
 
 /* ── Editor bar ── */
 .editor-bar{height:64px;background:var(--ink);color:var(--cream);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 22px;position:sticky;top:0;z-index:20}
