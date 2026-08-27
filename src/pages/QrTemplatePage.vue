@@ -160,6 +160,10 @@
                      @input="design.cta = ($event.target as HTMLElement).innerText"
                 >{{ design.cta }}</div>
                 <div v-if="selectedEl === 'copy'" class="sel-ring"></div>
+                <div v-if="selectedEl === 'copy'"
+                     class="resize-handle resize-handle--h"
+                     @pointerdown.stop="startElResize('copy', $event)"
+                     title="Drag to resize width"></div>
               </div>
 
               <!-- Merchant name element -->
@@ -181,6 +185,10 @@
                      @input="design.merchantName = ($event.target as HTMLElement).innerText"
                 >{{ design.merchantName }}</div>
                 <div v-if="selectedEl === 'merchant'" class="sel-ring"></div>
+                <div v-if="selectedEl === 'merchant'"
+                     class="resize-handle resize-handle--h"
+                     @pointerdown.stop="startElResize('merchant', $event)"
+                     title="Drag to resize width"></div>
               </div>
 
               <!-- Brand mark: locked, not interactive -->
@@ -191,9 +199,13 @@
                   draggable="false">
               </div>
 
+              <!-- Canva-style center snap guides -->
+              <div v-if="snapGuides.centerX" class="snap-guide snap-guide--v" :style="{ left: (displayW / 2) + 'px' }"></div>
+              <div v-if="snapGuides.centerY" class="snap-guide snap-guide--h" :style="{ top: (displayH / 2) + 'px' }"></div>
+
             </div><!-- /canvas-root -->
           </div><!-- /canvas-wrap -->
-          <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it · Double-click text to edit · Resize QR from corner</div>
+          <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it, snaps to center · Double-click text to edit · Arrow keys to nudge, Shift for bigger steps</div>
         </section>
 
         <!-- ── Properties panel ───────────────────────────── -->
@@ -249,7 +261,7 @@
               <i class="bi bi-check-circle-fill"></i>
             </button>
             <p class="panel-kicker" style="margin-top:18px">POSITION &amp; SIZE</p>
-            <p class="field-hint">Drag the QR code on the canvas to reposition. Drag the <b>bottom-right corner</b> to resize.</p>
+            <p class="field-hint">Drag the QR code on the canvas to reposition — it snaps to center. Drag the <b>bottom-right corner</b> to resize, or use arrow keys to nudge.</p>
             <button v-if="qrWasEdited" class="reset-btn" @click="resetQrPos"><i class="bi bi-arrow-counterclockwise"></i> Reset to template default</button>
           </template>
 
@@ -259,7 +271,7 @@
               <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
               <p class="panel-kicker">COPY BLOCK</p>
             </div>
-            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the block to move it. Double-click any line to edit it directly.</p>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the block to move it (snaps to center) or use arrow keys to nudge. Drag its right edge to resize width. Double-click any line to edit it directly.</p>
             <section>
               <p class="panel-kicker" style="margin-bottom:10px">ELEMENTS</p>
               <div class="vis-toggles">
@@ -285,7 +297,7 @@
               <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
               <p class="panel-kicker">BRAND NAME</p>
             </div>
-            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the name to move it. Double-click it to edit directly.</p>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the name to move it (snaps to center) or use arrow keys to nudge. Drag its right edge to resize width. Double-click it to edit directly.</p>
             <section>
               <div class="vis-toggles" style="margin-bottom:14px">
                 <button :class="['vis-btn', { active: vis.merchantName }]" @click="toggleVis('merchantName')">
@@ -395,9 +407,14 @@ const qrWasEdited = computed(() => {
 
 interface DragState { id: string; startCX: number; startCY: number; origX: number; origY: number }
 const dragState = ref<DragState | null>(null);
-interface ResizeState { startCX: number; startCY: number; origW: number; origH: number }
+// axis 'square' resizes both dimensions equally (QR); 'width' resizes only width (text blocks,
+// whose height is driven by content)
+interface ResizeState { id: 'qr' | 'copy' | 'merchant'; axis: 'square' | 'width'; startCX: number; startCY: number; origW: number; origH: number }
 const resizeState = ref<ResizeState | null>(null);
 const isDragging = ref(false);
+// Canva-style center snap guides — which axis the dragged element is currently snapped to
+const snapGuides = ref({ centerX: false, centerY: false });
+const SNAP_FRAC = 0.006; // snap tolerance as a fraction of the canvas short side
 
 // RAF-throttled pointer tracking — avoids flooding Vue's reactivity on every mousemove
 let _rafId: number | null = null;
@@ -608,7 +625,7 @@ function startQrDrag(e: PointerEvent): void {
   startDragListeners();
 }
 function startQrResize(e: PointerEvent): void {
-  resizeState.value = { startCX: e.clientX, startCY: e.clientY, origW: elPos.value.qr.w, origH: elPos.value.qr.h };
+  resizeState.value = { id: 'qr', axis: 'square', startCX: e.clientX, startCY: e.clientY, origW: elPos.value.qr.w, origH: elPos.value.qr.h };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
@@ -616,6 +633,13 @@ function startElDrag(id: 'copy' | 'merchant', e: PointerEvent): void {
   selectedEl.value = id;
   const { x, y } = elPos.value[id];
   dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: x, origY: y };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Width-only resize handle for the text blocks — their height is driven by content, not a drag.
+function startElResize(id: 'copy' | 'merchant', e: PointerEvent): void {
+  const { w, h } = elPos.value[id];
+  resizeState.value = { id, axis: 'width', startCX: e.clientX, startCY: e.clientY, origW: w, origH: h };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
@@ -674,15 +698,38 @@ function applyMove(e: PointerEvent): void {
     const el = elPos.value[id as 'qr' | 'copy' | 'merchant'];
     const maxX = t.canvas.width - el.w;
     const maxY = t.canvas.height - el.h;
-    el.x = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
-    el.y = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
+    let nx = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
+    let ny = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
+
+    // Canva-style center snapping — snap the element's center to the canvas center on each axis
+    // independently, within a small tolerance, and surface which axis snapped for the guide lines.
+    const sh = Math.min(t.canvas.width, t.canvas.height);
+    const tol = sh * SNAP_FRAC;
+    const canvasCX = t.canvas.width / 2, canvasCY = t.canvas.height / 2;
+    const snapX = Math.abs(nx + el.w / 2 - canvasCX) < tol;
+    const snapY = Math.abs(ny + el.h / 2 - canvasCY) < tol;
+    if (snapX) nx = canvasCX - el.w / 2;
+    if (snapY) ny = canvasCY - el.h / 2;
+    snapGuides.value = { centerX: snapX, centerY: snapY };
+
+    el.x = nx;
+    el.y = ny;
   }
   if (resizeState.value) {
-    const sh = Math.min(t.canvas.width, t.canvas.height);
-    const dCanvas = (e.clientX - resizeState.value.startCX) / s;
-    const newW = Math.max(sh * 0.08, Math.min(sh * 0.72, resizeState.value.origW + dCanvas));
-    elPos.value.qr.w = newW;
-    elPos.value.qr.h = newW;
+    const rs = resizeState.value;
+    const el = elPos.value[rs.id];
+    if (rs.axis === 'square') {
+      const sh = Math.min(t.canvas.width, t.canvas.height);
+      const dCanvas = (e.clientX - rs.startCX) / s;
+      const newW = Math.max(sh * 0.08, Math.min(sh * 0.72, rs.origW + dCanvas));
+      el.w = newW;
+      el.h = newW;
+    } else {
+      const dCanvas = (e.clientX - rs.startCX) / s;
+      const maxW = t.canvas.width - el.x;
+      const newW = Math.max(t.canvas.width * 0.12, Math.min(maxW, rs.origW + dCanvas));
+      el.w = newW;
+    }
   }
 }
 function onWindowMove(e: PointerEvent): void {
@@ -700,9 +747,30 @@ function onWindowUp(): void {
   isDragging.value = false;
   dragState.value = null;
   resizeState.value = null;
+  snapGuides.value = { centerX: false, centerY: false };
   window.removeEventListener('pointermove', onWindowMove);
   window.removeEventListener('pointerup', onWindowUp);
   window.removeEventListener('pointercancel', onWindowUp);
+}
+
+// ── Keyboard nudge — arrow keys move the selected element by a small step, Shift for a bigger one
+function onCanvasKeydown(e: KeyboardEvent): void {
+  if (mode.value !== 'editor' || editingKey.value || !selectedEl.value) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+  const delta: Record<string, [number, number]> = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  };
+  const d = delta[e.key];
+  if (!d) return;
+  const t = activeTemplate.value; if (!t) return;
+  e.preventDefault();
+  const sh = Math.min(t.canvas.width, t.canvas.height);
+  const step = sh * (e.shiftKey ? 0.02 : 0.004);
+  const el = elPos.value[selectedEl.value];
+  const maxX = t.canvas.width - el.w, maxY = t.canvas.height - el.h;
+  el.x = Math.max(0, Math.min(maxX, el.x + d[0] * step));
+  el.y = Math.max(0, Math.min(maxY, el.y + d[1] * step));
 }
 
 // ── Design state (must be before watches) ────────────────────────────────────
@@ -888,6 +956,7 @@ async function downloadPng(): Promise<void> {
 watch(activeTemplate, () => { if (activeTemplate.value) { initElPos(activeTemplate.value); nextTick(updateCanvasScale); } });
 onMounted(async () => {
   window.addEventListener('resize', updateCanvasScale);
+  window.addEventListener('keydown', onCanvasKeydown);
   // ?destination=:url — opened from a QR asset "Design" button: pre-set destination
   if (route.query.destination) destinationHint.value = String(route.query.destination);
   await loadDesigns();
@@ -898,7 +967,11 @@ onMounted(async () => {
     if (target) editSaved(target);
   }
 });
-onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onWindowUp(); });
+onUnmounted(() => {
+  window.removeEventListener('resize', updateCanvasScale);
+  window.removeEventListener('keydown', onCanvasKeydown);
+  onWindowUp();
+});
 </script>
 
 <style scoped>
@@ -1028,8 +1101,9 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 /* Selection ring */
 .sel-ring{display:none;position:absolute;inset:-3px;border:2px solid var(--gold);pointer-events:none}
 
-/* Resize handle (QR only) */
+/* Resize handle — bottom-right square for QR, right-edge grip for text blocks (width only) */
 .resize-handle{position:absolute;right:-5px;bottom:-5px;width:14px;height:14px;background:var(--gold);cursor:nwse-resize;border-radius:2px;z-index:2}
+.resize-handle--h{top:50%;bottom:auto;right:-6px;transform:translateY(-50%);width:8px;height:28px;cursor:ew-resize;border-radius:3px}
 
 /* QR reset mini-button */
 .qr-reset-btn{position:absolute;top:-26px;right:0;border:1px solid var(--gold);background:rgba(26,20,16,.75);color:var(--gold);font-size:10px;padding:3px 7px;cursor:pointer;display:flex;align-items:center;gap:4px}
@@ -1049,6 +1123,11 @@ onUnmounted(() => { window.removeEventListener('resize', updateCanvasScale); onW
 /* Brand mark (locked) */
 .el--brandmark{pointer-events:none;overflow:hidden}
 .el--brandmark img{pointer-events:none;display:block}
+
+/* Canva-style center snap guides */
+.snap-guide{position:absolute;background:#ff4d6d;pointer-events:none;z-index:6}
+.snap-guide--v{top:0;bottom:0;width:1px}
+.snap-guide--h{left:0;right:0;height:1px}
 
 /* ── Properties panel ── */
 .properties-panel{background:#fbf9f6;padding:22px 20px;overflow-y:auto;border-left:1px solid #dfd7d0;display:flex;flex-direction:column;gap:0}
