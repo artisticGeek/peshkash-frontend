@@ -1668,9 +1668,16 @@ onUnmounted(() => {
 .studio--embedded .canvas-stage{height:auto;min-height:420px}
 
 /* ── Icon rail + slide-out panel ── */
-.rail{grid-area:rail;background:#f4efe9;border-right:1px solid #dfd7d0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;overflow-y:auto}
-.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:9px 2px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:8.5px;font-weight:600;letter-spacing:.01em}
+.rail{grid-area:rail;background:#f4efe9;border-right:1px solid #dfd7d0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 4px;overflow-y:auto}
+/* <button> defaults to white-space:nowrap in the browser's UA stylesheet — without overriding it
+   here, a label longer than the rail's width (e.g. "Background") gets silently clipped instead of
+   wrapping to a second line. */
+.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 1px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:8px;font-weight:600;letter-spacing:.01em}
 .rail-btn i{font-size:17px}
+/* align-items:center above sizes the label to its unwrapped content by default (cross-axis
+   auto-width), so white-space:normal alone has nothing to wrap against — constrain it to the
+   button's own width so long labels ("Background") actually wrap instead of overflowing. */
+.rail-btn span{width:100%;white-space:normal;text-align:center;line-height:1.25}
 .rail-btn:hover{background:#efe7dd;color:var(--ink)}
 .rail-btn.active{background:#fdf8f2;color:var(--gold);box-shadow:inset 0 0 0 1.5px var(--gold)}
 .properties-panel--left{grid-area:railpanel}
