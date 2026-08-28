@@ -102,6 +102,7 @@
                    @start-text-edit="startElementTextEdit"
                    @end-text-edit="endElementTextEdit"
                    @input-text="onElementInputText"
+                   @resize-height="onElementResizeHeight"
                    @resize-pointerdown="startCanvasElResize"
                    @delete="deleteElement" />
 
@@ -234,6 +235,7 @@
                    @start-text-edit="startElementTextEdit"
                    @end-text-edit="endElementTextEdit"
                    @input-text="onElementInputText"
+                   @resize-height="onElementResizeHeight"
                    @resize-pointerdown="startCanvasElResize"
                    @delete="deleteElement" />
 
@@ -417,15 +419,17 @@
             </div>
             <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta' || selectedElement.kind === 'text'">, double-click the text to edit it</span>.</p>
             <section>
-              <p class="panel-kicker" style="margin-bottom:10px">LAYER</p>
-              <div class="vis-toggles">
-                <button class="vis-btn" :class="{ active: (selectedElement.layer ?? 'front') === 'front' }" @click="toggleElementLayer(selectedElementId)">
-                  <i class="bi bi-layers-fill"></i> In front
-                </button>
-                <button class="vis-btn" :class="{ active: (selectedElement.layer ?? 'front') === 'back' }" @click="toggleElementLayer(selectedElementId)">
-                  <i class="bi bi-layers"></i> Behind QR &amp; text
-                </button>
+              <p class="panel-kicker" style="margin-bottom:10px">LAYER ORDER</p>
+              <div class="layer-order-grid">
+                <button class="layer-order-btn" @click="bringToFront(selectedElementId)" title="Bring to front"><i class="bi bi-chevron-bar-up"></i><span>To front</span></button>
+                <button class="layer-order-btn" @click="moveElement(selectedElementId, 'up')" title="Move forward one step"><i class="bi bi-chevron-up"></i><span>Forward</span></button>
+                <button class="layer-order-btn" @click="moveElement(selectedElementId, 'down')" title="Move backward one step"><i class="bi bi-chevron-down"></i><span>Backward</span></button>
+                <button class="layer-order-btn" @click="sendToBack(selectedElementId)" title="Send to back"><i class="bi bi-chevron-bar-down"></i><span>To back</span></button>
               </div>
+              <p class="field-hint" style="margin-top:8px">
+                <i :class="(selectedElement.layer ?? 'front') === 'front' ? 'bi bi-layers-fill' : 'bi bi-layers'"></i>
+                Currently {{ (selectedElement.layer ?? 'front') === 'front' ? 'in front of' : 'behind' }} the QR code and text.
+              </p>
             </section>
             <section v-if="selectedElement.kind === 'shape' || selectedElement.kind === 'cta'">
               <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
@@ -933,11 +937,6 @@ function duplicateElement(id: string): void {
   design.canvasElements.splice(idx + 1, 0, copyEl);
   selectElement(copyEl.id);
 }
-function toggleElementLayer(id: string): void {
-  const el = findCanvasEl(id);
-  if (!el) return;
-  el.layer = (el.layer ?? 'front') === 'front' ? 'back' : 'front';
-}
 // Layers panel display order: front-layer elements first (topmost = highest stacking), then
 // back-layer — each group listed with its topmost (last-rendered, last-in-array) element first.
 const layerRows = computed(() => {
@@ -978,6 +977,27 @@ function moveElement(id: string, direction: 'up' | 'down'): void {
   if (k < 0 || k >= list.length) return;
   [list[i], list[k]] = [list[k], list[i]];
 }
+// Canva's classic 4-action stacking model: Forward/Backward (moveElement, one step) plus these
+// two jumps — bring to front means "front layer, topmost" (end of array, since front renders
+// last); send to back means "back layer, bottommost" (start of array, since back renders first).
+function bringToFront(id: string): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const [el] = list.splice(i, 1);
+  el.layer = 'front';
+  list.push(el);
+}
+function sendToBack(id: string): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const [el] = list.splice(i, 1);
+  el.layer = 'back';
+  list.unshift(el);
+}
 function startCanvasElDrag(id: string, e: PointerEvent): void {
   const el = findCanvasEl(id);
   if (!el) return;
@@ -1013,6 +1033,10 @@ function endElementTextEdit(): void { editingElementId.value = null; }
 function onElementInputText(id: string, value: string): void {
   const el = findCanvasEl(id);
   if (el && (el.kind === 'cta' || el.kind === 'text')) el.text = value;
+}
+function onElementResizeHeight(id: string, canvasHeight: number): void {
+  const el = findCanvasEl(id);
+  if (el) el.h = canvasHeight;
 }
 function textElFor(key: ElementKey): HTMLElement | undefined {
   switch (key) {
@@ -1645,7 +1669,7 @@ onUnmounted(() => {
 .field-note.invalid{color:#a44c41}
 .field-hint{font-size:10px;color:var(--muted);line-height:1.55;margin-bottom:12px}
 .canvas-edit-hint{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;line-height:1.5;background:#f0ebe4;padding:10px;border-left:2px solid var(--gold)}
-.bg-swatch-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.bg-swatch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .bg-swatch{position:relative;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid;place-items:center;padding:0}
 .bg-swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px rgba(189,148,90,.25)}
 .bg-swatch i{font-size:13px}
@@ -1668,6 +1692,10 @@ onUnmounted(() => {
 .el-action-row{display:flex;gap:8px}
 .el-action-row .reset-btn{margin-top:4px}
 .reset-btn--danger:hover{border-color:#a44c41;color:#a44c41}
+.layer-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.layer-order-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:1px solid #d9d0c7;background:#fff;font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--muted);cursor:pointer}
+.layer-order-btn:hover{border-color:var(--gold);color:var(--ink)}
+.layer-order-btn i{font-size:13px}
 .zone-hint{margin-top:auto;padding-top:18px;font-size:10px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e4ddd6}
 
 /* ── Visibility toggles ── */

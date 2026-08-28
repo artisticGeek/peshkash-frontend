@@ -14,6 +14,7 @@
     <img v-if="el.kind === 'image'" :src="el.src" class="dyn-image" draggable="false" alt="">
 
     <div v-else-if="el.kind === 'text'"
+         ref="textDiv"
          class="dyn-text"
          :data-el-text="el.id"
          :contenteditable="editing"
@@ -22,7 +23,7 @@
          @dblclick.stop="$emit('start-text-edit', el.id, $event)"
          @blur="$emit('end-text-edit')"
          @keydown.escape="($event.target as HTMLElement).blur()"
-         @input="$emit('input-text', el.id, ($event.target as HTMLElement).innerText)"
+         @input="onTextInput"
     >{{ el.text }}</div>
 
     <div v-else class="dyn-shape" :style="shapeStyle">
@@ -48,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { clipPathFor, ribbonClipPath } from './elementPresets';
 import type { CanvasElement } from './types';
 
@@ -65,6 +66,7 @@ const emit = defineEmits<{
   (e: 'start-text-edit', id: string, ev: MouseEvent): void;
   (e: 'end-text-edit'): void;
   (e: 'input-text', id: string, value: string): void;
+  (e: 'resize-height', id: string, canvasHeight: number): void;
   (e: 'resize-pointerdown', id: string, ev: PointerEvent): void;
   (e: 'delete', id: string): void;
 }>();
@@ -74,6 +76,32 @@ const emit = defineEmits<{
 function onPointerDown(ev: PointerEvent): void {
   emit('pointerdown', props.el.id, ev);
 }
+
+// Text boxes auto-grow (and shrink) to fit their content, like Canva — otherwise typing past the
+// preset's default height silently clips everything past it with no scrollbar or indicator.
+const textDiv = ref<HTMLElement>();
+function syncTextHeight(): void {
+  const node = textDiv.value;
+  if (!node || props.el.kind !== 'text' || !props.scale) return;
+  // The box's own CSS height (100% of its absolutely-positioned parent) floors scrollHeight at
+  // whatever size it currently is, so shrinking back down after a grow would never be detected —
+  // null the inline height just for this synchronous measurement, then restore it.
+  const prevHeight = node.style.height;
+  node.style.height = 'auto';
+  const measured = node.scrollHeight;
+  node.style.height = prevHeight;
+  const canvasHeight = measured / props.scale;
+  if (Math.abs(canvasHeight - props.el.h) > 0.5) emit('resize-height', props.el.id, canvasHeight);
+}
+function onTextInput(ev: Event): void {
+  emit('input-text', props.el.id, (ev.target as HTMLElement).innerText);
+  nextTick(syncTextHeight);
+}
+// Font size/weight/width changes reflow the text too (more/fewer lines) — resync after any of them.
+watch(
+  () => props.el.kind === 'text' ? [props.el.fontSize, props.el.fontWeight, props.el.w] : null,
+  () => nextTick(syncTextHeight),
+);
 
 const posStyle = computed((): Record<string, string> => {
   const { el, scale } = props;
