@@ -91,7 +91,12 @@ export interface CustomTemplateSpec {
 
 // ── Freeform element bank: shapes and CTA badges the user drops onto the canvas ────────────────
 // Geometry (x/y/w/h) lives in the same canvas-px coordinate space as the fixed elements' elPos.
-export type ShapeKind = 'rect' | 'circle' | 'line' | 'triangle' | 'star' | 'tag';
+export type ShapeKind = 'rect' | 'circle' | 'line' | 'triangle' | 'star' | 'tag' | 'hexagon' | 'diamond' | 'arrow' | 'frame';
+
+// 'back' renders right after the surface/corner decoration, beneath QR/copy/merchant/brandmark —
+// for backdrop shapes. 'front' (default) renders on top of everything, for badges and callouts.
+// Within a layer, array order is stacking order (later = on top).
+export type ElementLayer = 'back' | 'front';
 
 export interface CanvasElementBase {
   id: string;
@@ -100,6 +105,8 @@ export interface CanvasElementBase {
   w: number;
   h: number;
   opacity?: number;
+  layer?: ElementLayer;
+  name?: string; // optional user label shown in the Layers panel
 }
 
 export interface ShapeElement extends CanvasElementBase {
@@ -111,13 +118,19 @@ export interface ShapeElement extends CanvasElementBase {
 
 export interface CtaElement extends CanvasElementBase {
   kind: 'cta';
-  style: 'button' | 'tag';
+  style: 'button' | 'tag' | 'ribbon';
   text: string;
   fill: string;
   textColor: string;
 }
 
 export type CanvasElement = ShapeElement | CtaElement;
+
+// A curated background — solid color with a pre-picked, legible ink color — or a fully custom one.
+export interface BackgroundSpec {
+  color: string;
+  ink: string;
+}
 
 export interface StudioDesign extends StudioContent {
   id?: number | string;
@@ -131,6 +144,7 @@ export interface StudioDesign extends StudioContent {
   visibility?: ElementVisibility;
   customTemplate?: CustomTemplateSpec;
   canvasElements?: CanvasElement[];
+  background?: BackgroundSpec;
   updatedAt?: string;
 }
 

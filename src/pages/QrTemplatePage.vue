@@ -89,6 +89,33 @@
                 </g>
               </svg>
 
+              <!-- Element bank: backdrop shapes (behind QR/copy/merchant/brandmark) -->
+              <div v-for="el in backCanvasElements" :key="el.id"
+                   class="canvas-el el--dyn"
+                   :class="{ selected: selectedElementId === el.id }"
+                   :style="dynElStyle(el)"
+                   @pointerdown="onCanvasElPointerDown(el.id, $event)"
+                   @click.stop="selectElement(el.id)">
+                <div class="dyn-shape" :style="dynShapeStyle(el)">
+                  <div v-if="el.kind === 'cta'"
+                       class="dyn-cta-text"
+                       :data-cta-text="el.id"
+                       :contenteditable="editingElementId === el.id"
+                       spellcheck="false"
+                       :style="dynCtaTextStyle(el)"
+                       @dblclick.stop="startCtaTextEdit(el.id, $event)"
+                       @blur="endCtaTextEdit"
+                       @keydown.escape="($event.target as HTMLElement).blur()"
+                       @input="el.text = ($event.target as HTMLElement).innerText"
+                  >{{ el.text }}</div>
+                </div>
+                <template v-if="selectedElementId === el.id">
+                  <div class="sel-ring"></div>
+                  <div class="resize-handle" @pointerdown.stop="startCanvasElResize(el.id, $event)" title="Drag to resize"></div>
+                  <button class="el-delete-btn" @click.stop="deleteElement(el.id)" title="Delete"><i class="bi bi-trash"></i></button>
+                </template>
+              </div>
+
               <!-- QR Code element: full element is draggable -->
               <div class="canvas-el el--qr"
                    :class="{ selected: selectedEl === 'qr' }"
@@ -199,8 +226,8 @@
                   draggable="false">
               </div>
 
-              <!-- Element bank: freeform shapes / CTA badges -->
-              <div v-for="el in (design.canvasElements || [])" :key="el.id"
+              <!-- Element bank: foreground shapes / CTA badges (above everything else) -->
+              <div v-for="el in frontCanvasElements" :key="el.id"
                    class="canvas-el el--dyn"
                    :class="{ selected: selectedElementId === el.id }"
                    :style="dynElStyle(el)"
@@ -250,11 +277,22 @@
               </p>
             </section>
             <section>
-              <p class="panel-kicker">SURFACE</p>
-              <div class="theme-options">
-                <button :class="{ active: design.theme === 'light' }" @click="design.theme = 'light'"><span class="surface surface--light"></span>Warm cream</button>
-                <button :class="{ active: design.theme === 'dark' }" @click="design.theme = 'dark'"><span class="surface surface--dark"></span>Near black</button>
+              <p class="panel-kicker">BACKGROUND</p>
+              <div class="bg-swatch-grid">
+                <button v-for="preset in BACKGROUND_PRESETS" :key="preset.label"
+                        class="bg-swatch"
+                        :class="{ active: currentBgColor === preset.color }"
+                        :style="{ background: preset.color }"
+                        :title="preset.label"
+                        @click="applyBackgroundPreset(preset)">
+                  <i v-if="currentBgColor === preset.color" class="bi bi-check2" :style="{ color: preset.ink }"></i>
+                </button>
+                <label class="bg-swatch bg-swatch--custom" title="Custom color">
+                  <input type="color" :value="currentBgColor" @input="setCustomBackground(($event.target as HTMLInputElement).value)">
+                  <i class="bi bi-palette2"></i>
+                </label>
               </div>
+              <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
             </section>
             <section>
               <p class="panel-kicker">OUTPUT</p>
@@ -281,6 +319,25 @@
                   <span class="bank-icon" v-html="preset.icon"></span>
                   <span>{{ preset.label }}</span>
                 </button>
+              </div>
+            </section>
+            <section v-if="layerRows.length">
+              <p class="panel-kicker">LAYERS</p>
+              <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
+              <div class="layers-list">
+                <template v-for="(el, i) in layerRows" :key="el.id">
+                  <div v-if="i > 0 && (el.layer ?? 'front') !== (layerRows[i-1].layer ?? 'front')" class="layers-divider">
+                    <span>behind QR &amp; text</span>
+                  </div>
+                  <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
+                    <i class="bi bi-grip-vertical layer-grip"></i>
+                    <span class="layer-swatch" :style="{ background: el.fill }"></span>
+                    <span class="layer-name">{{ layerLabel(el) }}</span>
+                    <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
+                    <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
+                    <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
+                  </div>
+                </template>
               </div>
             </section>
             <div class="zone-hint"><i class="bi bi-cursor"></i> Click any element on the canvas to select and edit it</div>
@@ -354,13 +411,27 @@
             </div>
             <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta'">, double-click the label to edit it</span>.</p>
             <section>
+              <p class="panel-kicker" style="margin-bottom:10px">LAYER</p>
+              <div class="vis-toggles">
+                <button class="vis-btn" :class="{ active: (selectedElement.layer ?? 'front') === 'front' }" @click="toggleElementLayer(selectedElementId)">
+                  <i class="bi bi-layers-fill"></i> In front
+                </button>
+                <button class="vis-btn" :class="{ active: (selectedElement.layer ?? 'front') === 'back' }" @click="toggleElementLayer(selectedElementId)">
+                  <i class="bi bi-layers"></i> Behind QR &amp; text
+                </button>
+              </div>
+            </section>
+            <section>
               <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
-              <label>Fill color<input type="color" v-model="selectedElement.fill" class="color-input"></label>
+              <label>{{ selectedElement.kind === 'shape' && selectedElement.shape === 'frame' ? 'Border color' : 'Fill color' }}<input type="color" v-model="selectedElement.fill" class="color-input"></label>
               <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
-              <label v-if="selectedElement.kind === 'shape' && selectedElement.shape === 'rect'">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
+              <label v-if="selectedElement.kind === 'shape' && (selectedElement.shape === 'rect' || selectedElement.shape === 'frame')">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
               <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
             </section>
-            <button class="reset-btn" @click="deleteElement(selectedElementId)"><i class="bi bi-trash"></i> Delete element</button>
+            <div class="el-action-row">
+              <button class="reset-btn" @click="duplicateElement(selectedElementId)"><i class="bi bi-copy"></i> Duplicate</button>
+              <button class="reset-btn reset-btn--danger" @click="deleteElement(selectedElementId)"><i class="bi bi-trash"></i> Delete</button>
+            </div>
           </template>
 
         </aside>
@@ -405,9 +476,9 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement } from '../features/qrStudio/types';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ElementLayer } from '../features/qrStudio/types';
 import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
-import { ELEMENT_PRESETS, clipPathFor } from '../features/qrStudio/elementPresets';
+import { ELEMENT_PRESETS, clipPathFor, ribbonClipPath, BACKGROUND_PRESETS, inkForBackground } from '../features/qrStudio/elementPresets';
 import '../features/qrStudio/qr-template-tokens.css';
 
 // Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
@@ -454,6 +525,8 @@ function findCanvasEl(id: string): CanvasElement | undefined {
   return design.canvasElements?.find((el) => el.id === id);
 }
 const selectedElement = computed(() => selectedElementId.value ? findCanvasEl(selectedElementId.value) : undefined);
+const backCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'back'));
+const frontCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'front'));
 const selectedElementOpacity = computed<number>({
   get: () => selectedElement.value?.opacity ?? 1,
   set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
@@ -502,8 +575,22 @@ const displayH = computed(() => Math.round(canvasH.value * canvasScale.value));
 const displayShort = computed(() => Math.min(displayW.value, displayH.value));
 
 const dark = computed(() => design.theme === 'dark');
-const bgColor = computed(() => dark.value ? '#1A1410' : '#F5F2EE');
-const inkColor = computed(() => dark.value ? '#F5F2EE' : '#1A1410');
+// A custom background (palette pick or hand-picked color) overrides the two-theme default; the
+// brand mark's light/dark asset still follows the theme flag so it stays legible either way.
+const bgColor = computed(() => design.background?.color ?? (dark.value ? '#1A1410' : '#F5F2EE'));
+const inkColor = computed(() => design.background?.ink ?? (dark.value ? '#F5F2EE' : '#1A1410'));
+const currentBgColor = computed(() => bgColor.value);
+// Whichever background is chosen, keep design.theme (drives the brand-mark asset + surface panel
+// tone) in sync with its actual lightness so those pieces never render backwards.
+function applyBackgroundPreset(preset: { color: string; ink: string }): void {
+  design.background = { color: preset.color, ink: preset.ink };
+  design.theme = inkForBackground(preset.color) === '#F5F2EE' ? 'dark' : 'light';
+}
+function setCustomBackground(hex: string): void {
+  const ink = inkForBackground(hex);
+  design.background = { color: hex, ink };
+  design.theme = ink === '#F5F2EE' ? 'dark' : 'light';
+}
 
 const innerBgStyle = computed((): Record<string, string> => {
   const t = activeTemplate.value; if (!t) return {};
@@ -741,6 +828,52 @@ function selectElement(id: string): void {
   selectedElementId.value = id;
   selectedEl.value = null;
 }
+function duplicateElement(id: string): void {
+  const el = findCanvasEl(id);
+  if (!el || !design.canvasElements) return;
+  const short = activeTemplate.value ? Math.min(activeTemplate.value.canvas.width, activeTemplate.value.canvas.height) : 0;
+  const offset = short * 0.02;
+  const copyEl: CanvasElement = { ...el, id: crypto.randomUUID(), x: el.x + offset, y: el.y + offset };
+  const idx = design.canvasElements.findIndex((e) => e.id === id);
+  design.canvasElements.splice(idx + 1, 0, copyEl);
+  selectElement(copyEl.id);
+}
+function toggleElementLayer(id: string): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  el.layer = (el.layer ?? 'front') === 'front' ? 'back' : 'front';
+}
+// Layers panel display order: front-layer elements first (topmost = highest stacking), then
+// back-layer — each group listed with its topmost (last-rendered, last-in-array) element first.
+const layerRows = computed(() => {
+  const all = design.canvasElements ?? [];
+  const front = all.filter((el) => (el.layer ?? 'front') === 'front').slice().reverse();
+  const back = all.filter((el) => (el.layer ?? 'front') === 'back').slice().reverse();
+  return [...front, ...back];
+});
+function layerLabel(el: CanvasElement): string {
+  if (el.name) return el.name;
+  if (el.kind === 'cta') return `${el.style === 'tag' ? 'Tag' : el.style === 'ribbon' ? 'Ribbon' : 'Button'}: ${el.text || 'CTA'}`;
+  const names: Record<string, string> = { rect: 'Rectangle', circle: 'Circle', line: 'Line', triangle: 'Triangle', star: 'Star', tag: 'Tag shape', hexagon: 'Hexagon', diamond: 'Diamond', arrow: 'Arrow', frame: 'Frame' };
+  return names[el.shape] || 'Shape';
+}
+// Moves an element one step toward the front (up) or back (down) WITHIN its own layer — array
+// order is stacking order, so this is a plain adjacent swap.
+function moveElement(id: string, direction: 'up' | 'down'): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const layer = list[i].layer ?? 'front';
+  const j = direction === 'up' ? i + 1 : i - 1;
+  // find the nearest neighbor in the same layer to swap with
+  let k = j;
+  while (k >= 0 && k < list.length && (list[k].layer ?? 'front') !== layer) {
+    k += direction === 'up' ? 1 : -1;
+  }
+  if (k < 0 || k >= list.length) return;
+  [list[i], list[k]] = [list[k], list[i]];
+}
 function startCanvasElDrag(id: string, e: PointerEvent): void {
   const el = findCanvasEl(id);
   if (!el) return;
@@ -792,16 +925,25 @@ function dynCtaTextStyle(el: CanvasElement): Record<string, string> {
   };
 }
 function dynShapeStyle(el: CanvasElement): Record<string, string> {
-  const style: Record<string, string> = { width: '100%', height: '100%', background: el.fill, opacity: String(el.opacity ?? 1) };
+  const style: Record<string, string> = { width: '100%', height: '100%', opacity: String(el.opacity ?? 1) };
   if (el.kind === 'shape') {
+    if (el.shape === 'frame') {
+      const sw = Math.max(1.5, Math.min(el.w, el.h) * 0.025 * canvasScale.value);
+      style.background = 'transparent';
+      style.border = `${sw}px solid ${el.fill}`;
+      style.borderRadius = `${el.radius ?? 0}px`;
+      return style;
+    }
+    style.background = el.fill;
     if (el.shape === 'circle') style.borderRadius = '50%';
     else if (el.shape === 'rect') style.borderRadius = `${el.radius ?? 0}px`;
     else if (el.shape === 'line') style.borderRadius = '999px';
     const clip = clipPathFor(el.shape);
     if (clip) style.clipPath = clip;
   } else {
+    style.background = el.fill;
     if (el.style === 'button') style.borderRadius = '999px';
-    const clip = el.style === 'tag' ? clipPathFor('tag') : undefined;
+    const clip = el.style === 'tag' ? clipPathFor('tag') : el.style === 'ribbon' ? ribbonClipPath() : undefined;
     if (clip) style.clipPath = clip;
   }
   return style;
@@ -937,6 +1079,11 @@ function onCanvasKeydown(e: KeyboardEvent): void {
   if (selectedElementId.value && (e.key === 'Delete' || e.key === 'Backspace')) {
     e.preventDefault();
     deleteElement(selectedElementId.value);
+    return;
+  }
+  if (selectedElementId.value && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+    e.preventDefault();
+    duplicateElement(selectedElementId.value);
     return;
   }
 
@@ -1337,12 +1484,13 @@ onUnmounted(() => {
 .field-note.invalid{color:#a44c41}
 .field-hint{font-size:10px;color:var(--muted);line-height:1.55;margin-bottom:12px}
 .canvas-edit-hint{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;line-height:1.5;background:#f0ebe4;padding:10px;border-left:2px solid var(--gold)}
-.theme-options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.theme-options button{border:1px solid #ddd4cc;background:#fff;padding:8px;font-size:10px;cursor:pointer}
-.theme-options button.active{border-color:var(--gold)}
-.surface{height:32px;display:block;margin-bottom:6px}
-.surface--light{background:#f5f2ee}
-.surface--dark{background:#1a1410}
+.bg-swatch-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.bg-swatch{position:relative;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid;place-items:center;padding:0}
+.bg-swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px rgba(189,148,90,.25)}
+.bg-swatch i{font-size:13px}
+.bg-swatch--custom{background:conic-gradient(from 0deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);color:#fff;position:relative;overflow:hidden}
+.bg-swatch--custom i{text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.bg-swatch--custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .standard-card{background:#eee8e1;padding:12px;font-size:10px}
 .standard-card div{display:flex;gap:7px;color:#41614a}
 .standard-card ul{padding-left:16px;margin:9px 0 0;color:var(--muted);line-height:1.8}
@@ -1356,6 +1504,9 @@ onUnmounted(() => {
 .signature-card.active>i{opacity:1}
 .reset-btn{width:100%;border:1px solid #ddd4cc;background:transparent;padding:9px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:7px;justify-content:center;margin-top:4px}
 .reset-btn:hover{border-color:var(--gold)}
+.el-action-row{display:flex;gap:8px}
+.el-action-row .reset-btn{margin-top:4px}
+.reset-btn--danger:hover{border-color:#a44c41;color:#a44c41}
 .zone-hint{margin-top:auto;padding-top:18px;font-size:10px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e4ddd6}
 
 /* ── Visibility toggles ── */
@@ -1365,6 +1516,19 @@ onUnmounted(() => {
 .vis-btn:hover{border-color:var(--gold);color:var(--ink)}
 .vis-btn i{font-size:11px}
 .properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+
+/* ── Layers panel ── */
+.layers-list{display:flex;flex-direction:column;gap:2px}
+.layer-row{display:flex;align-items:center;gap:7px;padding:6px 6px 6px 2px;border:1px solid transparent;border-radius:4px;cursor:pointer;font-size:11.5px}
+.layer-row:hover{background:#f3ede4}
+.layer-row.active{background:#fdf8f2;border-color:var(--gold)}
+.layer-grip{color:#c2b7a9;font-size:12px;flex-shrink:0}
+.layer-swatch{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.12);flex-shrink:0}
+.layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.layer-btn{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px 4px;font-size:11px;line-height:1;flex-shrink:0}
+.layer-btn:hover{color:var(--ink)}
+.layers-divider{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.layers-divider::before,.layers-divider::after{content:'';flex:1;height:1px;background:#e4ddd6}
 
 /* ── Element bank ── */
 .element-bank{display:grid;grid-template-columns:1fr 1fr;gap:8px}

@@ -1,12 +1,13 @@
 import { renderBrandedQrSvg, svgDataUri } from './qrRenderer';
-import { svgPolygonPoints } from './elementPresets';
-import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement } from './types';
+import { svgPolygonPoints, svgRibbonPoints, isOutlineShape } from './elementPresets';
+import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer } from './types';
 
 export interface TemplateRenderOptions extends StudioContent {
   qrStyle: QrStyleId;
   theme: StudioTheme;
   visibility?: ElementVisibility;
   canvasElements?: CanvasElement[];
+  background?: BackgroundSpec;
 }
 
 export interface RenderOverrides {
@@ -102,33 +103,49 @@ function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark:
   return `<image href="${href}" x="${imgX.toFixed(2)}" y="${imgY.toFixed(2)}" width="${imgW.toFixed(2)}" height="${imgH.toFixed(2)}"/>`;
 }
 
-// Freeform element bank layer — shapes and CTA badges the user dropped onto the canvas. Rendered
-// on top of everything else, matching the live editor's DOM order.
-function renderCanvasElements(elements: CanvasElement[] | undefined): string {
+// Freeform element bank layer — shapes and CTA badges the user dropped onto the canvas.
+// 'back' elements render early (beneath QR/copy/merchant); 'front' (default) render last, on top
+// of everything — matching the live editor's DOM order.
+function renderCanvasElements(elements: CanvasElement[] | undefined, wantLayer: ElementLayer): string {
   if (!elements || !elements.length) return '';
-  return elements.map((el) => {
-    const opacity = el.opacity ?? 1;
-    if (el.kind === 'shape') {
-      if (el.shape === 'circle') {
-        const rx = el.w / 2, ry = el.h / 2;
-        return `<ellipse cx="${(el.x + rx).toFixed(1)}" cy="${(el.y + ry).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+  return elements
+    .filter((el) => (el.layer ?? 'front') === wantLayer)
+    .map((el) => {
+      const opacity = el.opacity ?? 1;
+      if (el.kind === 'shape') {
+        if (isOutlineShape(el.shape)) {
+          const sw = Math.max(1.5, Math.min(el.w, el.h) * 0.025);
+          return `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${(el.radius ?? 0).toFixed(1)}" fill="none" stroke="${el.fill}" stroke-width="${sw.toFixed(1)}" opacity="${opacity}"/>`;
+        }
+        if (el.shape === 'circle') {
+          const rx = el.w / 2, ry = el.h / 2;
+          return `<ellipse cx="${(el.x + rx).toFixed(1)}" cy="${(el.y + ry).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+        }
+        if (el.shape === 'rect' || el.shape === 'line') {
+          const rx = el.shape === 'rect' ? (el.radius ?? 0) : Math.min(el.h, el.w) / 2;
+          return `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${rx.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+        }
+        const pts = svgPolygonPoints(el.shape, el.x, el.y, el.w, el.h);
+        return pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : '';
       }
-      if (el.shape === 'rect' || el.shape === 'line') {
-        const rx = el.shape === 'rect' ? (el.radius ?? 0) : Math.min(el.h, el.w) / 2;
-        return `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${rx.toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+      // CTA: background shape + centered label
+      let shapeSvg: string;
+      let textX: number;
+      if (el.style === 'tag') {
+        const pts = svgPolygonPoints('tag', el.x, el.y, el.w, el.h);
+        shapeSvg = pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : '';
+        textX = el.x + el.w * 0.38;
+      } else if (el.style === 'ribbon') {
+        shapeSvg = `<polygon points="${svgRibbonPoints(el.x, el.y, el.w, el.h)}" fill="${el.fill}" opacity="${opacity}"/>`;
+        textX = el.x + el.w / 2;
+      } else {
+        shapeSvg = `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${(el.h / 2).toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
+        textX = el.x + el.w / 2;
       }
-      const pts = svgPolygonPoints(el.shape, el.x, el.y, el.w, el.h);
-      return pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : '';
-    }
-    // CTA: background shape + centered label
-    const shapeSvg = el.style === 'tag'
-      ? (() => { const pts = svgPolygonPoints('tag', el.x, el.y, el.w, el.h); return pts ? `<polygon points="${pts}" fill="${el.fill}" opacity="${opacity}"/>` : ''; })()
-      : `<rect x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" rx="${(el.h / 2).toFixed(1)}" fill="${el.fill}" opacity="${opacity}"/>`;
-    const fontSize = Math.max(10, el.h * 0.4);
-    const textX = el.style === 'tag' ? el.x + el.w * 0.38 : el.x + el.w / 2;
-    const textSvg = `<text x="${textX.toFixed(1)}" y="${(el.y + el.h / 2 + fontSize * 0.32).toFixed(1)}" text-anchor="middle" font-family="Urbanist,Arial,sans-serif" font-weight="700" font-size="${fontSize.toFixed(1)}" fill="${el.textColor}">${esc(el.text)}</text>`;
-    return shapeSvg + textSvg;
-  }).join('');
+      const fontSize = Math.max(10, el.h * 0.4);
+      const textSvg = `<text x="${textX.toFixed(1)}" y="${(el.y + el.h / 2 + fontSize * 0.32).toFixed(1)}" text-anchor="middle" font-family="Urbanist,Arial,sans-serif" font-weight="700" font-size="${fontSize.toFixed(1)}" fill="${el.textColor}">${esc(el.text)}</text>`;
+      return shapeSvg + textSvg;
+    }).join('');
 }
 
 export function renderTemplateSvg(
@@ -145,8 +162,10 @@ export function renderTemplateSvg(
   const dark     = options.theme === 'dark';
   const vis      = options.visibility ?? {};
 
-  const background = dark ? '#1A1410' : '#F5F2EE';
-  const foreground = dark ? '#F5F2EE' : '#1A1410';
+  // A custom background overrides the two-theme default; surface/inner-panel tone still follows
+  // the design's theme flag (keeps the card-on-background look consistent either way).
+  const background = options.background?.color ?? (dark ? '#1A1410' : '#F5F2EE');
+  const foreground = options.background?.ink ?? (dark ? '#F5F2EE' : '#1A1410');
   const surface    = dark ? '#231B16' : '#FFFFFF';
   const markColor  = '#BB9057';
 
@@ -223,6 +242,8 @@ export function renderTemplateSvg(
     `<rect x="${(inset * 0.6).toFixed(1)}" y="${(inset * 0.6).toFixed(1)}" width="${(width - inset * 1.2).toFixed(1)}" height="${(height - inset * 1.2).toFixed(1)}" rx="${innerR.toFixed(2)}" fill="none" stroke="${markColor}" stroke-width="0.6" opacity="0.22"/>` +
     // Corner accent marks
     scanCorners(width, height, markColor) +
+    // Backdrop shapes — behind everything else
+    renderCanvasElements(options.canvasElements, 'back') +
     // Merchant name strip
     merchantSvg +
     // Brand mark
@@ -231,8 +252,8 @@ export function renderTemplateSvg(
     `<image href="${svgDataUri(qrSvg)}" x="${qrX.toFixed(2)}" y="${qrY.toFixed(2)}" width="${qrSize.toFixed(2)}" height="${qrSize.toFixed(2)}" filter="url(#qr-shadow)"/>` +
     // Copy block
     copy +
-    // Freeform shapes / CTA badges — topmost layer, matching the live editor
-    renderCanvasElements(options.canvasElements) +
+    // Foreground shapes / CTA badges — topmost layer, matching the live editor
+    renderCanvasElements(options.canvasElements, 'front') +
     `</g></svg>`
   );
 }
