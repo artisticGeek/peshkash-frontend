@@ -124,7 +124,27 @@ export interface CtaElement extends CanvasElementBase {
   textColor: string;
 }
 
-export type CanvasElement = ShapeElement | CtaElement;
+// A freestanding, fully independent text box — separate from the template's fixed eyebrow/
+// headline/descriptor/cta/merchantName slots. font-size is stored in canvas-px (same coordinate
+// space as x/y/w/h) so it scales with canvasScale like everything else.
+export interface TextElement extends CanvasElementBase {
+  kind: 'text';
+  text: string;
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: '400' | '700';
+  align: 'left' | 'center' | 'right';
+}
+
+// A user-uploaded image (logo, photo) — src is a data: URI, stored inline since there's no asset
+// upload backend. object-fit: cover semantics — the box crops, never distorts, the source image.
+export interface ImageElement extends CanvasElementBase {
+  kind: 'image';
+  src: string;
+}
+
+export type CanvasElement = ShapeElement | CtaElement | TextElement | ImageElement;
 
 // A curated background — solid color with a pre-picked, legible ink color — or a fully custom one.
 export interface BackgroundSpec {

@@ -42,7 +42,7 @@ export function ribbonClipPath(): string {
 }
 
 let seq = 0;
-function newId(): string {
+export function newId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   seq += 1;
   return `el-${Date.now().toString(36)}-${seq}`;
@@ -51,7 +51,7 @@ function newId(): string {
 export interface ElementPreset {
   id: string;
   label: string;
-  category: 'shape' | 'cta';
+  category: 'shape' | 'cta' | 'text';
   icon: string; // inline SVG, 24x24 viewBox
   build: (canvasW: number, canvasH: number) => CanvasElement;
 }
@@ -160,6 +160,40 @@ export const ELEMENT_PRESETS: ElementPreset[] = [
       return { id: newId(), kind: 'cta', style: 'ribbon', x: w * 0.16, y: h * 0.06, w: w * 0.68, h: short * 0.09, fill: '#1A1410', textColor: '#F5F2EE', text: '20% OFF', opacity: 1, layer: 'front' };
     },
   },
+  {
+    id: 'text-heading', label: 'Heading', category: 'text',
+    icon: `<svg ${ICON_SIZE}><text x="2" y="17" font-family="Georgia,serif" font-size="16" font-weight="700" fill="currentColor">Aa</text></svg>`,
+    build: (w, h) => {
+      const short = Math.min(w, h);
+      return { id: newId(), kind: 'text', x: w * 0.1, y: h * 0.35, w: w * 0.5, h: short * 0.14, text: 'Heading', color: '#1A1410', fontFamily: 'Rufina, Georgia, serif', fontSize: Math.round(short * 0.09), fontWeight: '700', align: 'left', opacity: 1, layer: 'front' };
+    },
+  },
+  {
+    id: 'text-subheading', label: 'Subheading', category: 'text',
+    icon: `<svg ${ICON_SIZE}><text x="2" y="16" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="currentColor">Aa</text></svg>`,
+    build: (w, h) => {
+      const short = Math.min(w, h);
+      return { id: newId(), kind: 'text', x: w * 0.1, y: h * 0.4, w: w * 0.45, h: short * 0.08, text: 'Subheading', color: '#1A1410', fontFamily: 'Urbanist, Arial, sans-serif', fontSize: Math.round(short * 0.05), fontWeight: '700', align: 'left', opacity: 1, layer: 'front' };
+    },
+  },
+  {
+    id: 'text-body', label: 'Body text', category: 'text',
+    icon: `<svg ${ICON_SIZE}><text x="2" y="15" font-family="Arial,sans-serif" font-size="11" fill="currentColor">Aa</text></svg>`,
+    build: (w, h) => {
+      const short = Math.min(w, h);
+      return { id: newId(), kind: 'text', x: w * 0.1, y: h * 0.45, w: w * 0.5, h: short * 0.1, text: 'Add a bit of body text', color: '#1A1410', fontFamily: 'Urbanist, Arial, sans-serif', fontSize: Math.round(short * 0.032), fontWeight: '400', align: 'left', opacity: 1, layer: 'front' };
+    },
+  },
+];
+
+// Curated font pairing choices for freeform text elements — kept small and legible rather than
+// exhaustive; each is a real font-stack with a system fallback.
+export const TEXT_FONT_CHOICES: { label: string; value: string }[] = [
+  { label: 'Rufina (serif)', value: 'Rufina, Georgia, serif' },
+  { label: 'Urbanist (sans)', value: 'Urbanist, Arial, sans-serif' },
+  { label: 'Georgia', value: 'Georgia, "Times New Roman", serif' },
+  { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Courier (mono)', value: '"Courier New", Courier, monospace' },
 ];
 
 // ── Background palette ──────────────────────────────────────────────────────────────────────

@@ -112,6 +112,20 @@ function renderCanvasElements(elements: CanvasElement[] | undefined, wantLayer: 
     .filter((el) => (el.layer ?? 'front') === wantLayer)
     .map((el) => {
       const opacity = el.opacity ?? 1;
+      if (el.kind === 'image') {
+        return `<image href="${el.src}" x="${el.x.toFixed(1)}" y="${el.y.toFixed(1)}" width="${el.w.toFixed(1)}" height="${el.h.toFixed(1)}" preserveAspectRatio="xMidYMid slice" opacity="${opacity}"/>`;
+      }
+      if (el.kind === 'text') {
+        const lines = el.text.split('\n');
+        const anchor = el.align === 'center' ? 'middle' : el.align === 'right' ? 'end' : 'start';
+        const tx = el.align === 'center' ? el.x + el.w / 2 : el.align === 'right' ? el.x + el.w : el.x;
+        const lineHeight = el.fontSize * 1.25;
+        const startY = el.y + el.fontSize;
+        const tspans = lines.map((line, i) =>
+          `<tspan x="${tx.toFixed(1)}" y="${(startY + i * lineHeight).toFixed(1)}">${esc(line) || ' '}</tspan>`
+        ).join('');
+        return `<text text-anchor="${anchor}" font-family="${esc(el.fontFamily)}" font-size="${el.fontSize}" font-weight="${el.fontWeight}" fill="${el.color}" opacity="${opacity}">${tspans}</text>`;
+      }
       if (el.kind === 'shape') {
         if (isOutlineShape(el.shape)) {
           const sw = Math.max(1.5, Math.min(el.w, el.h) * 0.025);

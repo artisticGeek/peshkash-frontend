@@ -57,6 +57,9 @@
         <button class="back-button" @click="closeEditor"><i class="bi bi-arrow-left"></i><span>Template library</span></button>
         <div class="editor-title"><span>Editing</span><b>{{ activeTemplate.label }}</b></div>
         <div class="editor-actions">
+          <button class="secondary-action" :disabled="!canUndo" @click="undo" title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+          <button class="secondary-action" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Shift+Z)"><i class="bi bi-arrow-clockwise"></i></button>
+          <span class="editor-actions-divider"></span>
           <button class="secondary-action" @click="downloadSvg"><i class="bi bi-filetype-svg"></i> SVG</button>
           <button class="secondary-action" @click="downloadPng"><i class="bi bi-download"></i> PNG</button>
           <button class="primary-action compact" :disabled="saving" @click="saveDesign">{{ saving ? 'Saving…' : 'Save design' }}</button>
@@ -90,31 +93,17 @@
               </svg>
 
               <!-- Element bank: backdrop shapes (behind QR/copy/merchant/brandmark) -->
-              <div v-for="el in backCanvasElements" :key="el.id"
-                   class="canvas-el el--dyn"
-                   :class="{ selected: selectedElementId === el.id }"
-                   :style="dynElStyle(el)"
-                   @pointerdown="onCanvasElPointerDown(el.id, $event)"
-                   @click.stop="selectElement(el.id)">
-                <div class="dyn-shape" :style="dynShapeStyle(el)">
-                  <div v-if="el.kind === 'cta'"
-                       class="dyn-cta-text"
-                       :data-cta-text="el.id"
-                       :contenteditable="editingElementId === el.id"
-                       spellcheck="false"
-                       :style="dynCtaTextStyle(el)"
-                       @dblclick.stop="startCtaTextEdit(el.id, $event)"
-                       @blur="endCtaTextEdit"
-                       @keydown.escape="($event.target as HTMLElement).blur()"
-                       @input="el.text = ($event.target as HTMLElement).innerText"
-                  >{{ el.text }}</div>
-                </div>
-                <template v-if="selectedElementId === el.id">
-                  <div class="sel-ring"></div>
-                  <div class="resize-handle" @pointerdown.stop="startCanvasElResize(el.id, $event)" title="Drag to resize"></div>
-                  <button class="el-delete-btn" @click.stop="deleteElement(el.id)" title="Delete"><i class="bi bi-trash"></i></button>
-                </template>
-              </div>
+              <CanvasElementView v-for="el in backCanvasElements" :key="el.id"
+                   :el="el" :scale="canvasScale"
+                   :selected="selectedElementId === el.id"
+                   :editing="editingElementId === el.id"
+                   @pointerdown="onCanvasElPointerDown"
+                   @select="selectElement"
+                   @start-text-edit="startElementTextEdit"
+                   @end-text-edit="endElementTextEdit"
+                   @input-text="onElementInputText"
+                   @resize-pointerdown="startCanvasElResize"
+                   @delete="deleteElement" />
 
               <!-- QR Code element: full element is draggable -->
               <div class="canvas-el el--qr"
@@ -218,40 +207,35 @@
                      title="Drag to resize width"></div>
               </div>
 
-              <!-- Brand mark: locked, not interactive -->
-              <div v-if="vis.brandmark" class="canvas-el el--brandmark" :style="bmContainerStyle">
+              <!-- Brand mark: drag anywhere to move (Canva-style), corner handle to resize (locked aspect) -->
+              <div v-if="vis.brandmark"
+                   class="canvas-el el--brandmark"
+                   :class="{ selected: selectedEl === 'brandmark' }"
+                   :style="bmContainerStyle"
+                   @pointerdown.stop="startElDrag('brandmark', $event)"
+                   @click.stop="selectedEl = 'brandmark'; selectedElementId = null">
                 <img
                   :src="dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg'"
                   :style="bmImgStyle"
                   draggable="false">
-              </div>
-
-              <!-- Element bank: foreground shapes / CTA badges (above everything else) -->
-              <div v-for="el in frontCanvasElements" :key="el.id"
-                   class="canvas-el el--dyn"
-                   :class="{ selected: selectedElementId === el.id }"
-                   :style="dynElStyle(el)"
-                   @pointerdown="onCanvasElPointerDown(el.id, $event)"
-                   @click.stop="selectElement(el.id)">
-                <div class="dyn-shape" :style="dynShapeStyle(el)">
-                  <div v-if="el.kind === 'cta'"
-                       class="dyn-cta-text"
-                       :data-cta-text="el.id"
-                       :contenteditable="editingElementId === el.id"
-                       spellcheck="false"
-                       :style="dynCtaTextStyle(el)"
-                       @dblclick.stop="startCtaTextEdit(el.id, $event)"
-                       @blur="endCtaTextEdit"
-                       @keydown.escape="($event.target as HTMLElement).blur()"
-                       @input="el.text = ($event.target as HTMLElement).innerText"
-                  >{{ el.text }}</div>
-                </div>
-                <template v-if="selectedElementId === el.id">
+                <template v-if="selectedEl === 'brandmark'">
                   <div class="sel-ring"></div>
-                  <div class="resize-handle" @pointerdown.stop="startCanvasElResize(el.id, $event)" title="Drag to resize"></div>
-                  <button class="el-delete-btn" @click.stop="deleteElement(el.id)" title="Delete"><i class="bi bi-trash"></i></button>
+                  <div class="resize-handle" @pointerdown.stop="startBrandmarkResize" title="Drag to resize"></div>
                 </template>
               </div>
+
+              <!-- Element bank: foreground shapes / CTA badges / text / images (above everything else) -->
+              <CanvasElementView v-for="el in frontCanvasElements" :key="el.id"
+                   :el="el" :scale="canvasScale"
+                   :selected="selectedElementId === el.id"
+                   :editing="editingElementId === el.id"
+                   @pointerdown="onCanvasElPointerDown"
+                   @select="selectElement"
+                   @start-text-edit="startElementTextEdit"
+                   @end-text-edit="endElementTextEdit"
+                   @input-text="onElementInputText"
+                   @resize-pointerdown="startCanvasElResize"
+                   @delete="deleteElement" />
 
               <!-- Canva-style center snap guides -->
               <div v-if="snapGuides.centerX" class="snap-guide snap-guide--v" :style="{ left: (displayW / 2) + 'px' }"></div>
@@ -313,12 +297,17 @@
             </section>
             <section>
               <p class="panel-kicker">ELEMENT BANK</p>
-              <p class="field-hint" style="margin-bottom:10px">Shapes and CTA badges — click to drop one on the canvas, then drag, resize or edit it.</p>
+              <p class="field-hint" style="margin-bottom:10px">Text, shapes, CTA badges and images — click to drop one on the canvas, then drag, resize or edit it.</p>
               <div class="element-bank">
                 <button v-for="preset in ELEMENT_PRESETS" :key="preset.id" class="bank-item" @click="addElement(preset.id)" :title="'Add ' + preset.label">
                   <span class="bank-icon" v-html="preset.icon"></span>
                   <span>{{ preset.label }}</span>
                 </button>
+                <button class="bank-item" @click="imageFileInput?.click()" title="Upload an image">
+                  <span class="bank-icon"><i class="bi bi-image"></i></span>
+                  <span>Image</span>
+                </button>
+                <input ref="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" @change="onImageFileChosen">
               </div>
             </section>
             <section v-if="layerRows.length">
@@ -331,7 +320,7 @@
                   </div>
                   <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
                     <i class="bi bi-grip-vertical layer-grip"></i>
-                    <span class="layer-swatch" :style="{ background: el.fill }"></span>
+                    <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
                     <span class="layer-name">{{ layerLabel(el) }}</span>
                     <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
                     <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
@@ -403,13 +392,30 @@
             </section>
           </template>
 
-          <!-- Freeform shape / CTA badge selected -->
+          <!-- Brand mark selected -->
+          <template v-else-if="selectedEl === 'brandmark'">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">PESHKASH MARK</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move, corner handle to resize (aspect ratio locked).</p>
+            <section>
+              <div class="vis-toggles">
+                <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
+                  <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  Show mark
+                </button>
+              </div>
+            </section>
+          </template>
+
+          <!-- Freeform shape / CTA badge / text / image selected -->
           <template v-else-if="selectedElementId && selectedElement">
             <div class="panel-back-row">
               <button class="back-to-props" @click="selectedElementId = null"><i class="bi bi-arrow-left"></i></button>
-              <p class="panel-kicker">{{ selectedElement.kind === 'cta' ? 'CTA BADGE' : 'SHAPE' }}</p>
+              <p class="panel-kicker">{{ { shape: 'SHAPE', cta: 'CTA BADGE', text: 'TEXT', image: 'IMAGE' }[selectedElement.kind] }}</p>
             </div>
-            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta'">, double-click the label to edit it</span>.</p>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta' || selectedElement.kind === 'text'">, double-click the text to edit it</span>.</p>
             <section>
               <p class="panel-kicker" style="margin-bottom:10px">LAYER</p>
               <div class="vis-toggles">
@@ -421,12 +427,31 @@
                 </button>
               </div>
             </section>
-            <section>
+            <section v-if="selectedElement.kind === 'shape' || selectedElement.kind === 'cta'">
               <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
               <label>{{ selectedElement.kind === 'shape' && selectedElement.shape === 'frame' ? 'Border color' : 'Fill color' }}<input type="color" v-model="selectedElement.fill" class="color-input"></label>
               <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
               <label v-if="selectedElement.kind === 'shape' && (selectedElement.shape === 'rect' || selectedElement.shape === 'frame')">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
               <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+            </section>
+            <section v-else-if="selectedElement.kind === 'text'">
+              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200"></textarea></label>
+              <label>Font<select v-model="selectedElement.fontFamily" :style="{ fontFamily: selectedElement.fontFamily }">
+                <option v-for="f in TEXT_FONT_CHOICES" :key="f.value" :value="f.value" :style="{ fontFamily: f.value }">{{ f.label }}</option>
+              </select></label>
+              <label>Size<input type="number" min="8" max="400" v-model.number="selectedElement.fontSize"></label>
+              <div class="text-style-row">
+                <button class="vis-btn" :class="{ active: selectedElement.fontWeight === '700' }" @click="selectedElement.fontWeight = selectedElement.fontWeight === '700' ? '400' : '700'" title="Bold"><i class="bi bi-type-bold"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'left' }" @click="selectedElement.align = 'left'" title="Align left"><i class="bi bi-text-left"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'center' }" @click="selectedElement.align = 'center'" title="Align center"><i class="bi bi-text-center"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'right' }" @click="selectedElement.align = 'right'" title="Align right"><i class="bi bi-text-right"></i></button>
+              </div>
+              <label>Color<input type="color" v-model="selectedElement.color" class="color-input"></label>
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+            </section>
+            <section v-else-if="selectedElement.kind === 'image'">
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+              <button class="reset-btn" @click="imageFileInput?.click(); replacingImageId = selectedElementId"><i class="bi bi-arrow-repeat"></i> Replace image</button>
             </section>
             <div class="el-action-row">
               <button class="reset-btn" @click="duplicateElement(selectedElementId)"><i class="bi bi-copy"></i> Duplicate</button>
@@ -476,9 +501,10 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ElementLayer } from '../features/qrStudio/types';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement } from '../features/qrStudio/types';
 import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
-import { ELEMENT_PRESETS, clipPathFor, ribbonClipPath, BACKGROUND_PRESETS, inkForBackground } from '../features/qrStudio/elementPresets';
+import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES } from '../features/qrStudio/elementPresets';
+import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
 import '../features/qrStudio/qr-template-tokens.css';
 
 // Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
@@ -511,9 +537,13 @@ const creatorName = ref('');
 // ── Canvas state ──────────────────────────────────────────────────────────────
 const stageRef = ref<HTMLElement>();
 const canvasWrapRef = ref<HTMLElement>();
+const imageFileInput = ref<HTMLInputElement>();
+// Set right before opening the file picker from an existing image's "Replace image" action; if
+// set when a file is chosen, that image's src is swapped in place instead of adding a new element.
+const replacingImageId = ref<string | null>(null);
 const canvasScale = ref(0.5);
 const designKey = ref(0);
-const selectedEl = ref<'qr' | 'copy' | 'merchant' | null>(null);
+const selectedEl = ref<'qr' | 'copy' | 'merchant' | 'brandmark' | null>(null);
 // Which text line is currently in edit mode (contenteditable) — null means every element on the
 // canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
 const editingKey = ref<ElementKey | null>(null);
@@ -549,7 +579,7 @@ interface DragState { id: string; startCX: number; startCY: number; origX: numbe
 const dragState = ref<DragState | null>(null);
 // axis 'square' resizes both dimensions equally (QR); 'width' resizes only width (text blocks,
 // whose height is driven by content); 'free' resizes both independently (freeform shapes/CTAs)
-interface ResizeState { id: string; axis: 'square' | 'width' | 'free'; startCX: number; startCY: number; origW: number; origH: number }
+interface ResizeState { id: string; axis: 'square' | 'width' | 'free' | 'aspect'; startCX: number; startCY: number; origW: number; origH: number }
 const resizeState = ref<ResizeState | null>(null);
 const isDragging = ref(false);
 // Canva-style center snap guides — which axis the dragged element is currently snapped to
@@ -669,7 +699,7 @@ const merchantTextStyle = computed(() => ({
 // Brand mark: position the logo so its visual content (x:[335,1312] y:[164,415]) renders correctly
 const bmContainerStyle = computed((): Record<string, string> => {
   const { x, y, w, h } = elPos.value.brandmark; const s = canvasScale.value;
-  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden', pointerEvents: 'none' };
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
 });
 const bmImgStyle = computed((): Record<string, string> => {
   const { w: contentW, h: contentH } = elPos.value.brandmark; const s = canvasScale.value;
@@ -784,7 +814,7 @@ function startQrResize(e: PointerEvent): void {
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
-function startElDrag(id: 'copy' | 'merchant', e: PointerEvent): void {
+function startElDrag(id: 'copy' | 'merchant' | 'brandmark', e: PointerEvent): void {
   selectedEl.value = id;
   selectedElementId.value = null;
   const { x, y } = elPos.value[id];
@@ -799,15 +829,22 @@ function startElResize(id: 'copy' | 'merchant', e: PointerEvent): void {
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
 }
-// Grab-anywhere drag for the copy block / merchant name — Canva-style: pointerdown on the block
-// body starts a drag immediately, unless it landed on the one line currently in text-edit mode
-// (isContentEditable), in which case native cursor placement/selection takes over instead.
-function onBlockPointerDown(id: 'copy' | 'merchant', e: PointerEvent): void {
+// Uniform resize for the brand mark — aspect ratio must stay locked (the logo isn't square).
+function startBrandmarkResize(e: PointerEvent): void {
+  const { w, h } = elPos.value.brandmark;
+  resizeState.value = { id: 'brandmark', axis: 'aspect', startCX: e.clientX, startCY: e.clientY, origW: w, origH: h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Grab-anywhere drag for the copy block / merchant name / brand mark — Canva-style: pointerdown on
+// the block body starts a drag immediately, unless it landed on the one line currently in
+// text-edit mode (isContentEditable), in which case native cursor placement/selection takes over.
+function onBlockPointerDown(id: 'copy' | 'merchant' | 'brandmark', e: PointerEvent): void {
   if ((e.target as HTMLElement).isContentEditable) return;
   startElDrag(id, e);
 }
 
-// ── Element bank (freeform shapes / CTA badges) ───────────────────────────────
+// ── Element bank (freeform shapes / CTA badges / text / images) ───────────────
 function addElement(presetId: string): void {
   const preset = ELEMENT_PRESETS.find((p) => p.id === presetId);
   const t = activeTemplate.value;
@@ -817,6 +854,64 @@ function addElement(presetId: string): void {
   design.canvasElements.push(el);
   selectedEl.value = null;
   selectedElementId.value = el.id;
+}
+// Downscales an uploaded image client-side (long edge capped, re-encoded as JPEG) before storing
+// it as an inline data: URI — there's no asset-upload backend, and the design is persisted whole
+// as JSON, so keeping the payload small matters.
+const IMAGE_MAX_EDGE = 900;
+function downscaleImage(file: File): Promise<{ dataUrl: string; w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.85), w, h });
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+async function onImageFileChosen(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ''; // allow choosing the same file again later
+  const t = activeTemplate.value;
+  const replaceId = replacingImageId.value;
+  replacingImageId.value = null;
+  if (!file || !t) return;
+  try {
+    const { dataUrl, w, h } = await downscaleImage(file);
+    const existing = replaceId ? findCanvasEl(replaceId) : undefined;
+    if (existing && existing.kind === 'image') {
+      // Keep position + width, adjust height to the new image's aspect ratio.
+      existing.src = dataUrl;
+      existing.h = existing.w * (h / w);
+      return;
+    }
+    const short = Math.min(t.canvas.width, t.canvas.height);
+    const boxW = short * 0.4;
+    const boxH = boxW * (h / w);
+    const el: ImageElement = {
+      id: newId(), kind: 'image', src: dataUrl,
+      x: (t.canvas.width - boxW) / 2, y: (t.canvas.height - boxH) / 2,
+      w: boxW, h: boxH, opacity: 1, layer: 'front',
+    };
+    if (!design.canvasElements) design.canvasElements = [];
+    design.canvasElements.push(el);
+    selectedEl.value = null;
+    selectedElementId.value = el.id;
+  } catch {
+    notice.value = "Couldn't read that image — try a different file.";
+    window.setTimeout(() => { notice.value = ''; }, 3000);
+  }
 }
 function deleteElement(id: string): void {
   if (!design.canvasElements) return;
@@ -854,8 +949,17 @@ const layerRows = computed(() => {
 function layerLabel(el: CanvasElement): string {
   if (el.name) return el.name;
   if (el.kind === 'cta') return `${el.style === 'tag' ? 'Tag' : el.style === 'ribbon' ? 'Ribbon' : 'Button'}: ${el.text || 'CTA'}`;
+  if (el.kind === 'text') return `Text: ${el.text || 'empty'}`;
+  if (el.kind === 'image') return 'Image';
   const names: Record<string, string> = { rect: 'Rectangle', circle: 'Circle', line: 'Line', triangle: 'Triangle', star: 'Star', tag: 'Tag shape', hexagon: 'Hexagon', diamond: 'Diamond', arrow: 'Arrow', frame: 'Frame' };
   return names[el.shape] || 'Shape';
+}
+// Swatch color/thumbnail shown next to each row in the Layers panel — text and shapes/CTAs use
+// their color; images use their own thumbnail instead of a flat swatch.
+function layerSwatchStyle(el: CanvasElement): Record<string, string> {
+  if (el.kind === 'image') return { backgroundImage: `url(${el.src})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  if (el.kind === 'text') return { background: el.color };
+  return { background: el.fill };
 }
 // Moves an element one step toward the front (up) or back (down) WITHIN its own layer — array
 // order is stacking order, so this is a plain adjacent swap.
@@ -895,58 +999,20 @@ function onCanvasElPointerDown(id: string, e: PointerEvent): void {
   if ((e.target as HTMLElement).isContentEditable) return;
   startCanvasElDrag(id, e);
 }
-function startCtaTextEdit(id: string, e: MouseEvent): void {
+function startElementTextEdit(id: string, e: MouseEvent): void {
   editingElementId.value = id;
   const clientX = e.clientX, clientY = e.clientY;
   nextTick(() => {
-    const el = document.querySelector<HTMLElement>(`[data-cta-text="${id}"]`);
+    const el = document.querySelector<HTMLElement>(`[data-el-text="${id}"]`);
     if (!el) return;
     el.focus();
     placeCaretAt(el, clientX, clientY);
   });
 }
-function endCtaTextEdit(): void { editingElementId.value = null; }
-// Live-canvas positioning for a freeform element, in the same display-px space as the fixed slots.
-function dynElStyle(el: CanvasElement): Record<string, string> {
-  const s = canvasScale.value;
-  return { position: 'absolute', left: `${el.x * s}px`, top: `${el.y * s}px`, width: `${el.w * s}px`, height: `${el.h * s}px` };
-}
-// CTA label text style — font size tracks element height (matching the SVG export's 0.4 ratio)
-// scaled by the current canvas zoom, so it looks right at any display size.
-function dynCtaTextStyle(el: CanvasElement): Record<string, string> {
-  if (el.kind !== 'cta') return {};
-  const s = canvasScale.value;
-  const fontSize = Math.max(9, el.h * 0.4 * s);
-  return {
-    color: el.textColor,
-    fontSize: `${fontSize}px`,
-    justifyContent: el.style === 'tag' ? 'flex-start' : 'center',
-    paddingLeft: el.style === 'tag' ? '14%' : '0',
-  };
-}
-function dynShapeStyle(el: CanvasElement): Record<string, string> {
-  const style: Record<string, string> = { width: '100%', height: '100%', opacity: String(el.opacity ?? 1) };
-  if (el.kind === 'shape') {
-    if (el.shape === 'frame') {
-      const sw = Math.max(1.5, Math.min(el.w, el.h) * 0.025 * canvasScale.value);
-      style.background = 'transparent';
-      style.border = `${sw}px solid ${el.fill}`;
-      style.borderRadius = `${el.radius ?? 0}px`;
-      return style;
-    }
-    style.background = el.fill;
-    if (el.shape === 'circle') style.borderRadius = '50%';
-    else if (el.shape === 'rect') style.borderRadius = `${el.radius ?? 0}px`;
-    else if (el.shape === 'line') style.borderRadius = '999px';
-    const clip = clipPathFor(el.shape);
-    if (clip) style.clipPath = clip;
-  } else {
-    style.background = el.fill;
-    if (el.style === 'button') style.borderRadius = '999px';
-    const clip = el.style === 'tag' ? clipPathFor('tag') : el.style === 'ribbon' ? ribbonClipPath() : undefined;
-    if (clip) style.clipPath = clip;
-  }
-  return style;
+function endElementTextEdit(): void { editingElementId.value = null; }
+function onElementInputText(id: string, value: string): void {
+  const el = findCanvasEl(id);
+  if (el && (el.kind === 'cta' || el.kind === 'text')) el.text = value;
 }
 function textElFor(key: ElementKey): HTMLElement | undefined {
   switch (key) {
@@ -988,10 +1054,10 @@ function placeCaretAt(el: HTMLElement, x: number, y: number): void {
     sel?.addRange(range);
   }
 }
-// Resolves the mutable {x,y,w,h} for any draggable/resizable id — the three fixed slots (backed
+// Resolves the mutable {x,y,w,h} for any draggable/resizable id — the four fixed slots (backed
 // by elPos) or a freeform canvas element (backed by its own object in design.canvasElements).
 function getMutableRect(id: string): ElRect | undefined {
-  if (id === 'qr' || id === 'copy' || id === 'merchant') return elPos.value[id];
+  if (id === 'qr' || id === 'copy' || id === 'merchant' || id === 'brandmark') return elPos.value[id];
   return findCanvasEl(id);
 }
 function applyMove(e: PointerEvent): void {
@@ -1036,6 +1102,16 @@ function applyMove(e: PointerEvent): void {
         const maxW = t.canvas.width - el.x;
         const newW = Math.max(t.canvas.width * 0.12, Math.min(maxW, rs.origW + dCanvas));
         el.w = newW;
+      } else if (rs.axis === 'aspect') {
+        // Scale both dimensions by the same factor — preserves whatever aspect ratio the element
+        // started with (the brand mark's logo shape, unlike QR, isn't literally square).
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const minW = sh * 0.04;
+        const newW = Math.max(minW, rs.origW + dCanvas);
+        const factor = newW / rs.origW;
+        el.w = newW;
+        el.h = rs.origH * factor;
       } else {
         const sh = Math.min(t.canvas.width, t.canvas.height);
         const minSize = sh * 0.03;
@@ -1059,6 +1135,7 @@ function onWindowMove(e: PointerEvent): void {
 function onWindowUp(): void {
   if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null; }
   if (_lastMoveEvent) { applyMove(_lastMoveEvent); _lastMoveEvent = null; }
+  const hadGesture = !!(dragState.value || resizeState.value);
   isDragging.value = false;
   dragState.value = null;
   resizeState.value = null;
@@ -1066,15 +1143,30 @@ function onWindowUp(): void {
   window.removeEventListener('pointermove', onWindowMove);
   window.removeEventListener('pointerup', onWindowUp);
   window.removeEventListener('pointercancel', onWindowUp);
+  if (hadGesture) flushHistoryPush();
 }
 
 // ── Keyboard nudge — arrow keys move the selected element by a small step, Shift for a bigger one.
 // Delete/Backspace removes the selected freeform element (fixed slots use visibility toggles instead).
 function onCanvasKeydown(e: KeyboardEvent): void {
-  const activeId = selectedEl.value ?? selectedElementId.value;
-  if (mode.value !== 'editor' || editingKey.value || editingElementId.value || !activeId) return;
+  if (mode.value !== 'editor' || editingKey.value || editingElementId.value) return;
   const active = document.activeElement as HTMLElement | null;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+  // Undo/redo work with nothing selected — they don't depend on activeId below.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault();
+    redo();
+    return;
+  }
+
+  const activeId = selectedEl.value ?? selectedElementId.value;
+  if (!activeId) return;
 
   if (selectedElementId.value && (e.key === 'Delete' || e.key === 'Backspace')) {
     e.preventDefault();
@@ -1112,6 +1204,62 @@ const blankDesign = (): StudioDesign => ({
   canvasElements: [],
 });
 const design = reactive<StudioDesign>(blankDesign());
+
+// ── Undo / redo ────────────────────────────────────────────────────────────────
+// A design tool nobody trusts without undo. History is a stack of serialized {design, elPos}
+// snapshots — cheap enough for these small JSON payloads, and side-steps having to hand-write a
+// separate inverse for every kind of edit (drag, resize, color, text, add/delete...).
+interface HistorySnapshot { design: StudioDesign; elPos: typeof elPos.value }
+const HISTORY_LIMIT = 60;
+const historyStack = ref<string[]>([]);
+const historyIndex = ref(-1);
+let restoringHistory = false;
+const canUndo = computed(() => historyIndex.value > 0);
+const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1);
+function pushHistory(): void {
+  if (restoringHistory || mode.value !== 'editor') return;
+  const snap: HistorySnapshot = { design: JSON.parse(JSON.stringify(design)), elPos: JSON.parse(JSON.stringify(elPos.value)) };
+  const serialized = JSON.stringify(snap);
+  // Skip no-op pushes (nothing actually changed since the last snapshot).
+  if (historyStack.value[historyIndex.value] === serialized) return;
+  historyStack.value = historyStack.value.slice(0, historyIndex.value + 1);
+  historyStack.value.push(serialized);
+  if (historyStack.value.length > HISTORY_LIMIT) historyStack.value.shift();
+  historyIndex.value = historyStack.value.length - 1;
+}
+function restoreHistoryAt(index: number): void {
+  const raw = historyStack.value[index];
+  if (raw === undefined) return;
+  const snap: HistorySnapshot = JSON.parse(raw);
+  restoringHistory = true;
+  Object.assign(design, blankDesign(), snap.design);
+  elPos.value = snap.elPos;
+  selectedEl.value = null;
+  selectedElementId.value = null;
+  editingKey.value = null;
+  editingElementId.value = null;
+  historyIndex.value = index;
+  nextTick(() => { restoringHistory = false; });
+}
+function undo(): void { if (canUndo.value) restoreHistoryAt(historyIndex.value - 1); }
+function redo(): void { if (canRedo.value) restoreHistoryAt(historyIndex.value + 1); }
+// Rather than hand-instrument every mutation site (drag, resize, color pickers, text edits, add/
+// delete...), a debounced deep watch on the whole design + elPos catches everything generically:
+// one history entry ~500ms after edits settle. Drag-end also flushes immediately (see onWindowUp)
+// so undo lands cleanly on a completed gesture rather than waiting out the debounce.
+const HISTORY_DEBOUNCE_MS = 500;
+let historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleHistoryPush(): void {
+  if (restoringHistory || mode.value !== 'editor') return;
+  if (historyDebounceTimer) clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = setTimeout(() => { historyDebounceTimer = null; pushHistory(); }, HISTORY_DEBOUNCE_MS);
+}
+function flushHistoryPush(): void {
+  if (historyDebounceTimer) { clearTimeout(historyDebounceTimer); historyDebounceTimer = null; }
+  pushHistory();
+}
+watch(design, scheduleHistoryPush, { deep: true });
+watch(elPos, scheduleHistoryPush, { deep: true });
 
 // Helper: true = visible (default), false = hidden
 const vis = computed(() => ({
@@ -1284,7 +1432,16 @@ async function downloadPng(): Promise<void> {
   canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height); triggerDownload(canvas.toDataURL('image/png'), safeFilename('png'));
 }
 
-watch(activeTemplate, () => { if (activeTemplate.value) { initElPos(activeTemplate.value); nextTick(updateCanvasScale); } });
+watch(activeTemplate, () => {
+  if (!activeTemplate.value) return;
+  initElPos(activeTemplate.value);
+  nextTick(updateCanvasScale);
+  // Fresh template/design loaded — history should start clean from this exact baseline, not carry
+  // over undo entries from whatever was open before.
+  historyStack.value = [];
+  historyIndex.value = -1;
+  pushHistory();
+});
 onMounted(async () => {
   window.addEventListener('resize', updateCanvasScale);
   window.addEventListener('keydown', onCanvasKeydown);
@@ -1398,6 +1555,8 @@ onUnmounted(() => {
 .editor-title b{font:400 15px Rufina,serif}
 .editor-actions{justify-self:end;display:flex;gap:7px;align-items:center}
 .secondary-action{padding:9px;font-size:13px}
+.secondary-action:disabled{opacity:.35;cursor:default}
+.editor-actions-divider{width:1px;height:20px;background:rgba(245,242,238,.18);margin:0 2px}
 .primary-action{border:1px solid var(--gold);background:var(--gold);color:var(--ink)!important;padding:10px 16px;font-weight:700;display:inline-flex;align-items:center;gap:10px;cursor:pointer}
 .primary-action:hover{background:#d3ab76}
 .primary-action:disabled{opacity:.5;cursor:default}
@@ -1452,7 +1611,9 @@ onUnmounted(() => {
 .canvas-wrap.is-dragging .t-line{cursor:grabbing}
 
 /* Brand mark (locked) */
-.el--brandmark{pointer-events:none;overflow:hidden}
+.el--brandmark{cursor:grab;overflow:hidden}
+.el--brandmark:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
+.canvas-wrap.is-dragging .el--brandmark{cursor:grabbing}
 .el--brandmark img{pointer-events:none;display:block}
 
 /* Canva-style center snap guides */
@@ -1516,6 +1677,10 @@ onUnmounted(() => {
 .vis-btn:hover{border-color:var(--gold);color:var(--ink)}
 .vis-btn i{font-size:11px}
 .properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+.text-style-row{display:flex;gap:6px;margin-bottom:13px}
+.text-style-row .vis-btn{padding:6px 9px}
+.properties-panel select{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink)}
+.properties-panel select:focus{border-color:var(--gold)}
 
 /* ── Layers panel ── */
 .layers-list{display:flex;flex-direction:column;gap:2px}
@@ -1532,6 +1697,7 @@ onUnmounted(() => {
 
 /* ── Element bank ── */
 .element-bank{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .bank-item{border:1px solid #ddd4cc;background:#fff;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-size:10px;color:var(--muted);text-align:center}
 .bank-item:hover{border-color:var(--gold);color:var(--ink);background:#fdf8f2}
 .bank-icon{color:var(--ink);display:flex}
