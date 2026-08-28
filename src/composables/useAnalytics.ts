@@ -22,6 +22,9 @@ export interface AnalyticsContext {
   menuId?: number;
   itemId?: number;
   qrHash?: string;
+  // Per-call extra, currently only used by 'item_bookmark' — true when the item was just
+  // bookmarked, false when the bookmark was just removed.
+  bookmarked?: boolean;
 }
 
 export type ActionType =
@@ -35,7 +38,8 @@ export type ActionType =
   | 'item_expand'
   | 'vendor_contact_view'
   | 'menu_view'
-  | 'item_detail_view';
+  | 'item_detail_view'
+  | 'item_bookmark';
 
 function getStoredPhone(): string | null {
   try {
@@ -74,6 +78,7 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
       menu_id: merged.menuId,
       item_id: merged.itemId,
       qr_hash: merged.qrHash,
+      ...(merged.bookmarked !== undefined ? { bookmarked: merged.bookmarked } : {}),
     });
   }
 
