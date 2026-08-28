@@ -62,11 +62,11 @@
         <div class="idd-section-label">Activity</div>
         <div class="idd-chart-wrap">
           <ContactActionsChart
-            :scans-per-period="data.viewsPerPeriod"
-            :actions-per-period-by-type="data.actionsPerPeriodByType"
+            :scans-per-period="viewsPerPeriod"
+            :actions-per-period-by-type="actionsPerPeriodByType"
             :from="rangeFrom"
             :to="rangeTo"
-            :granularity="data.granularity"
+            :granularity="chartGranularity"
             scan-label="Views"
           />
         </div>
@@ -129,10 +129,13 @@ defineEmits<{ (e: 'update:modelValue', val: boolean): void }>();
 interface ItemAnalytics {
   totalViews: number;
   totalActions: number;
+  // New fields — not yet sent by the backend (same as VendorAnalyticsPanel's Summary type);
+  // fall back to the legacy viewsPerDay field below rather than assuming these exist.
+  viewsPerPeriod?: Array<{ period: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  granularity?: 'hour' | 'day';
+  // Legacy fields — currently the only ones the backend actually returns.
   viewsPerDay: Array<{ date: string; count: number }>;
-  viewsPerPeriod: Array<{ period: string; count: number }>;
-  actionsPerPeriodByType: Array<{ period: string; actionType: string; count: number }>;
-  granularity: 'hour' | 'day';
   actionBreakdown: Array<{ actionType: string; count: number }>;
   lastActivity: string | null;
   linkedQrHashes: string[];
@@ -160,6 +163,20 @@ const rangeFrom = computed(() => dateRange.value.from);
 const rangeTo   = computed(() => dateRange.value.to);
 
 const modelValue = computed(() => props.modelValue);
+
+// Backward compat: the backend doesn't currently send viewsPerPeriod/granularity for items at
+// all (same gap VendorAnalyticsPanel already works around) — without this, ContactActionsChart's
+// availableCtaTypes computed calls .map() directly on actionsPerPeriodByType and throws on
+// undefined, which aborts the whole render below the stats strip (chart/log/breakdown all go
+// blank). There's no per-period action breakdown to fall back to for items (unlike scans/views,
+// which have viewsPerDay) — CTA lines just won't chart over time until the backend adds it.
+const viewsPerPeriod = computed(() =>
+  (data.value?.viewsPerPeriod?.length
+    ? data.value.viewsPerPeriod
+    : (data.value?.viewsPerDay ?? []).map(r => ({ period: r.date, count: r.count })))
+);
+const actionsPerPeriodByType = computed(() => data.value?.actionsPerPeriodByType ?? []);
+const chartGranularity = computed(() => data.value?.granularity ?? 'day');
 
 const engagementRate = computed(() => {
   const v = data.value?.totalViews ?? 0;
