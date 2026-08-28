@@ -70,11 +70,11 @@
         <div class="iap-section-label">Activity</div>
         <div class="iap-chart-wrap">
           <ContactActionsChart
-            :scans-per-period="data.viewsPerPeriod"
-            :actions-per-period-by-type="data.actionsPerPeriodByType"
+            :scans-per-period="viewsPerPeriod"
+            :actions-per-period-by-type="actionsPerPeriodByType"
             :from="rangeFrom"
             :to="rangeTo"
-            :granularity="data.granularity"
+            :granularity="chartGranularity"
             scan-label="Views"
           />
         </div>
@@ -126,10 +126,16 @@ type RangeValue = typeof RANGES[number]['value'];
 interface ItemAnalytics {
   totalViews: number;
   totalActions: number;
+  // New fields — not yet sent by the backend (checked AnalyticsQueryService.ts: no analytics
+  // endpoint currently returns these); fall back to viewsPerDay below rather than assuming they
+  // exist. Without this fallback, ContactActionsChart's availableCtaTypes computed calls .map()
+  // directly on actionsPerPeriodByType and throws on undefined during setup, which aborts
+  // rendering everything after it in this template (chart/breakdown/QR badges all go blank).
+  viewsPerPeriod?: Array<{ period: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  granularity?: 'hour' | 'day';
+  // Legacy fields — currently the only ones the backend actually returns.
   viewsPerDay: Array<{ date: string; count: number }>;
-  viewsPerPeriod: Array<{ period: string; count: number }>;
-  actionsPerPeriodByType: Array<{ period: string; actionType: string; count: number }>;
-  granularity: 'hour' | 'day';
   actionBreakdown: Array<{ actionType: string; count: number }>;
   lastActivity: string | null;
   linkedQrHashes: string[];
@@ -153,6 +159,14 @@ const data     = ref<ItemAnalytics | null>(null);
 const range    = ref<RangeValue>('30d');
 const rangeTo  = ref(new Date());
 const rangeFrom = ref(new Date(Date.now() - 30 * 24 * 3600 * 1000));
+
+const viewsPerPeriod = computed(() =>
+  (data.value?.viewsPerPeriod?.length
+    ? data.value.viewsPerPeriod
+    : (data.value?.viewsPerDay ?? []).map(r => ({ period: r.date, count: r.count })))
+);
+const actionsPerPeriodByType = computed(() => data.value?.actionsPerPeriodByType ?? []);
+const chartGranularity = computed(() => data.value?.granularity ?? 'day');
 
 const engagementRate = computed(() => {
   const v = data.value?.totalViews ?? 0;

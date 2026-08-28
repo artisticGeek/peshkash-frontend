@@ -115,6 +115,11 @@ const routes: Array<RouteRecordRaw> = [
     name: 'DashboardQrTemplates',
     component: () => import('./pages/AdminDashboard.vue'),
   },
+  ...(import.meta.env.DEV || import.meta.env.VITE_STUDIO_PREVIEW === 'true' ? [{
+    path: '/dev/qr-studio',
+    name: 'DevQrStudio',
+    component: () => import('./pages/QrTemplatePage.vue'),
+  }] : []),
   {
     path: '/dashboard/analytics',
     name: 'DashboardAnalytics',

@@ -1,0 +1,1175 @@
+{
+  "version": "3.1.0",
+  "librarySize": 30,
+  "coordinateSystem": "normalized-0-to-1",
+  "sizeReference": "shorter-canvas-side",
+  "assetPattern": "SVG/Template-Library/{styleFolder}/{file}",
+  "qrStandard": {
+    "quietZoneModules": 4,
+    "foreground": "#1A1410",
+    "background": "#FFFFFF",
+    "errorCorrection": "H required",
+    "moduleShape": "rounded-square",
+    "finderShape": "rounded-square-with-round-core",
+    "approvedLogoOverlay": "compact-framed-P-medallion",
+    "minimumPrintSizeMm": 24,
+    "minimumDigitalSizePx": 160,
+    "minimumRasterModulePixels": 4,
+    "recommendedPrintModuleMm": 0.4,
+    "destinationPolicy": "short-owned-https-redirect"
+  },
+  "qrStyles": {
+    "obsidian-ring": {
+      "label": "Obsidian Ring",
+      "folder": "Obsidian-Ring",
+      "medallion": "compact near-black seal with white isolation ring",
+      "moduleRadiusCells": 0.28,
+      "finderRadiusCells": 1.35,
+      "medallionFill": "#1A1410",
+      "medallionStroke": "#BB9057",
+      "medallionRatio": 0.12,
+      "medallionIconRatio": 0.64,
+      "isolationInnerRatio": 0.91,
+      "finderCore": "#6F4A2C",
+      "maskPolicy": "minimize-center-overlay-damage",
+      "required": true
+    },
+    "porcelain-cameo": {
+      "label": "Porcelain Cameo",
+      "folder": "Porcelain-Cameo",
+      "medallion": "compact cream cameo with warm stone edge",
+      "moduleRadiusCells": 0.27,
+      "finderRadiusCells": 1.35,
+      "medallionFill": "#F5F2EE",
+      "medallionStroke": "#C5AF9D",
+      "medallionRatio": 0.172,
+      "medallionIconRatio": 0.62,
+      "finderCore": "#1A1410",
+      "maskPolicy": "encoder-default",
+      "required": true
+    }
+  },
+  "categories": {
+    "contact-networking": "Contact & networking",
+    "art-exhibition": "Art & exhibition",
+    "food-hospitality": "Food & hospitality",
+    "product-retail": "Product & retail",
+    "services-booking": "Services & booking",
+    "events-education": "Events & education"
+  },
+  "tagTaxonomy": [
+    "aftercare",
+    "allergens",
+    "appointments",
+    "archive",
+    "art",
+    "art-label",
+    "artisan",
+    "artist",
+    "artwork",
+    "authenticity",
+    "baker",
+    "booking",
+    "cafe",
+    "care",
+    "caterer",
+    "certificate",
+    "check-in",
+    "classes",
+    "community",
+    "consultant",
+    "contact-card",
+    "counter-plate",
+    "craft",
+    "creator",
+    "curatorial",
+    "designer",
+    "education",
+    "entry",
+    "event",
+    "events",
+    "exhibition",
+    "flyer",
+    "follow",
+    "food",
+    "food-stall",
+    "furniture",
+    "gallery",
+    "hang-tag",
+    "hospitality",
+    "insert",
+    "jewellery",
+    "listing",
+    "local-business",
+    "loyalty",
+    "luxury",
+    "maker",
+    "market",
+    "market-stall",
+    "menu",
+    "museum",
+    "networking",
+    "object-label",
+    "ordering",
+    "packaging",
+    "painter",
+    "painting",
+    "photographer",
+    "portfolio",
+    "postcard",
+    "product-care",
+    "product-sticker",
+    "product-tag",
+    "professional",
+    "programme",
+    "property",
+    "provenance",
+    "real-estate",
+    "registration",
+    "reorder",
+    "repair",
+    "restaurant",
+    "retail",
+    "round",
+    "salon",
+    "service-tag",
+    "services",
+    "showroom",
+    "small-format",
+    "social",
+    "square",
+    "street-food",
+    "studio",
+    "table-menu",
+    "takeaway",
+    "ticket",
+    "tutor",
+    "unboxing",
+    "vendor",
+    "visitor",
+    "wall-label",
+    "wedding"
+  ],
+  "templates": [
+    {
+      "id": "contact-card-creative",
+      "index": 1,
+      "label": "Creative contact card",
+      "category": "contact-networking",
+      "categoryLabel": "Contact & networking",
+      "tags": [
+        "contact-card",
+        "artist",
+        "portfolio",
+        "networking"
+      ],
+      "format": "landscape",
+      "file": "01-contact-card-creative.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "Noor Ceramics",
+      "defaultCopy": {
+        "eyebrow": "CREATIVE CONTACT",
+        "headline": "Take my work with you.",
+        "descriptor": "Portfolio · commissions · studio visits",
+        "cta": "SCAN MY PORTFOLIO"
+      },
+      "sampleDestination": "https://pksh.example/01",
+      "qr": {
+        "x": 0.598333,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "contact-card-professional",
+      "index": 2,
+      "label": "Professional contact card",
+      "category": "contact-networking",
+      "categoryLabel": "Contact & networking",
+      "tags": [
+        "contact-card",
+        "consultant",
+        "professional",
+        "networking"
+      ],
+      "format": "landscape",
+      "file": "02-contact-card-professional.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "dark",
+      "merchantType": "Ira Advisory",
+      "defaultCopy": {
+        "eyebrow": "PROFESSIONAL CONTACT",
+        "headline": "Let’s continue the conversation.",
+        "descriptor": "Profile · services · contact",
+        "cta": "SAVE MY DETAILS"
+      },
+      "sampleDestination": "https://pksh.example/02",
+      "qr": {
+        "x": 0.06,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "contact-card-maker",
+      "index": 3,
+      "label": "Maker contact card",
+      "category": "contact-networking",
+      "categoryLabel": "Contact & networking",
+      "tags": [
+        "contact-card",
+        "maker",
+        "artisan",
+        "craft"
+      ],
+      "format": "landscape",
+      "file": "03-contact-card-maker.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "Kora Workshop",
+      "defaultCopy": {
+        "eyebrow": "MADE BY HAND",
+        "headline": "See what I make next.",
+        "descriptor": "Objects · process · custom orders",
+        "cta": "MEET THE MAKER"
+      },
+      "sampleDestination": "https://pksh.example/03",
+      "qr": {
+        "x": 0.06,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "portfolio-postcard",
+      "index": 4,
+      "label": "Portfolio postcard",
+      "category": "contact-networking",
+      "categoryLabel": "Contact & networking",
+      "tags": [
+        "portfolio",
+        "postcard",
+        "designer",
+        "photographer"
+      ],
+      "format": "landscape",
+      "file": "04-portfolio-postcard.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "dark",
+      "merchantType": "Aarav Studio",
+      "defaultCopy": {
+        "eyebrow": "SELECTED WORK",
+        "headline": "A portfolio that travels.",
+        "descriptor": "Projects · case studies · enquiries",
+        "cta": "VIEW PORTFOLIO"
+      },
+      "sampleDestination": "https://pksh.example/04",
+      "qr": {
+        "x": 0.598333,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "social-follow-card",
+      "index": 5,
+      "label": "Social follow card",
+      "category": "contact-networking",
+      "categoryLabel": "Contact & networking",
+      "tags": [
+        "social",
+        "creator",
+        "follow",
+        "community"
+      ],
+      "format": "square",
+      "file": "05-social-follow-card.svg",
+      "canvas": {
+        "width": 800,
+        "height": 800
+      },
+      "ratio": "800:800",
+      "defaultTheme": "light",
+      "merchantType": "The Local Edit",
+      "defaultCopy": {
+        "eyebrow": "FOLLOW ALONG",
+        "headline": "New stories, every week.",
+        "descriptor": "Instagram · updates · new drops",
+        "cta": "SCAN TO FOLLOW"
+      },
+      "sampleDestination": "https://pksh.example/05",
+      "qr": {
+        "x": 0.28125,
+        "y": 0.28125,
+        "size": 0.4375
+      }
+    },
+    {
+      "id": "artist-artwork-tag",
+      "index": 6,
+      "label": "Artist artwork tag",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "artist",
+        "artwork",
+        "hang-tag",
+        "provenance"
+      ],
+      "format": "tag",
+      "file": "06-artist-artwork-tag.svg",
+      "canvas": {
+        "width": 600,
+        "height": 1080
+      },
+      "ratio": "600:1080",
+      "defaultTheme": "light",
+      "merchantType": "Mira Sen",
+      "defaultCopy": {
+        "eyebrow": "ORIGINAL WORK",
+        "headline": "Study No. 14",
+        "descriptor": "Process · provenance · available pieces",
+        "cta": "MEET THE WORK"
+      },
+      "sampleDestination": "https://pksh.example/06",
+      "qr": {
+        "x": 0.208333,
+        "y": 0.319444,
+        "size": 0.583333
+      }
+    },
+    {
+      "id": "painter-title-card",
+      "index": 7,
+      "label": "Painter title card",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "painter",
+        "painting",
+        "art-label",
+        "portfolio"
+      ],
+      "format": "label",
+      "file": "07-painter-title-card.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "Rohan Bedi",
+      "defaultCopy": {
+        "eyebrow": "PAINTING LABEL",
+        "headline": "Monsoon Field, 2026",
+        "descriptor": "Oil and mineral pigment on linen",
+        "cta": "VIEW THE SERIES"
+      },
+      "sampleDestination": "https://pksh.example/07",
+      "qr": {
+        "x": 0.058333,
+        "y": 0.242857,
+        "size": 0.514286
+      }
+    },
+    {
+      "id": "exhibition-wall-label",
+      "index": 8,
+      "label": "Exhibition wall label",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "exhibition",
+        "wall-label",
+        "gallery",
+        "curatorial"
+      ],
+      "format": "label",
+      "file": "08-exhibition-wall-label.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "dark",
+      "merchantType": "Thresholds",
+      "defaultCopy": {
+        "eyebrow": "EXHIBITION NOTE",
+        "headline": "The room continues online.",
+        "descriptor": "Curator’s note · artists · programme",
+        "cta": "EXPLORE EXHIBITION"
+      },
+      "sampleDestination": "https://pksh.example/08",
+      "qr": {
+        "x": 0.641667,
+        "y": 0.242857,
+        "size": 0.514286
+      }
+    },
+    {
+      "id": "gallery-takeaway-card",
+      "index": 9,
+      "label": "Gallery takeaway card",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "gallery",
+        "takeaway",
+        "visitor",
+        "art"
+      ],
+      "format": "portrait",
+      "file": "09-gallery-takeaway-card.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "light",
+      "merchantType": "Gallery 27",
+      "defaultCopy": {
+        "eyebrow": "TAKE THE SHOW HOME",
+        "headline": "Visitors leave. The work stays.",
+        "descriptor": "Artists · essays · future exhibitions",
+        "cta": "KEEP EXPLORING"
+      },
+      "sampleDestination": "https://pksh.example/09",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "museum-object-label",
+      "index": 10,
+      "label": "Museum object label",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "museum",
+        "object-label",
+        "archive",
+        "education"
+      ],
+      "format": "label",
+      "file": "10-museum-object-label.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "City Museum",
+      "defaultCopy": {
+        "eyebrow": "OBJECT 041",
+        "headline": "A story beyond the glass.",
+        "descriptor": "History · audio · related objects",
+        "cta": "DISCOVER THE STORY"
+      },
+      "sampleDestination": "https://pksh.example/10",
+      "qr": {
+        "x": 0.641667,
+        "y": 0.242857,
+        "size": 0.514286
+      }
+    },
+    {
+      "id": "craft-market-tag",
+      "index": 11,
+      "label": "Craft market tag",
+      "category": "art-exhibition",
+      "categoryLabel": "Art & exhibition",
+      "tags": [
+        "craft",
+        "market-stall",
+        "maker",
+        "hang-tag"
+      ],
+      "format": "tag",
+      "file": "11-craft-market-tag.svg",
+      "canvas": {
+        "width": 600,
+        "height": 1080
+      },
+      "ratio": "600:1080",
+      "defaultTheme": "dark",
+      "merchantType": "Rasa Loom",
+      "defaultCopy": {
+        "eyebrow": "HANDWOVEN",
+        "headline": "Made slowly. Remembered easily.",
+        "descriptor": "Maker · materials · reorder",
+        "cta": "SAVE THIS MAKER"
+      },
+      "sampleDestination": "https://pksh.example/11",
+      "qr": {
+        "x": 0.208333,
+        "y": 0.319444,
+        "size": 0.583333
+      }
+    },
+    {
+      "id": "product-sticker-square",
+      "index": 12,
+      "label": "Square product sticker",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "product-sticker",
+        "square",
+        "packaging",
+        "retail"
+      ],
+      "format": "square",
+      "file": "12-product-sticker-square.svg",
+      "canvas": {
+        "width": 800,
+        "height": 800
+      },
+      "ratio": "800:800",
+      "defaultTheme": "dark",
+      "merchantType": "Saanjh",
+      "defaultCopy": {
+        "eyebrow": "MADE WITH INTENTION",
+        "headline": "Know what you’re holding.",
+        "descriptor": "Ingredients · maker · reorder",
+        "cta": "SCAN FOR DETAILS"
+      },
+      "sampleDestination": "https://pksh.example/12",
+      "qr": {
+        "x": 0.28125,
+        "y": 0.28125,
+        "size": 0.4375
+      }
+    },
+    {
+      "id": "product-sticker-round",
+      "index": 13,
+      "label": "Round product sticker",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "product-sticker",
+        "round",
+        "packaging",
+        "small-format"
+      ],
+      "format": "round",
+      "file": "13-product-sticker-round.svg",
+      "canvas": {
+        "width": 900,
+        "height": 900
+      },
+      "ratio": "900:900",
+      "defaultTheme": "light",
+      "merchantType": "Kansa & Co.",
+      "defaultCopy": {
+        "eyebrow": "CRAFTED IN INDIA",
+        "headline": "The object has a story.",
+        "descriptor": "Material · care · provenance",
+        "cta": "OPEN THE STORY"
+      },
+      "sampleDestination": "https://pksh.example/13",
+      "qr": {
+        "x": 0.316667,
+        "y": 0.294444,
+        "size": 0.366667
+      }
+    },
+    {
+      "id": "product-care-card",
+      "index": 14,
+      "label": "Product care card",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "product-care",
+        "aftercare",
+        "retail",
+        "insert"
+      ],
+      "format": "insert",
+      "file": "14-product-care-card.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1000
+      },
+      "ratio": "800:1000",
+      "defaultTheme": "light",
+      "merchantType": "Nivasa",
+      "defaultCopy": {
+        "eyebrow": "CARE INSTRUCTIONS",
+        "headline": "Made to last longer.",
+        "descriptor": "Cleaning · storage · repairs",
+        "cta": "VIEW CARE GUIDE"
+      },
+      "sampleDestination": "https://pksh.example/14",
+      "qr": {
+        "x": 0.275,
+        "y": 0.315,
+        "size": 0.45
+      }
+    },
+    {
+      "id": "packaging-insert",
+      "index": 15,
+      "label": "Packaging insert",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "packaging",
+        "insert",
+        "unboxing",
+        "reorder"
+      ],
+      "format": "insert",
+      "file": "15-packaging-insert.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1000
+      },
+      "ratio": "800:1000",
+      "defaultTheme": "dark",
+      "merchantType": "Aamra Goods",
+      "defaultCopy": {
+        "eyebrow": "THANK YOU",
+        "headline": "This is only the beginning.",
+        "descriptor": "Story · care · reorder",
+        "cta": "STAY CONNECTED"
+      },
+      "sampleDestination": "https://pksh.example/15",
+      "qr": {
+        "x": 0.275,
+        "y": 0.315,
+        "size": 0.45
+      }
+    },
+    {
+      "id": "jewellery-authenticity-card",
+      "index": 16,
+      "label": "Jewellery authenticity card",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "jewellery",
+        "authenticity",
+        "certificate",
+        "luxury"
+      ],
+      "format": "portrait",
+      "file": "16-jewellery-authenticity-card.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "dark",
+      "merchantType": "Aabha Jewels",
+      "defaultCopy": {
+        "eyebrow": "AUTHENTICITY CARD",
+        "headline": "Crafted once. Recorded forever.",
+        "descriptor": "Materials · artisan · certificate",
+        "cta": "VERIFY THIS PIECE"
+      },
+      "sampleDestination": "https://pksh.example/16",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "furniture-product-tag",
+      "index": 17,
+      "label": "Furniture product tag",
+      "category": "product-retail",
+      "categoryLabel": "Product & retail",
+      "tags": [
+        "furniture",
+        "product-tag",
+        "care",
+        "showroom"
+      ],
+      "format": "tag",
+      "file": "17-furniture-product-tag.svg",
+      "canvas": {
+        "width": 600,
+        "height": 1080
+      },
+      "ratio": "600:1080",
+      "defaultTheme": "light",
+      "merchantType": "Taal Furniture",
+      "defaultCopy": {
+        "eyebrow": "OBJECT NO. 28",
+        "headline": "Built for a longer life.",
+        "descriptor": "Wood · dimensions · care",
+        "cta": "SEE FULL DETAILS"
+      },
+      "sampleDestination": "https://pksh.example/17",
+      "qr": {
+        "x": 0.208333,
+        "y": 0.319444,
+        "size": 0.583333
+      }
+    },
+    {
+      "id": "baker-box-sticker",
+      "index": 18,
+      "label": "Baker box sticker",
+      "category": "food-hospitality",
+      "categoryLabel": "Food & hospitality",
+      "tags": [
+        "baker",
+        "food",
+        "product-sticker",
+        "allergens"
+      ],
+      "format": "square",
+      "file": "18-baker-box-sticker.svg",
+      "canvas": {
+        "width": 800,
+        "height": 800
+      },
+      "ratio": "800:800",
+      "defaultTheme": "light",
+      "merchantType": "Maya Bakes",
+      "defaultCopy": {
+        "eyebrow": "BAKED THIS MORNING",
+        "headline": "Loved beyond the counter.",
+        "descriptor": "Ingredients · allergens · reorder",
+        "cta": "ORDER AGAIN"
+      },
+      "sampleDestination": "https://pksh.example/18",
+      "qr": {
+        "x": 0.28125,
+        "y": 0.28125,
+        "size": 0.4375
+      }
+    },
+    {
+      "id": "caterer-menu-card",
+      "index": 19,
+      "label": "Caterer menu card",
+      "category": "food-hospitality",
+      "categoryLabel": "Food & hospitality",
+      "tags": [
+        "caterer",
+        "menu",
+        "events",
+        "contact-card"
+      ],
+      "format": "landscape",
+      "file": "19-caterer-menu-card.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "dark",
+      "merchantType": "Daawat Kitchen",
+      "defaultCopy": {
+        "eyebrow": "CATERING MENU",
+        "headline": "A feast begins with one scan.",
+        "descriptor": "Menus · packages · availability",
+        "cta": "PLAN YOUR TABLE"
+      },
+      "sampleDestination": "https://pksh.example/19",
+      "qr": {
+        "x": 0.598333,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "restaurant-table-menu",
+      "index": 20,
+      "label": "Restaurant table menu",
+      "category": "food-hospitality",
+      "categoryLabel": "Food & hospitality",
+      "tags": [
+        "restaurant",
+        "table-menu",
+        "hospitality",
+        "ordering"
+      ],
+      "format": "portrait",
+      "file": "20-restaurant-table-menu.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "dark",
+      "merchantType": "Mitti & Steam",
+      "defaultCopy": {
+        "eyebrow": "TABLE 08",
+        "headline": "Today’s menu, one scan away.",
+        "descriptor": "Seasonal dishes · allergens · specials",
+        "cta": "VIEW MENU"
+      },
+      "sampleDestination": "https://pksh.example/20",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "cafe-counter-plate",
+      "index": 21,
+      "label": "Café counter plate",
+      "category": "food-hospitality",
+      "categoryLabel": "Food & hospitality",
+      "tags": [
+        "cafe",
+        "counter-plate",
+        "menu",
+        "loyalty"
+      ],
+      "format": "portrait",
+      "file": "21-cafe-counter-plate.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "light",
+      "merchantType": "Third Cup",
+      "defaultCopy": {
+        "eyebrow": "AT THE COUNTER",
+        "headline": "Your next cup starts here.",
+        "descriptor": "Menu · beans · loyalty",
+        "cta": "SCAN THE COUNTER"
+      },
+      "sampleDestination": "https://pksh.example/21",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "food-stall-sign",
+      "index": 22,
+      "label": "Food stall sign",
+      "category": "food-hospitality",
+      "categoryLabel": "Food & hospitality",
+      "tags": [
+        "food-stall",
+        "market",
+        "menu",
+        "street-food"
+      ],
+      "format": "landscape",
+      "file": "22-food-stall-sign.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "dark",
+      "merchantType": "Gali No. 5",
+      "defaultCopy": {
+        "eyebrow": "TODAY AT THE STALL",
+        "headline": "Find us after the market.",
+        "descriptor": "Menu · location · next pop-up",
+        "cta": "SAVE THIS STALL"
+      },
+      "sampleDestination": "https://pksh.example/22",
+      "qr": {
+        "x": 0.06,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "salon-booking-card",
+      "index": 23,
+      "label": "Salon booking card",
+      "category": "services-booking",
+      "categoryLabel": "Services & booking",
+      "tags": [
+        "salon",
+        "booking",
+        "services",
+        "contact-card"
+      ],
+      "format": "landscape",
+      "file": "23-salon-booking-card.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "Aranya Salon",
+      "defaultCopy": {
+        "eyebrow": "BOOK YOUR NEXT VISIT",
+        "headline": "Your chair is one scan away.",
+        "descriptor": "Services · prices · available slots",
+        "cta": "BOOK NOW"
+      },
+      "sampleDestination": "https://pksh.example/23",
+      "qr": {
+        "x": 0.598333,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "studio-booking-plate",
+      "index": 24,
+      "label": "Studio booking plate",
+      "category": "services-booking",
+      "categoryLabel": "Services & booking",
+      "tags": [
+        "studio",
+        "booking",
+        "counter-plate",
+        "appointments"
+      ],
+      "format": "portrait",
+      "file": "24-studio-booking-plate.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "dark",
+      "merchantType": "Stillroom Studio",
+      "defaultCopy": {
+        "eyebrow": "APPOINTMENTS",
+        "headline": "Make time for the work.",
+        "descriptor": "Sessions · availability · directions",
+        "cta": "RESERVE A SLOT"
+      },
+      "sampleDestination": "https://pksh.example/24",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "repair-service-tag",
+      "index": 25,
+      "label": "Repair service tag",
+      "category": "services-booking",
+      "categoryLabel": "Services & booking",
+      "tags": [
+        "repair",
+        "service-tag",
+        "aftercare",
+        "local-business"
+      ],
+      "format": "tag",
+      "file": "25-repair-service-tag.svg",
+      "canvas": {
+        "width": 600,
+        "height": 1080
+      },
+      "ratio": "600:1080",
+      "defaultTheme": "light",
+      "merchantType": "Fix & Form",
+      "defaultCopy": {
+        "eyebrow": "REPAIR RECORD",
+        "headline": "Don’t replace it yet.",
+        "descriptor": "Status · warranty · contact",
+        "cta": "TRACK THIS REPAIR"
+      },
+      "sampleDestination": "https://pksh.example/25",
+      "qr": {
+        "x": 0.208333,
+        "y": 0.319444,
+        "size": 0.583333
+      }
+    },
+    {
+      "id": "tutor-class-flyer",
+      "index": 26,
+      "label": "Tutor class flyer",
+      "category": "events-education",
+      "categoryLabel": "Events & education",
+      "tags": [
+        "tutor",
+        "classes",
+        "education",
+        "flyer"
+      ],
+      "format": "portrait",
+      "file": "26-tutor-class-flyer.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "light",
+      "merchantType": "North Star Tuition",
+      "defaultCopy": {
+        "eyebrow": "NEW BATCH",
+        "headline": "Learn what finally makes sense.",
+        "descriptor": "Subjects · schedule · enquiry",
+        "cta": "VIEW CLASS DETAILS"
+      },
+      "sampleDestination": "https://pksh.example/26",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "event-checkin-pass",
+      "index": 27,
+      "label": "Event check-in pass",
+      "category": "events-education",
+      "categoryLabel": "Events & education",
+      "tags": [
+        "event",
+        "check-in",
+        "ticket",
+        "registration"
+      ],
+      "format": "ticket",
+      "file": "27-event-checkin-pass.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 500
+      },
+      "ratio": "1200:500",
+      "defaultTheme": "dark",
+      "merchantType": "Neighbourhood Design Day",
+      "defaultCopy": {
+        "eyebrow": "ENTRY PASS",
+        "headline": "You’re on the list.",
+        "descriptor": "Schedule · venue · check-in",
+        "cta": "OPEN EVENT PASS"
+      },
+      "sampleDestination": "https://pksh.example/27",
+      "qr": {
+        "x": 0.7,
+        "y": 0.16,
+        "size": 0.68
+      }
+    },
+    {
+      "id": "wedding-vendor-card",
+      "index": 28,
+      "label": "Wedding vendor card",
+      "category": "events-education",
+      "categoryLabel": "Events & education",
+      "tags": [
+        "wedding",
+        "vendor",
+        "portfolio",
+        "contact-card"
+      ],
+      "format": "landscape",
+      "file": "28-wedding-vendor-card.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 700
+      },
+      "ratio": "1200:700",
+      "defaultTheme": "light",
+      "merchantType": "Phool & Thread",
+      "defaultCopy": {
+        "eyebrow": "WEDDING FLORALS",
+        "headline": "Keep the celebration growing.",
+        "descriptor": "Portfolio · packages · enquiries",
+        "cta": "VIEW WEDDING WORK"
+      },
+      "sampleDestination": "https://pksh.example/28",
+      "qr": {
+        "x": 0.06,
+        "y": 0.207143,
+        "size": 0.585714
+      }
+    },
+    {
+      "id": "real-estate-property-card",
+      "index": 29,
+      "label": "Property information card",
+      "category": "services-booking",
+      "categoryLabel": "Services & booking",
+      "tags": [
+        "real-estate",
+        "property",
+        "listing",
+        "booking"
+      ],
+      "format": "portrait",
+      "file": "29-real-estate-property-card.svg",
+      "canvas": {
+        "width": 800,
+        "height": 1200
+      },
+      "ratio": "800:1200",
+      "defaultTheme": "dark",
+      "merchantType": "House No. 17",
+      "defaultCopy": {
+        "eyebrow": "PROPERTY DETAILS",
+        "headline": "Everything beyond the front door.",
+        "descriptor": "Plan · amenities · viewing slots",
+        "cta": "EXPLORE PROPERTY"
+      },
+      "sampleDestination": "https://pksh.example/29",
+      "qr": {
+        "x": 0.225,
+        "y": 0.3,
+        "size": 0.55
+      }
+    },
+    {
+      "id": "exhibition-entry-card",
+      "index": 30,
+      "label": "Exhibition entry card",
+      "category": "events-education",
+      "categoryLabel": "Events & education",
+      "tags": [
+        "exhibition",
+        "entry",
+        "ticket",
+        "programme"
+      ],
+      "format": "ticket",
+      "file": "30-exhibition-entry-card.svg",
+      "canvas": {
+        "width": 1200,
+        "height": 500
+      },
+      "ratio": "1200:500",
+      "defaultTheme": "light",
+      "merchantType": "Open Studios Weekend",
+      "defaultCopy": {
+        "eyebrow": "VISITOR ENTRY",
+        "headline": "Your route through the studios.",
+        "descriptor": "Map · artists · live programme",
+        "cta": "OPEN VISITOR GUIDE"
+      },
+      "sampleDestination": "https://pksh.example/30",
+      "qr": {
+        "x": 0.7,
+        "y": 0.16,
+        "size": 0.68
+      }
+    }
+  ]
+}

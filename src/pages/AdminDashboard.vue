@@ -224,7 +224,7 @@
                 <!-- Section: Identity -->
                 <p class="form-section-label"><i class="bi bi-building"></i> Identity</p>
                 <div class="form-grid">
-                  <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @blur="fillVendorSlug" /></label>
+                  <label>Vendor Name<input v-model.trim="vendorForm.displayName" class="form-control" placeholder="Radisson Gurgaon" @input="fillVendorSlug" @blur="fillVendorSlug" /></label>
                   <label>
                     Public identifier
                     <div class="handle-input-wrap">
@@ -455,7 +455,7 @@
           <form v-if="showEventEditor" class="inline-editor" @submit.prevent="saveEvent">
             <p class="eyebrow">{{ eventForm.id ? `Editing: ${eventForm.displayName}` : 'New Event' }}</p>
             <div class="form-grid">
-              <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @blur="fillEventSlug" /></label>
+              <label>Event Name<input v-model.trim="eventForm.displayName" class="form-control" placeholder="Sanya Reception" @input="fillEventSlug" @blur="fillEventSlug" /></label>
               <label>Public identifier<input v-model.trim="eventForm.name" class="form-control" placeholder="sanya-reception" /></label>
               <label>Active From<input v-model="eventForm.startTime" type="datetime-local" class="form-control" /></label>
               <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
@@ -549,6 +549,7 @@
                 <div class="event-qr-actions">
                   <a :href="eventQrMapping.shortQrUrl" target="_blank" rel="noreferrer" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right"></i> Test scan</a>
                   <button class="btn btn-outline-secondary btn-sm" @click="openQrEditor(eventQrMapping!)"><i class="bi bi-pencil"></i> Manage</button>
+                  <button class="btn btn-outline-secondary btn-sm" @click="openDesignStudio(eventQrMapping!)"><i class="bi bi-palette"></i> Design</button>
                 </div>
               </div>
             </div>
@@ -686,7 +687,7 @@
         <form class="panel" @submit.prevent="saveMenu">
           <h3>{{ menuForm.id ? 'Edit Menu' : 'Create Menu' }}</h3>
           <div class="form-grid">
-            <label>Menu Name<input v-model.trim="menuForm.displayName" class="form-control" placeholder="Maharaja Menu" @blur="fillMenuSlug" /></label>
+            <label>Menu Name<input v-model.trim="menuForm.displayName" class="form-control" placeholder="Maharaja Menu" @input="fillMenuSlug" @blur="fillMenuSlug" /></label>
             <label>Slug<input v-model.trim="menuForm.name" class="form-control" placeholder="maharaja-menu" /></label>
             <label class="check"><input v-model="menuForm.isActive" type="checkbox" /> Active</label>
             <label class="wide">Description<textarea v-model.trim="menuForm.description" rows="2" class="form-control"></textarea></label>
@@ -1160,6 +1161,7 @@
                     <td class="col-scans">{{ mapping.usageCount || 0 }}</td>
                     <td class="row-actions" @click.stop>
                       <button class="icon-btn" title="Edit" @click.stop="openQrEditor(mapping)"><i class="bi bi-pencil"></i></button>
+                      <button class="icon-btn" title="Design QR template" @click.stop="openDesignStudio(mapping)"><i class="bi bi-palette"></i></button>
                       <button class="icon-btn" title="Print template" @click.stop="openPrintForQr(mapping)"><i class="bi bi-printer"></i></button>
                     </td>
                   </tr>
@@ -1437,7 +1439,7 @@
       </section>
 
       <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
-        <QrTemplatePage :embedded="true" />
+        <QrTemplatePage :embedded="true" :vendor-id="selectedVendorId || undefined" :vendor-name="selectedVendor?.displayName" />
       </section>
 
       <!-- ── Session Management ──────────────────────────────────────────── -->
@@ -3960,6 +3962,11 @@ function openPrintForQr(mapping: QrMapping) {
   closeQrEditor();
   router.push('/dashboard/qr-templates');
 }
+function openDesignStudio(mapping: QrMapping) {
+  closeQrEditor();
+  const params = mapping.shortQrUrl ? `?destination=${encodeURIComponent(mapping.shortQrUrl)}` : '';
+  router.push(`/dashboard/qr-templates${params}`);
+}
 const selectedQrHashForPrint = ref('');
 
 // ── QR modal: template preview ────────────────────────────────────────────────
@@ -4635,7 +4642,7 @@ async function deleteVendorById(id: number, name: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .ps-workspace {

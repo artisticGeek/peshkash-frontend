@@ -2,7 +2,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import axios from 'axios';
-import { renderTemplateToCanvas, PrintTemplate, EXPORT_SCALE } from '../../utils/qrRenderer';
+import { EXPORT_SCALE } from '../../utils/qrRenderer';
+import { renderTemplateSvg } from '../../features/qrStudio/templateRenderer';
+import { svgDataUri } from '../../features/qrStudio/qrRenderer';
+import { qrManifest, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
 import { API_BASE_URL } from '../../config';
 
 interface QrTarget {
@@ -34,15 +37,16 @@ const props = defineProps<{
   qrMappings: QrMapping[];
 }>();
 
-const templates = ref<PrintTemplate[]>([]);
-const selectedTemplateId = ref<number | null>(null);
+const templates = ref<StudioDesign[]>([]);
+const selectedTemplateId = ref<number | string | null>(null);
 const previews = ref<Record<string, string>>({});
 const isGenerating = ref(false);
 const isDownloading = ref(false);
 const downloadProgress = ref(0);
+const downloadTotal = ref(0);
 
 const selectedTemplate = computed(() =>
-  templates.value.find(t => t.id === selectedTemplateId.value) ?? null
+  templates.value.find(t => String(t.id) === String(selectedTemplateId.value)) ?? null
 );
 
 const exportPixelSize = computed(() => {
@@ -52,6 +56,13 @@ const exportPixelSize = computed(() => {
     h: Math.round(selectedTemplate.value.heightMm * EXPORT_SCALE),
   };
 });
+
+// Deep-links directly into the editor for the currently selected design
+const editTemplateRoute = computed(() =>
+  selectedTemplate.value?.id
+    ? `/dashboard/qr-templates?edit=${selectedTemplate.value.id}`
+    : '/dashboard/qr-templates'
+);
 
 function qrValueForTarget(target: QrTarget): string {
   const mapping = props.qrMappings.find(m => m.url === target.path || m.url === target.path + '/');
@@ -63,21 +74,84 @@ function qrHashForTarget(target: QrTarget): string | null {
   return mapping?.qrHash ?? null;
 }
 
-function safeFilename(label: string) {
+function safeFilename(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-async function loadTemplates() {
+function blankDesign(): StudioDesign {
+  return {
+    name: '',
+    libraryTemplateId: qrManifest.templates[0]?.id ?? '',
+    manifestVersion: qrManifest.version,
+    qrStyle: 'obsidian-ring',
+    theme: 'light',
+    widthMm: 120,
+    heightMm: 70,
+    merchantName: '',
+    eyebrow: '',
+    headline: '',
+    descriptor: '',
+    cta: '',
+    destination: 'https://peshkash.app',
+  };
+}
+
+function fromApi(row: Record<string, unknown>): StudioDesign {
+  const settings = (row.settings || {}) as Partial<StudioDesign>;
+  const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object'
+    ? row.elements[0] as Partial<StudioDesign>
+    : {};
+  return {
+    ...blankDesign(),
+    ...elements,
+    ...settings,
+    id: row.id as number,
+    name: String(row.name || settings.name || 'Untitled design'),
+    libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0]?.id),
+    manifestVersion: String(row.manifestVersion || settings.manifestVersion || qrManifest.version),
+    qrStyle: (row.qrStyle || settings.qrStyle || 'obsidian-ring') as QrStyleId,
+    theme: (row.theme || settings.theme || 'light') as StudioTheme,
+    widthMm: Number(row.widthMm || settings.widthMm || 120),
+    heightMm: Number(row.heightMm || settings.heightMm || 70),
+    updatedAt: String(row.updatedAt || ''),
+  };
+}
+
+async function loadTemplates(): Promise<void> {
   try {
-    const { data } = await axios.get<PrintTemplate[]>(`${API_BASE_URL}/admin/qr-templates`);
-    templates.value = data;
-    if (data.length > 0 && selectedTemplateId.value === null) {
-      selectedTemplateId.value = data[0].id ?? null;
+    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
+    templates.value = data.map(fromApi);
+    if (templates.value.length > 0 && selectedTemplateId.value === null) {
+      selectedTemplateId.value = templates.value[0].id ?? null;
     }
   } catch { /* ignore */ }
 }
 
-async function generatePreviews() {
+// Renders a StudioDesign to a PNG data URL at 300 DPI.
+// destinationOverride replaces design.destination so the QR encodes the
+// target's actual shortQrUrl, not the URL the designer typed when saving.
+async function renderToPng(design: StudioDesign, destinationOverride: string): Promise<string> {
+  const def = qrManifest.templates.find(t => t.id === design.libraryTemplateId);
+  if (!def) return '';
+
+  const svg = renderTemplateSvg(def, { ...design, destination: destinationOverride });
+  const uri = svgDataUri(svg);
+
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = uri;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(design.widthMm * EXPORT_SCALE);
+  canvas.height = Math.round(design.heightMm * EXPORT_SCALE);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
+async function generatePreviews(): Promise<void> {
   if (!selectedTemplate.value || !props.targets.length) {
     previews.value = {};
     return;
@@ -86,33 +160,31 @@ async function generatePreviews() {
   previews.value = {};
   const result: Record<string, string> = {};
   for (const target of props.targets) {
-    const canvas = document.createElement('canvas');
-    await renderTemplateToCanvas(canvas, selectedTemplate.value, qrValueForTarget(target));
-    result[target.key] = canvas.toDataURL('image/png');
+    result[target.key] = await renderToPng(selectedTemplate.value, qrValueForTarget(target));
   }
   previews.value = result;
   isGenerating.value = false;
 }
 
-async function downloadAll() {
+async function downloadAll(): Promise<void> {
   if (!selectedTemplate.value || !props.targets.length) return;
   isDownloading.value = true;
   downloadProgress.value = 0;
+  downloadTotal.value = props.targets.length;
   for (let i = 0; i < props.targets.length; i++) {
     const target = props.targets[i];
-    const canvas = document.createElement('canvas');
-    await renderTemplateToCanvas(canvas, selectedTemplate.value, qrValueForTarget(target));
+    const png = await renderToPng(selectedTemplate.value, qrValueForTarget(target));
     const link = document.createElement('a');
     link.download = `${safeFilename(target.label)}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = png;
     link.click();
-    downloadProgress.value = Math.round(((i + 1) / props.targets.length) * 100);
+    downloadProgress.value = i + 1;
     await new Promise(r => setTimeout(r, 350));
   }
   isDownloading.value = false;
 }
 
-function downloadSingle(target: QrTarget) {
+function downloadSingle(target: QrTarget): void {
   const src = previews.value[target.key];
   if (!src) return;
   const link = document.createElement('a');
@@ -123,7 +195,6 @@ function downloadSingle(target: QrTarget) {
 
 watch(selectedTemplate, () => { generatePreviews(); });
 watch(() => props.targets, () => { generatePreviews(); }, { deep: true });
-
 onMounted(() => { loadTemplates(); });
 </script>
 
@@ -157,7 +228,7 @@ onMounted(() => { loadTemplates(); });
       <div class="ps-controls">
         <div class="ps-template-picker">
           <span>Template</span>
-          <select v-model.number="selectedTemplateId" class="form-select form-select-sm">
+          <select v-model="selectedTemplateId" class="form-select form-select-sm">
             <option :value="null" disabled>Pick a template…</option>
             <option v-for="t in templates" :key="t.id" :value="t.id">
               {{ t.name }} ({{ t.widthMm }}×{{ t.heightMm }}mm)
@@ -165,8 +236,9 @@ onMounted(() => { loadTemplates(); });
           </select>
         </div>
 
-        <RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr-templates">
-          <i class="bi bi-pencil-square"></i> Edit Templates
+        <!-- Deep-links to the editor for the selected design, not the library root -->
+        <RouterLink class="btn btn-outline-secondary btn-sm" :to="editTemplateRoute">
+          <i class="bi bi-pencil-square"></i> Edit Template
         </RouterLink>
 
         <button
@@ -175,7 +247,11 @@ onMounted(() => { loadTemplates(); });
           @click="downloadAll"
         >
           <template v-if="isDownloading">
-            <i class="bi bi-hourglass-split"></i> {{ downloadProgress }}% …
+            <i class="bi bi-hourglass-split spin"></i>
+            {{ downloadProgress }}/{{ downloadTotal }} …
+          </template>
+          <template v-else-if="isGenerating">
+            <i class="bi bi-hourglass-split spin"></i> Preparing…
           </template>
           <template v-else>
             <i class="bi bi-download"></i> Download All ({{ targets.length }})
@@ -341,6 +417,7 @@ onMounted(() => { loadTemplates(); });
 .ps-generating i { font-size: 1.6rem; animation: spin 1.2s linear infinite; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1.2s linear infinite; display: inline-block; }
 
 /* Grid */
 .ps-grid {
@@ -446,7 +523,7 @@ onMounted(() => { loadTemplates(); });
   width: 100%;
 }
 
-.ps-card-dl:hover:not(:disabled) { background: #F5F2EE; }
+.ps-card-dl:hover:not(:disabled) { background: #EDE7DF; }
 .ps-card-dl:disabled { color: #ccc; cursor: default; }
 
 .btn { font-size: 0.84rem; }

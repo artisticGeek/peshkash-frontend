@@ -1,2473 +1,1884 @@
-<script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import axios from 'axios';
-import QRCode from 'qrcode';
-import { API_BASE_URL } from '../config';
-import { drawPeshkashMark, EXPORT_SCALE as _EXPORT_SCALE } from '../utils/qrRenderer';
-
-const props = defineProps<{ embedded?: boolean }>();
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Unit = 'mm' | 'cm' | 'in';
-type ElementType = 'qr' | 'text' | 'image' | 'rect';
-type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
-
-interface BaseEl {
-  id: string;
-  type: ElementType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  name: string;
-  locked: boolean;
-}
-interface QrEl extends BaseEl {
-  type: 'qr';
-  fgColor: string;
-  bgColor: string;
-  margin: number;
-  errorLevel: 'L' | 'M' | 'Q' | 'H';
-  borderRadius: number;
-}
-interface TextEl extends BaseEl {
-  type: 'text';
-  content: string;
-  fontFamily: string;
-  fontSize: number;
-  fontWeight: string;
-  color: string;
-  textAlign: 'left' | 'center' | 'right';
-}
-interface ImageEl extends BaseEl {
-  type: 'image';
-  src: string;
-  objectFit: 'contain' | 'cover' | 'fill';
-  borderRadius: number;
-  opacity: number;
-}
-interface RectEl extends BaseEl {
-  type: 'rect';
-  fill: string;
-  stroke: string;
-  strokeWidth: number;
-  borderRadius: number;
-  opacity: number;
-}
-type TemplateEl = QrEl | TextEl | ImageEl | RectEl;
-
-interface QrTemplate {
-  id?: number;
-  name: string;
-  widthMm: number;
-  heightMm: number;
-  elements: TemplateEl[];
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const PRESETS = [
-  { label: 'Business Card', w: 85, h: 54 },
-  { label: 'Square 80', w: 80, h: 80 },
-  { label: 'Square 60', w: 60, h: 60 },
-  { label: 'Acrylic Portrait', w: 90, h: 120 },
-  { label: 'Acrylic Square', w: 100, h: 100 },
-  { label: 'Label', w: 50, h: 30 },
-  { label: 'Custom', w: 0, h: 0 },
-];
-
-const FONTS = ['Rufina', 'Urbanist', 'Inter', 'Playfair Display', 'Georgia', 'Arial', 'Helvetica Neue', 'Times New Roman', 'Courier New'];
-const BASE_SCALE = 3.78; // px per mm at 100% zoom
-
-// Mini layout preview for the list-page preset cards
-function miniElStyle(el: TemplateEl, tpl: QrTemplate): Record<string, string> {
-  const pct = (v: number, total: number) => `${(v / total) * 100}%`;
-  const base: Record<string, string> = {
-    position: 'absolute',
-    left: pct(el.x, tpl.widthMm),
-    top: pct(el.y, tpl.heightMm),
-    width: pct(el.width, tpl.widthMm),
-    height: pct(el.height, tpl.heightMm),
-    boxSizing: 'border-box',
-  };
-  if (el.type === 'rect') {
-    const r = el as RectEl;
-    base.background = r.fill;
-    if ((r.strokeWidth ?? 0) > 0) base.border = `1px solid ${r.stroke}`;
-    if ((r.borderRadius ?? 0) > 0) base.borderRadius = '2px';
-    base.opacity = String(r.opacity ?? 1);
-    // Hairline bracket rects (s≈0.45mm) render sub-pixel at thumbnail scale — clamp to 1px
-    base.minWidth = '1px';
-    base.minHeight = '1px';
-  } else if (el.type === 'qr') {
-    base.background = '#e8e8e8';
-    base.backgroundImage = 'repeating-conic-gradient(#c0c0c0 0% 25%, #e8e8e8 0% 50%)';
-    base.backgroundSize = '5px 5px';
-  } else if (el.type === 'text') {
-    const t = el as TextEl;
-    base.background = t.color;
-    base.opacity = '0.28';
-    base.borderRadius = '1px';
-  } else if (el.type === 'image') {
-    base.background = '#d4b07a44';
-    base.borderRadius = '1px';
-    base.border = '1px dashed #d4b07a';
-  }
-  return base;
-}
-
-// ─── Brand bracket helper ─────────────────────────────────────────────────────
-// Generates the 8 rect elements that form the four L-shaped corner brackets
-// — the signature Peshkash framing motif from the brand kit.
-// arm   = length of each bracket arm in mm (default 7)
-// margin = distance from canvas edge to bracket corner in mm (default 4)
-// color  = fill color (use #C79C62 on dark bg, #BB9057 on light bg)
-// s      = stroke thickness in mm (default 0.45)
-function makeBrackets(
-  w: number, h: number,
-  arm = 7, margin = 4,
-  color = '#C79C62', s = 0.45,
-): RectEl[] {
-  const b = (x: number, y: number, bw: number, bh: number): RectEl => ({
-    id: uid(), type: 'rect' as const, name: 'Bracket',
-    x, y, width: bw, height: bh,
-    locked: true, fill: color, stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1,
-  });
-  return [
-    b(margin,       margin,       arm, s  ),  // TL — horizontal arm
-    b(margin,       margin,       s,   arm),  // TL — vertical arm
-    b(w-margin-arm, margin,       arm, s  ),  // TR — horizontal arm
-    b(w-margin-s,   margin,       s,   arm),  // TR — vertical arm
-    b(margin,       h-margin-s,   arm, s  ),  // BL — horizontal arm
-    b(margin,       h-margin-arm, s,   arm),  // BL — vertical arm
-    b(w-margin-arm, h-margin-s,   arm, s  ),  // BR — horizontal arm
-    b(w-margin-s,   h-margin-arm, s,   arm),  // BR — vertical arm
-  ];
-}
-
-// ─── Preset Template Library ──────────────────────────────────────────────────
-
-interface PresetTemplate {
-  name: string;
-  icon: string;
-  desc: string;
-  create: () => QrTemplate;
-}
-
-const PRESET_TEMPLATES: PresetTemplate[] = [
-  // ── Business Card format (85 × 54 mm) ──────────────────────────────────────
-  {
-    name: 'Dark Card',
-    icon: 'bi-moon-stars-fill',
-    desc: '85 × 54 mm · Near-black · Gold brackets · Cream QR',
-    create: () => ({
-      name: 'Dark Card', widthMm: 85, heightMm: 54,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(85, 54, 6.5, 3.5, '#C79C62'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#F5F2EE', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
-      ]
-    })
-  },
-  {
-    name: 'Cream Card',
-    icon: 'bi-credit-card',
-    desc: '85 × 54 mm · Cream · Gold brackets · Dark QR',
-    create: () => ({
-      name: 'Cream Card', widthMm: 85, heightMm: 54,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(85, 54, 6.5, 3.5, '#BB9057'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 10, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 10, y: 39, width: 65, height: 7, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '600', color: '#1A1410', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 10, y: 46, width: 65, height: 5, locked: false, content: 'Scan to explore', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
-      ]
-    })
-  },
-  {
-    name: 'Gold Strip Card',
-    icon: 'bi-stripe',
-    desc: '85 × 54 mm · Cream · Solid gold footer strip',
-    create: () => ({
-      name: 'Gold Strip Card', widthMm: 85, heightMm: 54,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 85, height: 54, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Footer', x: 0, y: 43, width: 85, height: 11, locked: true, fill: '#BD945A', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(85, 43, 6, 3.5, '#1A1410'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 29.5, y: 9, width: 26, height: 26, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 37.5, width: 75, height: 4.5, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 6, fontWeight: '600', color: '#8C7667', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Label', x: 5, y: 45.5, width: 75, height: 6, locked: false, content: 'SCAN TO EXPLORE', fontFamily: 'Urbanist', fontSize: 7, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
-      ]
-    })
-  },
-
-  // ── Square format (80 × 80 mm) ─────────────────────────────────────────────
-  {
-    name: 'Dark Square',
-    icon: 'bi-moon-fill',
-    desc: '80 × 80 mm · Near-black · Gold brackets · Cream QR',
-    create: () => ({
-      name: 'Dark Square', widthMm: 80, heightMm: 80,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(80, 80, 7, 4, '#C79C62'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
-      ]
-    })
-  },
-  {
-    name: 'Cream Square',
-    icon: 'bi-square',
-    desc: '80 × 80 mm · Cream · Gold brackets · Dark QR',
-    create: () => ({
-      name: 'Cream Square', widthMm: 80, heightMm: 80,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 80, height: 80, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(80, 80, 7, 4, '#BB9057'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 15, y: 14, width: 50, height: 50, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 5, y: 67, width: 70, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 9, fontWeight: '500', color: '#1A1410', textAlign: 'center' as const },
-      ]
-    })
-  },
-
-  // ── Portrait Stand (90 × 120 mm) ────────────────────────────────────────────
-  {
-    name: 'Dark Portrait Stand',
-    icon: 'bi-phone-fill',
-    desc: '90 × 120 mm · Near-black · Dark header · Logo slot',
-    create: () => ({
-      name: 'Dark Portrait Stand', widthMm: 90, heightMm: 120,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(90, 120, 8, 5, '#C79C62'),
-        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
-      ]
-    })
-  },
-  {
-    name: 'Cream Portrait Stand',
-    icon: 'bi-phone',
-    desc: '90 × 120 mm · Cream · Dark header · Logo slot',
-    create: () => ({
-      name: 'Cream Portrait Stand', widthMm: 90, heightMm: 120,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 90, height: 120, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Dark Header', x: 0, y: 0, width: 90, height: 22, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 22, width: 90, height: 0.5, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(90, 120, 8, 5, '#BB9057'),
-        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 29, y: 5, width: 32, height: 13, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 27, width: 55, height: 55, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 5, y: 86, width: 80, height: 12, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 14, fontWeight: '700', color: '#1A1410', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 5, y: 101, width: 80, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
-      ]
-    })
-  },
-
-  // ── Mini Square (60 × 60 mm) ───────────────────────────────────────────────
-  {
-    name: 'Dark Mini',
-    icon: 'bi-aspect-ratio-fill',
-    desc: '60 × 60 mm · Near-black · Compact acrylic',
-    create: () => ({
-      name: 'Dark Mini', widthMm: 60, heightMm: 60,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 60, height: 60, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(60, 60, 6, 3.5, '#C79C62'),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 11, y: 11, width: 38, height: 38, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 3, y: 51.5, width: 54, height: 6, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 7.5, fontWeight: '500', color: '#F5F2EE', textAlign: 'center' as const },
-      ]
-    })
-  },
-
-  // ── Label / Sticker (70 × 30 mm) ───────────────────────────────────────────
-  {
-    name: 'Cream Label',
-    icon: 'bi-tag-fill',
-    desc: '70 × 30 mm · Cream · QR left · Name right',
-    create: () => ({
-      name: 'Cream Label', widthMm: 70, heightMm: 30,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 70, height: 30, locked: true, fill: '#F5F2EE', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(70, 30, 5, 3, '#BB9057', 0.4),
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 4, y: 5, width: 20, height: 20, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Divider', x: 27, y: 4, width: 0.4, height: 22, locked: true, fill: '#BB9057', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'text' as const, name: 'Vendor Name', x: 29.5, y: 7.5, width: 36, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 8, fontWeight: '600', color: '#1A1410', textAlign: 'left' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Text', x: 29.5, y: 17, width: 36, height: 6, locked: false, content: 'Scan for menu', fontFamily: 'Urbanist', fontSize: 6.5, fontWeight: '400', color: '#8C7667', textAlign: 'left' as const },
-      ]
-    })
-  },
-
-  // ── Large Display (100 × 140 mm) ────────────────────────────────────────────
-  {
-    name: 'Dark Display',
-    icon: 'bi-display-fill',
-    desc: '100 × 140 mm · Near-black · Large event display',
-    create: () => ({
-      name: 'Dark Display', widthMm: 100, heightMm: 140,
-      elements: [
-        { id: uid(), type: 'rect' as const, name: 'Background', x: 0, y: 0, width: 100, height: 140, locked: true, fill: '#1A1410', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Header Rule', x: 0, y: 28, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'rect' as const, name: 'Gold Footer Rule', x: 0, y: 131.4, width: 100, height: 0.6, locked: true, fill: '#C79C62', stroke: '', strokeWidth: 0, borderRadius: 0, opacity: 1 },
-        ...makeBrackets(100, 140, 9, 5.5, '#C79C62'),
-        { id: uid(), type: 'image' as const, name: 'Logo (paste URL)', x: 33, y: 7.5, width: 34, height: 14, locked: false, src: '', objectFit: 'contain' as const, borderRadius: 0, opacity: 1 },
-        { id: uid(), type: 'qr' as const, name: 'QR Code', x: 17.5, y: 34, width: 65, height: 65, locked: false, fgColor: '#F5F2EE', bgColor: '#1A1410', margin: 0, errorLevel: 'H' as const, borderRadius: 0 },
-        { id: uid(), type: 'text' as const, name: 'Event Name', x: 6, y: 103, width: 88, height: 16, locked: false, content: 'Event Name', fontFamily: 'Rufina', fontSize: 17, fontWeight: '700', color: '#F5F2EE', textAlign: 'center' as const },
-        { id: uid(), type: 'text' as const, name: 'Scan Hint', x: 6, y: 121, width: 88, height: 8, locked: false, content: 'Scan for menu & details', fontFamily: 'Urbanist', fontSize: 8.5, fontWeight: '400', color: '#8C7667', textAlign: 'center' as const },
-      ]
-    })
-  },
-];
-const EXPORT_DPI = 300;
-const EXPORT_SCALE = EXPORT_DPI / 25.4; // px per mm for export (~11.81)
-const HANDLE_SIZE = 8;
-
-function uid() { return Math.random().toString(36).slice(2, 9); }
-
-function adminUrl(path: string) { return `${API_BASE_URL}/admin${path}`; }
-
-// ─── State ────────────────────────────────────────────────────────────────────
-
-const view = ref<'list' | 'editor'>('list');
-const templates = ref<QrTemplate[]>([]);
-const saving = ref(false);
-const leftPanelOpen = ref(true);
-const rightPanelOpen = ref(true);
-const saveStatus = ref<'' | 'saved' | 'error'>('');
-const zoom = ref(1.0);
-const unit = ref<Unit>('mm');
-const selectedId = ref<string | null>(null);
-const qrPreviews = ref<Record<string, string>>({});
-
-const tpl = reactive<QrTemplate>({
-  name: 'New Template',
-  widthMm: 85,
-  heightMm: 54,
-  elements: [],
-});
-
-// Undo history
-const history = ref<string[]>([]);
-const historyIndex = ref(-1);
-
-// Preview modal state
-const showPreview = ref(false);
-const previewQrValue = ref('https://peshkash.com');
-const previewDataUrl = ref('');
-const previewRendering = ref(false);
-
-// Drag state
-let dragEl: TemplateEl | null = null;
-let dragStartClient = { x: 0, y: 0 };
-let dragOrigPos = { x: 0, y: 0 };
-
-// Resize state
-let resizeEl: TemplateEl | null = null;
-let resizeHandle: ResizeHandle | null = null;
-let resizeStartClient = { x: 0, y: 0 };
-let resizeOrig = { x: 0, y: 0, w: 0, h: 0 };
-
-// ─── Computed ─────────────────────────────────────────────────────────────────
-
-const displayScale = computed(() => BASE_SCALE * zoom.value);
-
-const selectedEl = computed(() =>
-  selectedId.value ? tpl.elements.find(e => e.id === selectedId.value) ?? null : null
-);
-
-const canvasStyle = computed(() => ({
-  width: `${tpl.widthMm * displayScale.value}px`,
-  height: `${tpl.heightMm * displayScale.value}px`,
-  position: 'relative' as const,
-}));
-
-// ─── Unit helpers ─────────────────────────────────────────────────────────────
-
-function fromMm(mm: number): string {
-  if (unit.value === 'cm') return (mm / 10).toFixed(1);
-  if (unit.value === 'in') return (mm / 25.4).toFixed(2);
-  return mm.toFixed(1);
-}
-
-function toMm(val: string | number): number {
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  if (isNaN(n) || n < 0) return 0;
-  if (unit.value === 'cm') return n * 10;
-  if (unit.value === 'in') return n * 25.4;
-  return n;
-}
-
-function unitLabel() { return unit.value; }
-
-// ─── History ──────────────────────────────────────────────────────────────────
-
-function pushHistory() {
-  const snap = JSON.stringify(tpl.elements);
-  history.value = history.value.slice(0, historyIndex.value + 1);
-  history.value.push(snap);
-  if (history.value.length > 40) history.value.shift();
-  historyIndex.value = history.value.length - 1;
-}
-
-function undo() {
-  if (historyIndex.value > 0) {
-    historyIndex.value--;
-    tpl.elements = JSON.parse(history.value[historyIndex.value]);
-    selectedId.value = null;
-  }
-}
-
-function redo() {
-  if (historyIndex.value < history.value.length - 1) {
-    historyIndex.value++;
-    tpl.elements = JSON.parse(history.value[historyIndex.value]);
-    selectedId.value = null;
-  }
-}
-
-// ─── QR Preview ───────────────────────────────────────────────────────────────
-
-async function generateQrPreview(el: QrEl) {
-  try {
-    const previewSize = 200;
-    const qCanvas = document.createElement('canvas');
-    await QRCode.toCanvas(qCanvas, 'peshkash-preview', {
-      width: previewSize,
-      margin: el.margin,
-      color: { dark: el.fgColor, light: el.bgColor === 'transparent' ? '#ffffff' : el.bgColor },
-      errorCorrectionLevel: 'H', // always H so logo fits
-    });
-    // Overlay Peshkash mark (non-editable)
-    const ctx = qCanvas.getContext('2d')!;
-    drawPeshkashMark(ctx, previewSize / 2, previewSize / 2, previewSize * 0.22);
-    qrPreviews.value[el.id] = qCanvas.toDataURL('image/png');
-  } catch { /* ignore */ }
-}
-
-watch(
-  () => tpl.elements.filter(e => e.type === 'qr') as QrEl[],
-  (qrEls) => { qrEls.forEach(generateQrPreview); },
-  { deep: true, immediate: true }
-);
-
-// ─── Element factory ──────────────────────────────────────────────────────────
-
-function makeQr(): QrEl {
-  const cx = tpl.widthMm / 2 - 15;
-  const cy = tpl.heightMm / 2 - 15;
-  return { id: uid(), type: 'qr', name: 'QR Code', x: cx, y: cy, width: 30, height: 30, locked: false, fgColor: '#1A1410', bgColor: '#F5F2EE', margin: 1, errorLevel: 'H', borderRadius: 0 };
-}
-
-function makeText(): TextEl {
-  return { id: uid(), type: 'text', name: 'Text', x: 5, y: tpl.heightMm - 12, width: tpl.widthMm - 10, height: 8, locked: false, content: 'Vendor Name', fontFamily: 'Urbanist', fontSize: 10, fontWeight: '500', color: '#1A1410', textAlign: 'center' };
-}
-
-function makeImage(): ImageEl {
-  return { id: uid(), type: 'image', name: 'Logo', x: 3, y: 3, width: 20, height: 12, locked: false, src: '', objectFit: 'contain', borderRadius: 0, opacity: 1 };
-}
-
-function makeRect(): RectEl {
-  return { id: uid(), type: 'rect', name: 'Shape', x: 0, y: 0, width: tpl.widthMm, height: tpl.heightMm, locked: false, fill: '#F5F2EE', stroke: '#BD945A', strokeWidth: 0, borderRadius: 0, opacity: 1 };
-}
-
-function addElement(type: ElementType) {
-  let el: TemplateEl;
-  if (type === 'qr') el = makeQr();
-  else if (type === 'text') el = makeText();
-  else if (type === 'image') el = makeImage();
-  else el = makeRect();
-  tpl.elements.push(el);
-  selectedId.value = el.id;
-  if (type === 'qr') generateQrPreview(el as QrEl);
-  pushHistory();
-}
-
-function deleteSelected() {
-  if (!selectedId.value) return;
-  const idx = tpl.elements.findIndex(e => e.id === selectedId.value);
-  if (idx >= 0) {
-    tpl.elements.splice(idx, 1);
-    selectedId.value = null;
-    pushHistory();
-  }
-}
-
-function moveLayer(id: string, dir: -1 | 1) {
-  const idx = tpl.elements.findIndex(e => e.id === id);
-  const target = idx + dir;
-  if (target < 0 || target >= tpl.elements.length) return;
-  const tmp = tpl.elements[idx];
-  tpl.elements[idx] = tpl.elements[target];
-  tpl.elements[target] = tmp;
-  pushHistory();
-}
-
-// ─── Drag ─────────────────────────────────────────────────────────────────────
-
-function startDrag(e: PointerEvent, el: TemplateEl) {
-  if (el.locked) { selectedId.value = el.id; return; }
-  e.preventDefault();
-  selectedId.value = el.id;
-  dragEl = el;
-  dragStartClient = { x: e.clientX, y: e.clientY };
-  dragOrigPos = { x: el.x, y: el.y };
-  window.addEventListener('pointermove', onDragMove);
-  window.addEventListener('pointerup', onDragEnd, { once: true });
-}
-
-function onDragMove(e: PointerEvent) {
-  if (!dragEl) return;
-  const dx = (e.clientX - dragStartClient.x) / displayScale.value;
-  const dy = (e.clientY - dragStartClient.y) / displayScale.value;
-  dragEl.x = Math.max(0, Math.min(tpl.widthMm - dragEl.width, dragOrigPos.x + dx));
-  dragEl.y = Math.max(0, Math.min(tpl.heightMm - dragEl.height, dragOrigPos.y + dy));
-}
-
-function onDragEnd() {
-  window.removeEventListener('pointermove', onDragMove);
-  if (dragEl) pushHistory();
-  dragEl = null;
-}
-
-// ─── Resize ───────────────────────────────────────────────────────────────────
-
-function startResize(e: PointerEvent, el: TemplateEl, handle: ResizeHandle) {
-  e.preventDefault();
-  e.stopPropagation();
-  resizeEl = el;
-  resizeHandle = handle;
-  resizeStartClient = { x: e.clientX, y: e.clientY };
-  resizeOrig = { x: el.x, y: el.y, w: el.width, h: el.height };
-  window.addEventListener('pointermove', onResizeMove);
-  window.addEventListener('pointerup', onResizeEnd, { once: true });
-}
-
-function onResizeMove(e: PointerEvent) {
-  if (!resizeEl || !resizeHandle) return;
-  const dx = (e.clientX - resizeStartClient.x) / displayScale.value;
-  const dy = (e.clientY - resizeStartClient.y) / displayScale.value;
-  const MIN = 5;
-  let { x, y, w, h } = resizeOrig;
-
-  if (resizeHandle.includes('e')) w = Math.max(MIN, w + dx);
-  if (resizeHandle.includes('s')) h = Math.max(MIN, h + dy);
-  if (resizeHandle.includes('w')) { const nw = Math.max(MIN, w - dx); x = x + (w - nw); w = nw; }
-  if (resizeHandle.includes('n')) { const nh = Math.max(MIN, h - dy); y = y + (h - nh); h = nh; }
-
-  resizeEl.x = Math.max(0, x);
-  resizeEl.y = Math.max(0, y);
-  resizeEl.width = w;
-  resizeEl.height = h;
-}
-
-function onResizeEnd() {
-  window.removeEventListener('pointermove', onResizeMove);
-  if (resizeEl) pushHistory();
-  resizeEl = null;
-  resizeHandle = null;
-}
-
-// ─── Element style for canvas ─────────────────────────────────────────────────
-
-function elStyle(el: TemplateEl): Record<string, string> {
-  const s = displayScale.value;
-  const base: Record<string, string> = {
-    position: 'absolute',
-    left: `${el.x * s}px`,
-    top: `${el.y * s}px`,
-    width: `${el.width * s}px`,
-    height: `${el.height * s}px`,
-    boxSizing: 'border-box',
-    userSelect: 'none',
-    cursor: el.locked ? 'default' : 'move',
-  };
-  if (el.type === 'rect') {
-    const r = el as RectEl;
-    base.background = r.fill;
-    base.borderRadius = `${r.borderRadius * s}px`;
-    base.opacity = String(r.opacity);
-    if (r.strokeWidth > 0) base.border = `${r.strokeWidth * s}px solid ${r.stroke}`;
-  }
-  if (el.type === 'text') {
-    const t = el as TextEl;
-    base.color = t.color;
-    base.fontFamily = t.fontFamily;
-    base.fontSize = `${t.fontSize * (s / BASE_SCALE)}px`;
-    base.fontWeight = t.fontWeight;
-    base.textAlign = t.textAlign;
-    base.display = 'flex';
-    base.alignItems = 'center';
-    base.overflow = 'hidden';
-    base.whiteSpace = 'pre-wrap';
-    base.wordBreak = 'break-word';
-    base.justifyContent = t.textAlign === 'right' ? 'flex-end' : t.textAlign === 'center' ? 'center' : 'flex-start';
-  }
-  if (el.type === 'image') {
-    const img = el as ImageEl;
-    base.borderRadius = `${img.borderRadius * s}px`;
-    base.opacity = String(img.opacity);
-    base.overflow = 'hidden';
-  }
-  if (el.type === 'qr') {
-    const q = el as QrEl;
-    base.borderRadius = `${q.borderRadius * s}px`;
-    base.overflow = 'hidden';
-    base.background = q.bgColor;
-  }
-  return base;
-}
-
-// ─── Save / Load ──────────────────────────────────────────────────────────────
-
-async function loadTemplates() {
-  const { data } = await axios.get<QrTemplate[]>(adminUrl('/qr-templates'));
-  templates.value = data;
-}
-
-async function saveTemplate() {
-  saving.value = true;
-  saveStatus.value = '';
-  try {
-    const payload = { name: tpl.name, widthMm: tpl.widthMm, heightMm: tpl.heightMm, elements: tpl.elements };
-    if (tpl.id) {
-      const { data } = await axios.put<QrTemplate>(adminUrl(`/qr-templates/${tpl.id}`), payload);
-      tpl.id = data.id;
-    } else {
-      const { data } = await axios.post<QrTemplate>(adminUrl('/qr-templates'), payload);
-      tpl.id = data.id;
-    }
-    saveStatus.value = 'saved';
-    setTimeout(() => { saveStatus.value = ''; }, 2200);
-    await loadTemplates();
-  } catch {
-    saveStatus.value = 'error';
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function deleteTemplate(id: number) {
-  if (!confirm('Delete this template?')) return;
-  await axios.delete(adminUrl(`/qr-templates/${id}`));
-  await loadTemplates();
-}
-
-function openTemplate(t: QrTemplate) {
-  Object.assign(tpl, { id: t.id, name: t.name, widthMm: t.widthMm, heightMm: t.heightMm, elements: JSON.parse(JSON.stringify(t.elements)) });
-  selectedId.value = null;
-  history.value = [JSON.stringify(tpl.elements)];
-  historyIndex.value = 0;
-  fitZoom();
-  view.value = 'editor';
-}
-
-function newTemplate() {
-  Object.assign(tpl, { id: undefined, name: 'New Template', widthMm: 85, heightMm: 54, elements: [] });
-  const qr = makeQr();
-  // center the QR on the default canvas
-  qr.x = (85 - 30) / 2;
-  qr.y = (54 - 30) / 2;
-  tpl.elements.push(qr);
-  generateQrPreview(qr);
-  selectedId.value = null;
-  history.value = [JSON.stringify(tpl.elements)];
-  historyIndex.value = 0;
-  fitZoom();
-  view.value = 'editor';
-}
-
-function backToList() {
-  view.value = 'list';
-  loadTemplates();
-}
-
-function startFromPreset(preset: PresetTemplate) {
-  const t = preset.create();
-  Object.assign(tpl, { id: undefined, name: t.name, widthMm: t.widthMm, heightMm: t.heightMm, elements: t.elements });
-  selectedId.value = null;
-  history.value = [JSON.stringify(tpl.elements)];
-  historyIndex.value = 0;
-  tpl.elements.filter(e => e.type === 'qr').forEach(e => generateQrPreview(e as QrEl));
-  fitZoom();
-  view.value = 'editor';
-}
-
-// ─── Zoom ─────────────────────────────────────────────────────────────────────
-
-const canvasAreaRef = ref<HTMLElement | null>(null);
-
-function fitZoom() {
-  nextTick(() => {
-    const el = canvasAreaRef.value;
-    if (!el) return;
-    const aw = el.clientWidth - 80;
-    const ah = el.clientHeight - 80;
-    const sw = aw / (tpl.widthMm * BASE_SCALE);
-    const sh = ah / (tpl.heightMm * BASE_SCALE);
-    zoom.value = Math.min(1, Math.round(Math.min(sw, sh) * 20) / 20);
-  });
-}
-
-function setZoom(z: number) {
-  zoom.value = Math.max(0.25, Math.min(3, z));
-}
-
-function applyPreset(p: typeof PRESETS[0]) {
-  if (!p.w) return;
-  tpl.widthMm = p.w;
-  tpl.heightMm = p.h;
-  fitZoom();
-}
-
-// ─── Render / Export ─────────────────────────────────────────────────────────
-
-async function renderToCanvas(canvas: HTMLCanvasElement, qrValue: string): Promise<void> {
-  const pw = Math.round(tpl.widthMm * EXPORT_SCALE);
-  const ph = Math.round(tpl.heightMm * EXPORT_SCALE);
-  const FOOTER_H = Math.round(6 * EXPORT_SCALE); // 6 mm branded footer
-
-  canvas.width = pw;
-  canvas.height = ph + FOOTER_H;
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, pw, ph);
-
-  for (const el of tpl.elements) {
-    if (!el) continue;
-    const ex = el.x * EXPORT_SCALE;
-    const ey = el.y * EXPORT_SCALE;
-    const ew = el.width * EXPORT_SCALE;
-    const eh = el.height * EXPORT_SCALE;
-
-    ctx.save();
-    ctx.globalAlpha = ('opacity' in el && typeof el.opacity === 'number') ? (el.opacity as number) : 1;
-
-    if (el.type === 'rect') {
-      const r = el as RectEl;
-      const br = r.borderRadius * EXPORT_SCALE;
-      ctx.beginPath();
-      ctx.roundRect(ex, ey, ew, eh, br);
-      ctx.fillStyle = r.fill;
-      ctx.fill();
-      if (r.strokeWidth > 0) {
-        ctx.strokeStyle = r.stroke;
-        ctx.lineWidth = r.strokeWidth * EXPORT_SCALE;
-        ctx.stroke();
-      }
-    } else if (el.type === 'text') {
-      const t = el as TextEl;
-      const fs = t.fontSize * (EXPORT_SCALE / BASE_SCALE);
-      ctx.font = `${t.fontWeight} ${fs}px ${t.fontFamily}, sans-serif`;
-      ctx.fillStyle = t.color;
-      ctx.textAlign = t.textAlign;
-      ctx.textBaseline = 'middle';
-      const tx = t.textAlign === 'center' ? ex + ew / 2 : t.textAlign === 'right' ? ex + ew : ex;
-      ctx.fillText(t.content, tx, ey + eh / 2, ew);
-    } else if (el.type === 'image') {
-      const img = el as ImageEl;
-      if (img.src) {
-        await new Promise<void>(resolve => {
-          const i = new Image();
-          i.crossOrigin = 'anonymous';
-          i.onload = () => { ctx.drawImage(i, ex, ey, ew, eh); resolve(); };
-          i.onerror = () => resolve();
-          i.src = img.src;
-        });
-      }
-    } else if (el.type === 'qr') {
-      const q = el as QrEl;
-      const qCanvas = document.createElement('canvas');
-      await QRCode.toCanvas(qCanvas, qrValue, {
-        width: ew,
-        margin: q.margin,
-        color: { dark: q.fgColor, light: q.bgColor === 'transparent' ? '#ffffff' : q.bgColor },
-        errorCorrectionLevel: 'H', // always H to allow logo overlay
-      });
-      const br = q.borderRadius * EXPORT_SCALE;
-      if (br > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(ex, ey, ew, eh, br);
-        ctx.clip();
-      }
-      ctx.drawImage(qCanvas, ex, ey, ew, eh);
-      if (br > 0) ctx.restore();
-      // Non-editable Peshkash mark centred on QR
-      ctx.globalAlpha = 1;
-      drawPeshkashMark(ctx, ex + ew / 2, ey + eh / 2, ew * 0.22);
-    }
-    ctx.restore();
-  }
-
-  // ── Branded footer strip ──────────────────────────────────────────────────
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#f5f1eb';
-  ctx.fillRect(0, ph, pw, FOOTER_H);
-  ctx.fillStyle = '#e0d4be';
-  ctx.fillRect(0, ph, pw, Math.ceil(EXPORT_SCALE * 0.2));
-
-  const markH = FOOTER_H * 0.52;
-  const markCX = FOOTER_H * 0.72;
-  const markCY = ph + FOOTER_H / 2;
-  drawPeshkashMark(ctx, markCX, markCY, markH);
-
-  const textX = markCX + markH * 0.65;
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'left';
-  ctx.font = `400 ${Math.round(FOOTER_H * 0.24)}px Arial, sans-serif`;
-  ctx.fillStyle = '#9a8870';
-  ctx.fillText('powered by', textX, ph + FOOTER_H * 0.42);
-  ctx.font = `600 ${Math.round(FOOTER_H * 0.38)}px Georgia, "Times New Roman", serif`;
-  ctx.fillStyle = '#BD945A';
-  ctx.fillText('peshkash', textX, ph + FOOTER_H * 0.78);
-}
-
-async function exportPng(qrValue = 'https://peshkash.com') {
-  const canvas = document.createElement('canvas');
-  await renderToCanvas(canvas, qrValue);
-  const link = document.createElement('a');
-  link.download = `${tpl.name.replace(/\s+/g, '-').toLowerCase()}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-}
-
-// ─── Preview ──────────────────────────────────────────────────────────────────
-
-async function openPreview() {
-  showPreview.value = true;
-  await renderPreview();
-}
-
-async function renderPreview() {
-  previewRendering.value = true;
-  try {
-    const canvas = document.createElement('canvas');
-    await renderToCanvas(canvas, previewQrValue.value || 'https://peshkash.com');
-    previewDataUrl.value = canvas.toDataURL('image/png');
-  } finally {
-    previewRendering.value = false;
-  }
-}
-
-function downloadPreview() {
-  const link = document.createElement('a');
-  link.download = `${tpl.name.replace(/\s+/g, '-').toLowerCase()}-preview.png`;
-  link.href = previewDataUrl.value;
-  link.click();
-}
-
-// ─── Keyboard ─────────────────────────────────────────────────────────────────
-
-function onKeydown(e: KeyboardEvent) {
-  if (view.value !== 'editor') return;
-  const tag = (e.target as HTMLElement)?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveTemplate(); }
-  if (e.key === 'Escape') selectedId.value = null;
-}
-
-onMounted(() => {
-  loadTemplates();
-  window.addEventListener('keydown', onKeydown);
-});
-onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
-</script>
-
 <template>
-  <!-- ── LIST VIEW ─────────────────────────────────────────── -->
-  <div v-if="view === 'list'" class="qrt-list-page" :class="{ 'qrt-list-page--embedded': props.embedded }">
-
-    <!-- Hero banner -->
-    <div class="qrt-hero">
-      <!-- Decorative corner brackets -->
-      <svg class="qrt-hero-bracket qrt-hero-bracket--tl" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M2 16 L2 2 L16 2" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
-      <svg class="qrt-hero-bracket qrt-hero-bracket--tr" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M16 2 L30 2 L30 16" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
-      <svg class="qrt-hero-bracket qrt-hero-bracket--bl" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M2 16 L2 30 L16 30" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
-      <svg class="qrt-hero-bracket qrt-hero-bracket--br" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M16 30 L30 30 L30 16" stroke="#C79C62" stroke-width="1.8" fill="none" stroke-linecap="square" stroke-linejoin="miter"/></svg>
-
-      <div class="qrt-hero-mark">
-        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="64" width="46">
-          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
-          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
-          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
-          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
-        </svg>
-      </div>
-      <div class="qrt-hero-text">
-        <div class="qrt-hero-eyebrow">QR Template Studio</div>
-        <h2>Design once.<br>Print everywhere.</h2>
-        <p>Every template ships with the Peshkash brand mark — 300 DPI, print-ready. The only thing vendors get from you physically, should look the part.</p>
-      </div>
-      <button class="btn btn-primary qrt-hero-cta" @click="newTemplate">
-        <i class="bi bi-plus-lg"></i> Blank Canvas
-      </button>
-    </div>
-
-    <!-- Presets -->
-    <div class="qrt-presets-section">
-      <div class="qrt-section-header">
-        <div>
-          <p class="qrt-section-title">Template Library</p>
-          <p class="qrt-section-sub">{{ PRESET_TEMPLATES.length }} print-ready designs — all brand-framed with corner brackets at 300 DPI</p>
+  <div class="studio" :class="{ 'studio--embedded': embedded }">
+    <template v-if="mode === 'library'">
+      <section v-if="savedDesigns.length" class="saved-section">
+        <div class="section-heading">
+          <div><p class="eyebrow">YOUR WORK</p><h2>Saved designs</h2></div>
+          <span>{{ savedDesigns.length }} design{{ savedDesigns.length === 1 ? '' : 's' }}</span>
         </div>
-      </div>
-      <div class="qrt-presets-grid">
-        <div v-for="p in PRESET_TEMPLATES" :key="p.name" class="qrt-preset-card" @click="startFromPreset(p)">
-          <!-- Real layout preview thumbnail -->
-          <div class="qrt-preset-visual-wrap">
-            <div
-              class="qrt-preset-visual"
-              :style="{ aspectRatio: `${p.create().widthMm} / ${p.create().heightMm}` }"
-            >
-              <div v-for="el in p.create().elements" :key="el.id" :style="miniElStyle(el, p.create())"></div>
-            </div>
-          </div>
-          <div class="qrt-preset-info">
-            <strong>{{ p.name }}</strong>
-            <span>{{ p.desc }}</span>
-          </div>
-          <div class="qrt-preset-cta">
-            <i class="bi bi-pencil-square"></i> Customise
+        <div class="saved-strip">
+          <div v-for="saved in savedDesigns" :key="saved.id" class="saved-card">
+            <button class="saved-card-body" @click="editSaved(saved)">
+              <span class="saved-monogram">{{ saved.name.slice(0, 1).toUpperCase() }}</span>
+              <span><b>{{ saved.name }}</b><small>{{ templateLabelFor(saved) }}</small></span>
+              <i class="bi bi-arrow-up-right"></i>
+            </button>
+            <button class="saved-delete" :disabled="deleting === saved.id" @click.stop="deleteDesign(saved.id!)" title="Delete design"><i class="bi bi-trash"></i></button>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Saved templates -->
-    <div v-if="templates.length > 0" class="qrt-saved-section" style="padding: 0 40px;">
-      <p class="qrt-section-title"><i class="bi bi-folder2-open"></i> Your templates</p>
-      <div class="qrt-grid">
-        <div v-for="t in templates" :key="t.id" class="qrt-card" @click="openTemplate(t)">
-          <div class="qrt-card-thumb">
-            <div class="qrt-card-canvas-preview" :style="{ aspectRatio: `${t.widthMm} / ${t.heightMm}` }">
-              <i class="bi bi-qr-code qrt-thumb-icon"></i>
-            </div>
-          </div>
-          <div class="qrt-card-info">
-            <strong>{{ t.name }}</strong>
-            <span class="qrt-card-size">{{ t.widthMm }} × {{ t.heightMm }} mm · {{ (t.elements ?? []).length }} element{{ (t.elements ?? []).length !== 1 ? 's' : '' }}</span>
-          </div>
-          <div class="qrt-card-actions">
-            <button class="qrt-icon-btn" title="Open" @click.stop="openTemplate(t)"><i class="bi bi-pencil"></i></button>
-            <button class="qrt-icon-btn danger" title="Delete" @click.stop="deleteTemplate(t.id!)"><i class="bi bi-trash3"></i></button>
-          </div>
+      <section class="library-section">
+        <div class="library-heading">
+          <div><p class="eyebrow">THE LIBRARY</p><h2>Choose by purpose, not dimensions.</h2></div>
+          <div class="library-count"><strong>{{ filteredTemplates.length }}</strong><span>of {{ qrManifest.librarySize }}<br>templates</span></div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── EDITOR VIEW ────────────────────────────────────────── -->
-  <div v-else class="qrt-editor" :class="{ 'qrt-editor--embedded': props.embedded }">
-
-    <!-- Header -->
-    <header class="qrt-header">
-      <button class="qrt-back-btn" @click="backToList"><i class="bi bi-arrow-left"></i></button>
-      <div class="qrt-header-brand">
-        <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="18" width="13">
-          <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
-          <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
-          <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
-          <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
-        </svg>
-      </div>
-      <input v-model="tpl.name" class="qrt-name-input" placeholder="Design name" spellcheck="false" />
-      <div class="qrt-header-actions">
-        <!-- Panel toggles (visible on tablet/mobile only) -->
-        <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: leftPanelOpen }" title="Toggle layers panel" @click="leftPanelOpen = !leftPanelOpen"><i class="bi bi-layout-sidebar"></i></button>
-        <button class="qrt-icon-btn qrt-panel-btn" :class="{ active: rightPanelOpen }" title="Toggle properties panel" @click="rightPanelOpen = !rightPanelOpen"><i class="bi bi-layout-sidebar-reverse"></i></button>
-        <span v-if="saveStatus === 'saved'" class="qrt-save-status saved"><i class="bi bi-check2"></i> Saved</span>
-        <span v-if="saveStatus === 'error'" class="qrt-save-status error"><i class="bi bi-exclamation-triangle"></i> Error</span>
-        <button class="qrt-icon-btn" title="Undo (Ctrl+Z)" :disabled="historyIndex <= 0" @click="undo"><i class="bi bi-arrow-counterclockwise"></i></button>
-        <button class="qrt-icon-btn" title="Redo (Ctrl+Y)" :disabled="historyIndex >= history.length - 1" @click="redo"><i class="bi bi-arrow-clockwise"></i></button>
-        <button class="btn btn-outline-secondary btn-sm" @click="openPreview"><i class="bi bi-eye"></i> Preview</button>
-        <button class="btn btn-outline-secondary btn-sm qrt-desktop-btn" @click="() => exportPng()"><i class="bi bi-download"></i> Export PNG</button>
-        <button class="btn btn-primary btn-sm" :disabled="saving" @click="saveTemplate">
-          <i class="bi bi-floppy2"></i> {{ saving ? 'Saving…' : 'Save' }}
+        <div class="library-toolbar">
+          <label class="search-box"><i class="bi bi-search"></i><input v-model="search" type="search" placeholder="Search artist, table menu, product tag…"></label>
+        </div>
+        <div class="category-list" aria-label="Template categories">
+          <button :class="{ active: activeCategory === 'all' }" @click="activeCategory = 'all'">All use cases</button>
+          <button v-for="(label, id) in qrManifest.categories" :key="id" :class="{ active: activeCategory === id }" @click="activeCategory = id">{{ label }}</button>
+        </div>
+        <button class="create-template-cta" @click="showCreator = true">
+          <span class="cta-icon"><i class="bi bi-plus-lg"></i></span>
+          <span class="cta-text"><b>Create a custom template</b><small>Pick a shape and size — it works just like the library, start to finish.</small></span>
+          <i class="bi bi-arrow-up-right"></i>
         </button>
-      </div>
-    </header>
-
-    <div class="qrt-body">
-
-      <!-- Left Sidebar: elements + layers -->
-      <aside class="qrt-sidebar-left" :class="{ 'panel-hidden': !leftPanelOpen }">
-        <p class="qrt-sidebar-section-label">Add Element</p>
-        <div class="qrt-add-grid">
-          <button class="qrt-add-btn" @click="addElement('qr')"><i class="bi bi-qr-code"></i><span>QR Code</span><span class="qrt-add-hint">scannable</span></button>
-          <button class="qrt-add-btn" @click="addElement('text')"><i class="bi bi-type"></i><span>Text</span><span class="qrt-add-hint">label</span></button>
-          <button class="qrt-add-btn" @click="addElement('image')"><i class="bi bi-image"></i><span>Logo</span><span class="qrt-add-hint">url</span></button>
-          <button class="qrt-add-btn" @click="addElement('rect')"><i class="bi bi-square"></i><span>Shape</span><span class="qrt-add-hint">block</span></button>
-        </div>
-
-        <p class="qrt-sidebar-section-label">Layers <span class="qrt-layer-count">{{ tpl.elements.length }}</span></p>
-        <div class="qrt-layers">
-          <div
-            v-for="(el, idx) in [...tpl.elements].reverse()"
-            :key="el.id"
-            class="qrt-layer-row"
-            :class="{ selected: selectedId === el.id }"
-            @click="selectedId = el.id"
-          >
-            <i :class="{ 'bi bi-qr-code': el.type === 'qr', 'bi bi-type': el.type === 'text', 'bi bi-image': el.type === 'image', 'bi bi-square': el.type === 'rect' }"></i>
-            <span class="qrt-layer-name">{{ el.name }}</span>
-            <div class="qrt-layer-btns">
-              <button class="qrt-layer-btn" title="Move up" @click.stop="moveLayer(el.id, 1)"><i class="bi bi-chevron-up"></i></button>
-              <button class="qrt-layer-btn" title="Move down" @click.stop="moveLayer(el.id, -1)"><i class="bi bi-chevron-down"></i></button>
+        <div v-if="filteredTemplates.length" class="template-grid">
+          <article v-for="template in filteredTemplates" :key="template.id" class="template-card">
+            <button class="template-preview" @click="startWithTemplate(template)">
+              <img :src="assetPath(template)" :alt="template.label">
+              <span class="use-template">Use template <i class="bi bi-arrow-up-right"></i></span>
+            </button>
+            <div class="template-meta">
+              <div><p>{{ template.categoryLabel }}</p><h3>{{ template.label }}</h3></div>
+              <span class="format-pill">{{ template.format }}</span>
             </div>
-          </div>
-          <div v-if="tpl.elements.length === 0" class="qrt-layers-empty">No elements yet</div>
+            <div class="tag-row"><span v-for="tag in template.tags.slice(0, 3)" :key="tag">{{ tag }}</span></div>
+          </article>
         </div>
-      </aside>
+        <div v-else class="empty-state"><i class="bi bi-search"></i><h3>No matching template</h3><p>Try a broader use case or clear the search.</p></div>
+      </section>
+    </template>
 
-      <!-- Canvas Area -->
-      <div ref="canvasAreaRef" class="qrt-canvas-area" @pointerdown.self="selectedId = null">
-        <div class="qrt-canvas-wrap">
-          <div class="qrt-canvas" :style="canvasStyle" @pointerdown.self="selectedId = null">
+    <template v-else-if="activeTemplate">
+      <header class="editor-bar">
+        <button class="back-button" @click="closeEditor"><i class="bi bi-arrow-left"></i><span>Template library</span></button>
+        <div class="editor-title"><span>Editing</span><b>{{ activeTemplate.label }}</b></div>
+        <div class="editor-actions">
+          <button class="secondary-action" :disabled="!canUndo" @click="undo" title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
+          <button class="secondary-action" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Shift+Z)"><i class="bi bi-arrow-clockwise"></i></button>
+          <span class="editor-actions-divider"></span>
+          <button class="secondary-action" @click="downloadSvg"><i class="bi bi-filetype-svg"></i> SVG</button>
+          <button class="secondary-action" @click="downloadPng"><i class="bi bi-download"></i> PNG</button>
+          <button class="primary-action compact" :disabled="saving" @click="saveDesign">{{ saving ? 'Saving…' : 'Save design' }}</button>
+        </div>
+      </header>
+      <main class="editor-shell" :class="{ 'rail-panel-open': !!activeRailPanel, 'props-open': !!(selectedEl || selectedElementId) }">
 
-            <!-- Render elements -->
-            <div
-              v-for="el in tpl.elements"
-              :key="el.id"
-              class="qrt-el"
-              :class="{ 'qrt-el--selected': selectedId === el.id }"
-              :style="elStyle(el)"
-              @pointerdown.stop="startDrag($event, el)"
-            >
-              <!-- QR preview -->
-              <img
-                v-if="el.type === 'qr'"
-                :src="qrPreviews[el.id]"
-                draggable="false"
-                style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none"
-              />
-              <!-- Text -->
-              <span v-else-if="el.type === 'text'" style="pointer-events:none;padding:2px 4px;width:100%">
-                {{ (el as any).content }}
-              </span>
-              <!-- Image -->
-              <img
-                v-else-if="el.type === 'image' && (el as any).src"
-                :src="(el as any).src"
-                :style="{ width: '100%', height: '100%', objectFit: (el as any).objectFit, display: 'block', pointerEvents: 'none' }"
-                draggable="false"
-              />
-              <div
-                v-else-if="el.type === 'image' && !(el as any).src"
-                style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border:1.5px dashed #c9a96e;border-radius:3px;color:#c9a96e;font-size:0.75rem;pointer-events:none"
-              >
-                <i class="bi bi-image"></i>
-              </div>
+        <!-- ── Left icon rail: switch which slide-out panel is open ────────── -->
+        <nav class="rail">
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'design' }" title="Design" @click="toggleRailPanel('design')"><i class="bi bi-sliders"></i><span>Design</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'background' }" title="Background" @click="toggleRailPanel('background')"><i class="bi bi-palette2"></i><span>Background</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'typography' }" title="Typography" @click="toggleRailPanel('typography')"><i class="bi bi-fonts"></i><span>Type</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'elements' }" title="Elements" @click="toggleRailPanel('elements')"><i class="bi bi-stickies"></i><span>Elements</span></button>
+          <button v-if="layerRows.length" class="rail-btn" :class="{ active: activeRailPanel === 'layers' }" title="Layers" @click="toggleRailPanel('layers')"><i class="bi bi-layers"></i><span>Layers</span></button>
+          <!-- Always mounted (not gated by which rail panel is open) — both the Elements panel's
+               "Image" button and the properties dock's "Replace image" action trigger it. -->
+          <input ref="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" @change="onImageFileChosen">
+        </nav>
 
-              <!-- Resize handles (selected only) -->
-              <template v-if="selectedId === el.id && !el.locked">
-                <div v-for="h in ['nw','n','ne','e','se','s','sw','w'] as ResizeHandle[]" :key="h"
-                  class="qrt-handle"
-                  :class="`qrt-handle--${h}`"
-                  @pointerdown.stop="startResize($event, el, h)"
-                ></div>
+        <!-- ── Left slide-out panel: content for whichever rail icon is active ── -->
+        <aside v-if="activeRailPanel" class="properties-panel properties-panel--left" @click.stop>
+
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">DESIGN</p>
+            <label>Design name<input v-model="design.name" maxlength="80"></label>
+            <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
+            <p :class="['field-note', { invalid: !destinationValid }]">
+              <i :class="destinationValid ? 'bi bi-shield-check' : 'bi bi-exclamation-circle'"></i>
+              {{ destinationValid ? 'Short HTTPS link ready to encode.' : 'Use a complete https:// URL.' }}
+            </p>
+          </section>
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">OUTPUT</p>
+            <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
+            <div class="standard-card">
+              <div><i class="bi bi-patch-check-fill"></i><b>Scan-safe standard</b></div>
+              <ul><li>Error correction H</li><li>4-module quiet zone</li><li>Rounded modules + anchors</li><li>Peshkash brand mark</li></ul>
+            </div>
+          </section>
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">ELEMENTS</p>
+            <div class="vis-toggles">
+              <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
+                <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                Peshkash mark
+              </button>
+            </div>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'background'">
+            <p class="panel-kicker">BACKGROUND</p>
+            <div class="bg-swatch-grid">
+              <button v-for="preset in BACKGROUND_PRESETS" :key="preset.label"
+                      class="bg-swatch"
+                      :class="{ active: currentBgColor === preset.color }"
+                      :style="{ background: preset.color }"
+                      :title="preset.label"
+                      @click="applyBackgroundPreset(preset)">
+                <i v-if="currentBgColor === preset.color" class="bi bi-check2" :style="{ color: preset.ink }"></i>
+              </button>
+              <label class="bg-swatch bg-swatch--custom" title="Custom color">
+                <input type="color" :value="currentBgColor" @input="setCustomBackground(($event.target as HTMLInputElement).value)">
+                <i class="bi bi-palette2"></i>
+              </label>
+            </div>
+            <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'typography'">
+            <p class="panel-kicker">TYPOGRAPHY</p>
+            <div class="font-pairing-list">
+              <button v-for="pairing in FONT_PAIRINGS" :key="pairing.id" class="font-pairing-btn"
+                      :class="{ active: typography.pairingId === pairing.id }"
+                      @click="setFontPairing(pairing.id)">
+                <span class="font-pairing-sample" :style="{ fontFamily: pairing.displayFont }">Aa</span>
+                <span class="font-pairing-label">{{ pairing.label }}</span>
+                <i v-if="typography.pairingId === pairing.id" class="bi bi-check2"></i>
+              </button>
+            </div>
+            <div class="type-scale-row">
+              <span class="field-hint" style="margin:0">Size</span>
+              <button class="scale-btn" title="Smaller" :disabled="typography.scale <= 0.75" @click="setTypeScale(typography.scale - 0.05)"><i class="bi bi-dash"></i></button>
+              <span class="scale-value">{{ Math.round(typography.scale * 100) }}%</span>
+              <button class="scale-btn" title="Larger" :disabled="typography.scale >= 1.4" @click="setTypeScale(typography.scale + 0.05)"><i class="bi bi-plus"></i></button>
+            </div>
+            <p class="field-hint" style="margin-top:6px">Applies to eyebrow, headline, descriptor, CTA and the merchant name.</p>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'elements'">
+            <p class="panel-kicker">ELEMENT BANK</p>
+            <p class="field-hint" style="margin-bottom:10px">Text, shapes, CTA badges and images — click to drop one on the canvas, then drag, resize or edit it.</p>
+            <div class="element-bank">
+              <button v-for="preset in ELEMENT_PRESETS" :key="preset.id" class="bank-item" @click="addElement(preset.id)" :title="'Add ' + preset.label">
+                <span class="bank-icon" v-html="preset.icon"></span>
+                <span>{{ preset.label }}</span>
+              </button>
+              <button class="bank-item" @click="imageFileInput?.click()" title="Upload an image">
+                <span class="bank-icon"><i class="bi bi-image"></i></span>
+                <span>Image</span>
+              </button>
+            </div>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'layers' && layerRows.length">
+            <p class="panel-kicker">LAYERS</p>
+            <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
+            <div class="layers-list">
+              <template v-for="(el, i) in layerRows" :key="el.id">
+                <div v-if="i > 0 && (el.layer ?? 'front') !== (layerRows[i-1].layer ?? 'front')" class="layers-divider">
+                  <span>behind QR &amp; text</span>
+                </div>
+                <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
+                  <i class="bi bi-grip-vertical layer-grip"></i>
+                  <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
+                  <span class="layer-name">{{ layerLabel(el) }}</span>
+                  <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
+                  <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
+                  <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
+                </div>
               </template>
             </div>
+          </section>
 
+        </aside>
+
+        <!-- ── Interactive canvas stage ─────────────────────── -->
+        <section class="canvas-stage" ref="stageRef">
+          <div class="stage-ruler">
+            <span>{{ activeTemplate.ratio }}</span>
+            <span>{{ Math.round(design.widthMm) }} × {{ Math.round(design.heightMm) }} mm</span>
           </div>
-          <!-- Canvas size badge -->
-          <div class="qrt-canvas-badge">{{ tpl.widthMm }} × {{ tpl.heightMm }} mm</div>
+          <div class="canvas-wrap" ref="canvasWrapRef" :class="{ 'is-dragging': isDragging }">
+            <div class="canvas-root"
+                 :style="{ width: displayW + 'px', height: displayH + 'px' }"
+                 @click.self="selectedEl = null; selectedElementId = null">
 
-          <!-- Non-editable Peshkash footer preview (matches export output) -->
-          <div class="qrt-brand-footer" :style="{ width: `${tpl.widthMm * displayScale}px` }">
-            <div class="qrt-brand-footer-mark">
-              <svg viewBox="235 95 360 380" xmlns="http://www.w3.org/2000/svg" height="100%" width="auto" style="display:block">
-                <polygon points="391.5,164 471,164 516,205 391.5,276.5" fill="#E8DBCE"/>
-                <polygon points="516,205 516,262.5 470.5,310 391.5,276.5" fill="#C5AF9D"/>
-                <polygon points="391.5,276.5 470.5,310 391.5,310" fill="#8C7667"/>
-                <polygon points="335,164 392,164 392,415 364,389 335,415" fill="#BB9057"/>
+              <!-- Background layers (pointer-events:none) -->
+              <div class="canvas-bg" :style="{ background: bgColor }"></div>
+              <div class="canvas-inner" :style="innerBgStyle"></div>
+
+              <!-- Scan corners SVG (pointer-events:none) -->
+              <svg class="canvas-corners"
+                   :width="displayW" :height="displayH"
+                   :viewBox="`0 0 ${displayW} ${displayH}`"
+                   style="pointer-events:none">
+                <g fill="none" stroke="#BB9057" :stroke-width="cornerSw" opacity=".8">
+                  <path v-for="(d, i) in cornerPaths" :key="i" :d="d"/>
+                </g>
               </svg>
-            </div>
-            <div class="qrt-brand-footer-text">
-              <span class="qrt-brand-powered">powered by</span>
-              <span class="qrt-brand-name">peshkash</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Right Sidebar: Properties -->
-      <aside class="qrt-sidebar-right" :class="{ 'panel-hidden': !rightPanelOpen }">
+              <!-- Element bank: backdrop shapes (behind QR/copy/merchant/brandmark) -->
+              <CanvasElementView v-for="el in backCanvasElements" :key="el.id"
+                   :el="el" :scale="canvasScale"
+                   :selected="selectedElementId === el.id"
+                   :editing="editingElementId === el.id"
+                   @pointerdown="onCanvasElPointerDown"
+                   @select="selectElement"
+                   @start-text-edit="startElementTextEdit"
+                   @end-text-edit="endElementTextEdit"
+                   @input-text="onElementInputText"
+                   @resize-height="onElementResizeHeight"
+                   @resize-pointerdown="startCanvasElResize"
+                   @delete="deleteElement" />
 
-        <!-- Canvas settings (always visible at top) -->
-        <div class="qrt-props-group">
-          <p class="qrt-props-label">Canvas</p>
-          <div class="qrt-props-row">
-            <label class="qrt-prop-field">
-              <span>Width</span>
-              <div class="qrt-unit-input">
-                <input type="number" :value="fromMm(tpl.widthMm)" min="10" max="500" step="0.5"
-                  @change="tpl.widthMm = toMm(($event.target as HTMLInputElement).value); fitZoom()" />
-                <span>{{ unitLabel() }}</span>
+              <!-- QR Code element: full element is draggable -->
+              <div class="canvas-el el--qr"
+                   :class="{ selected: selectedEl === 'qr' }"
+                   :style="qrElStyle"
+                   @pointerdown.stop="startQrDrag"
+                   @click.stop="selectedEl = 'qr'">
+                <img :src="qrDataUri" style="width:100%;height:100%;display:block">
+                <template v-if="selectedEl === 'qr'">
+                  <div class="sel-ring"></div>
+                  <div class="resize-handle"
+                       @pointerdown.stop="startQrResize"
+                       title="Drag to resize"></div>
+                  <button class="qr-reset-btn" v-if="qrWasEdited" @click.stop="resetQrPos" title="Reset position"><i class="bi bi-arrow-counterclockwise"></i></button>
+                </template>
               </div>
-            </label>
-            <label class="qrt-prop-field">
-              <span>Height</span>
-              <div class="qrt-unit-input">
-                <input type="number" :value="fromMm(tpl.heightMm)" min="10" max="500" step="0.5"
-                  @change="tpl.heightMm = toMm(($event.target as HTMLInputElement).value); fitZoom()" />
-                <span>{{ unitLabel() }}</span>
+
+              <!-- Copy block: grab anywhere to drag (Canva-style); double-click a line to edit it -->
+              <div class="canvas-el el--copy"
+                   :class="{ selected: selectedEl === 'copy', 'is-editing-text': editingKey }"
+                   :style="copyElStyle"
+                   @pointerdown="onBlockPointerDown('copy', $event)"
+                   @click.stop="selectedEl = 'copy'">
+                <div v-if="vis.eyebrow"
+                     class="t-line t-eyebrow"
+                     :style="eyebrowStyle"
+                     :key="'ey-' + designKey"
+                     ref="eyebrowEl"
+                     :contenteditable="editingKey === 'eyebrow'"
+                     spellcheck="false"
+                     @dblclick.stop="startTextEdit('eyebrow', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
+                     @input="design.eyebrow = ($event.target as HTMLElement).innerText"
+                >{{ design.eyebrow }}</div>
+                <div v-if="vis.headline"
+                     class="t-line t-headline"
+                     :style="headlineStyle"
+                     :key="'hl-' + designKey"
+                     ref="headlineEl"
+                     :contenteditable="editingKey === 'headline'"
+                     spellcheck="false"
+                     @dblclick.stop="startTextEdit('headline', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
+                     @input="design.headline = ($event.target as HTMLElement).innerText"
+                >{{ design.headline }}</div>
+                <div v-if="vis.descriptor"
+                     class="t-line t-descriptor"
+                     :style="descriptorStyle"
+                     :key="'ds-' + designKey"
+                     ref="descriptorEl"
+                     :contenteditable="editingKey === 'descriptor'"
+                     spellcheck="false"
+                     @dblclick.stop="startTextEdit('descriptor', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
+                     @input="design.descriptor = ($event.target as HTMLElement).innerText"
+                >{{ design.descriptor }}</div>
+                <div v-if="vis.cta"
+                     class="t-line t-cta"
+                     :style="ctaStyle"
+                     :key="'ct-' + designKey"
+                     ref="ctaEl"
+                     :contenteditable="editingKey === 'cta'"
+                     spellcheck="false"
+                     @dblclick.stop="startTextEdit('cta', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
+                     @input="design.cta = ($event.target as HTMLElement).innerText"
+                >{{ design.cta }}</div>
+                <div v-if="selectedEl === 'copy'" class="sel-ring"></div>
+                <div v-if="selectedEl === 'copy'"
+                     class="resize-handle resize-handle--h"
+                     @pointerdown.stop="startElResize('copy', $event)"
+                     title="Drag to resize width"></div>
               </div>
-            </label>
-          </div>
-          <div class="qrt-props-row">
-            <label class="qrt-prop-field wide">
-              <span>Preset</span>
-              <select class="form-control form-control-sm" @change="applyPreset(PRESETS[+($event.target as HTMLSelectElement).value])">
-                <option v-for="(p, i) in PRESETS" :key="i" :value="i">{{ p.label }}</option>
-              </select>
-            </label>
-          </div>
-        </div>
 
-        <!-- Element properties -->
-        <template v-if="selectedEl">
+              <!-- Merchant name element -->
+              <div v-if="vis.merchantName"
+                   class="canvas-el el--merchant"
+                   :class="{ selected: selectedEl === 'merchant', 'is-editing-text': editingKey === 'merchantName' }"
+                   :style="merchantElStyle"
+                   @pointerdown="onBlockPointerDown('merchant', $event)"
+                   @click.stop="selectedEl = 'merchant'">
+                <div class="t-line t-merchant"
+                     :style="merchantTextStyle"
+                     :key="'mn-' + designKey"
+                     ref="merchantEl"
+                     :contenteditable="editingKey === 'merchantName'"
+                     spellcheck="false"
+                     @dblclick.stop="startTextEdit('merchantName', $event)"
+                     @blur="endTextEdit"
+                     @keydown.escape="($event.target as HTMLElement).blur()"
+                     @input="design.merchantName = ($event.target as HTMLElement).innerText"
+                >{{ design.merchantName }}</div>
+                <div v-if="selectedEl === 'merchant'" class="sel-ring"></div>
+                <div v-if="selectedEl === 'merchant'"
+                     class="resize-handle resize-handle--h"
+                     @pointerdown.stop="startElResize('merchant', $event)"
+                     title="Drag to resize width"></div>
+              </div>
 
-          <!-- Common -->
-          <div class="qrt-props-group">
-            <p class="qrt-props-label">{{ selectedEl.name }} <span class="qrt-type-badge">{{ selectedEl.type }}</span></p>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field"><span>Name</span><input type="text" v-model="selectedEl.name" class="form-control form-control-sm" /></label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>X</span>
-                <div class="qrt-unit-input">
-                  <input type="number" :value="fromMm(selectedEl.x)" step="0.5"
-                    @change="selectedEl!.x = toMm(($event.target as HTMLInputElement).value)" />
-                  <span>{{ unitLabel() }}</span>
-                </div>
-              </label>
-              <label class="qrt-prop-field">
-                <span>Y</span>
-                <div class="qrt-unit-input">
-                  <input type="number" :value="fromMm(selectedEl.y)" step="0.5"
-                    @change="selectedEl!.y = toMm(($event.target as HTMLInputElement).value)" />
-                  <span>{{ unitLabel() }}</span>
-                </div>
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Width</span>
-                <div class="qrt-unit-input">
-                  <input type="number" :value="fromMm(selectedEl.width)" min="2" step="0.5"
-                    @change="selectedEl!.width = toMm(($event.target as HTMLInputElement).value)" />
-                  <span>{{ unitLabel() }}</span>
-                </div>
-              </label>
-              <label class="qrt-prop-field">
-                <span>Height</span>
-                <div class="qrt-unit-input">
-                  <input type="number" :value="fromMm(selectedEl.height)" min="2" step="0.5"
-                    @change="selectedEl!.height = toMm(($event.target as HTMLInputElement).value)" />
-                  <span>{{ unitLabel() }}</span>
-                </div>
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field wide">
-                <span>Lock position</span>
-                <input type="checkbox" v-model="selectedEl.locked" />
-              </label>
-            </div>
-          </div>
+              <!-- Brand mark: drag anywhere to move (Canva-style), corner handle to resize (locked aspect) -->
+              <div v-if="vis.brandmark"
+                   class="canvas-el el--brandmark"
+                   :class="{ selected: selectedEl === 'brandmark' }"
+                   :style="bmContainerStyle"
+                   @pointerdown.stop="startElDrag('brandmark', $event)"
+                   @click.stop="selectedEl = 'brandmark'; selectedElementId = null">
+                <img
+                  :src="dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg'"
+                  :style="bmImgStyle"
+                  draggable="false">
+                <template v-if="selectedEl === 'brandmark'">
+                  <div class="sel-ring"></div>
+                  <div class="resize-handle" @pointerdown.stop="startBrandmarkResize" title="Drag to resize"></div>
+                </template>
+              </div>
 
-          <!-- Alignment quick actions -->
-          <div class="qrt-props-group">
-            <p class="qrt-props-label">Align on canvas</p>
-            <div class="qrt-align-btns">
-              <button title="Left" @click="selectedEl!.x = 0"><i class="bi bi-align-start"></i></button>
-              <button title="Center H" @click="selectedEl!.x = (tpl.widthMm - selectedEl!.width) / 2"><i class="bi bi-align-center"></i></button>
-              <button title="Right" @click="selectedEl!.x = tpl.widthMm - selectedEl!.width"><i class="bi bi-align-end"></i></button>
-              <button title="Top" @click="selectedEl!.y = 0"><i class="bi bi-align-top"></i></button>
-              <button title="Center V" @click="selectedEl!.y = (tpl.heightMm - selectedEl!.height) / 2"><i class="bi bi-align-middle"></i></button>
-              <button title="Bottom" @click="selectedEl!.y = tpl.heightMm - selectedEl!.height"><i class="bi bi-align-bottom"></i></button>
-            </div>
-          </div>
+              <!-- Element bank: foreground shapes / CTA badges / text / images (above everything else) -->
+              <CanvasElementView v-for="el in frontCanvasElements" :key="el.id"
+                   :el="el" :scale="canvasScale"
+                   :selected="selectedElementId === el.id"
+                   :editing="editingElementId === el.id"
+                   @pointerdown="onCanvasElPointerDown"
+                   @select="selectElement"
+                   @start-text-edit="startElementTextEdit"
+                   @end-text-edit="endElementTextEdit"
+                   @input-text="onElementInputText"
+                   @resize-height="onElementResizeHeight"
+                   @resize-pointerdown="startCanvasElResize"
+                   @delete="deleteElement" />
 
-          <!-- QR-specific -->
-          <div v-if="selectedEl.type === 'qr'" class="qrt-props-group">
-            <p class="qrt-props-label">QR Style</p>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Foreground</span>
-                <input type="color" :value="(selectedEl as QrEl).fgColor" @input="(selectedEl as QrEl).fgColor = ($event.target as HTMLInputElement).value" class="qrt-color-input" />
-              </label>
-              <label class="qrt-prop-field">
-                <span>Background</span>
-                <input type="color" :value="(selectedEl as QrEl).bgColor" @input="(selectedEl as QrEl).bgColor = ($event.target as HTMLInputElement).value" class="qrt-color-input" />
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Quiet zone (mm)</span>
-                <input type="number" v-model.number="(selectedEl as QrEl).margin" min="0" max="10" step="0.5" class="form-control form-control-sm" />
-              </label>
-              <label class="qrt-prop-field">
-                <span>Corner radius</span>
-                <input type="number" v-model.number="(selectedEl as QrEl).borderRadius" min="0" max="20" step="0.5" class="form-control form-control-sm" />
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field wide">
-                <span>Error correction</span>
-                <select v-model="(selectedEl as QrEl).errorLevel" class="form-control form-control-sm">
-                  <option value="L">L — Low (7%)</option>
-                  <option value="M">M — Medium (15%)</option>
-                  <option value="Q">Q — Quartile (25%)</option>
-                  <option value="H">H — High (30%)</option>
-                </select>
-              </label>
-            </div>
-          </div>
+              <!-- Canva-style center snap guides -->
+              <div v-if="snapGuides.centerX" class="snap-guide snap-guide--v" :style="{ left: (displayW / 2) + 'px' }"></div>
+              <div v-if="snapGuides.centerY" class="snap-guide snap-guide--h" :style="{ top: (displayH / 2) + 'px' }"></div>
 
-          <!-- Text-specific -->
-          <div v-else-if="selectedEl.type === 'text'" class="qrt-props-group">
-            <p class="qrt-props-label">Text</p>
-            <label class="qrt-prop-field wide" style="margin-bottom:8px">
-              <span>Content</span>
-              <textarea v-model="(selectedEl as TextEl).content" class="form-control form-control-sm" rows="2"></textarea>
-              <span class="input-hint">Use {{'{'}}{{'{'}}vendorName{{'}'}}{{'}'}}, {{'{'}}{{'{'}}eventName{{'}'}}{{'}'}} as placeholders</span>
-            </label>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field wide">
-                <span>Font</span>
-                <select v-model="(selectedEl as TextEl).fontFamily" class="form-control form-control-sm">
-                  <option v-for="f in FONTS" :key="f" :value="f">{{ f }}</option>
-                </select>
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Size (pt)</span>
-                <input type="number" v-model.number="(selectedEl as TextEl).fontSize" min="4" max="120" step="1" class="form-control form-control-sm" />
-              </label>
-              <label class="qrt-prop-field">
-                <span>Color</span>
-                <input type="color" :value="(selectedEl as TextEl).color" @input="(selectedEl as TextEl).color = ($event.target as HTMLInputElement).value" class="qrt-color-input" />
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Weight</span>
-                <select v-model="(selectedEl as TextEl).fontWeight" class="form-control form-control-sm">
-                  <option value="300">Light</option>
-                  <option value="400">Regular</option>
-                  <option value="500">Medium</option>
-                  <option value="600">Semibold</option>
-                  <option value="700">Bold</option>
-                </select>
-              </label>
-              <label class="qrt-prop-field">
-                <span>Align</span>
-                <select v-model="(selectedEl as TextEl).textAlign" class="form-control form-control-sm">
-                  <option value="left">Left</option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
-                </select>
-              </label>
-            </div>
-          </div>
+            </div><!-- /canvas-root -->
+          </div><!-- /canvas-wrap -->
+          <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it, snaps to center · Double-click text to edit · Arrow keys to nudge, Shift for bigger steps</div>
+        </section>
 
-          <!-- Image-specific -->
-          <div v-else-if="selectedEl.type === 'image'" class="qrt-props-group">
-            <p class="qrt-props-label">Image</p>
-            <label class="qrt-prop-field wide" style="margin-bottom:8px">
-              <span>Image URL</span>
-              <input type="text" v-model="(selectedEl as ImageEl).src" class="form-control form-control-sm" placeholder="https://…" />
-            </label>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Fit</span>
-                <select v-model="(selectedEl as ImageEl).objectFit" class="form-control form-control-sm">
-                  <option value="contain">Contain</option>
-                  <option value="cover">Cover</option>
-                  <option value="fill">Fill</option>
-                </select>
-              </label>
-              <label class="qrt-prop-field">
-                <span>Radius (mm)</span>
-                <input type="number" v-model.number="(selectedEl as ImageEl).borderRadius" min="0" max="50" step="0.5" class="form-control form-control-sm" />
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field wide">
-                <span>Opacity</span>
-                <input type="range" v-model.number="(selectedEl as ImageEl).opacity" min="0" max="1" step="0.05" style="width:100%" />
-              </label>
-            </div>
-          </div>
+        <!-- ── Properties dock: only appears once something on canvas is selected ── -->
+        <aside v-if="selectedEl || selectedElementId" class="properties-panel properties-panel--right" @click.stop>
 
-          <!-- Rect-specific -->
-          <div v-else-if="selectedEl.type === 'rect'" class="qrt-props-group">
-            <p class="qrt-props-label">Shape</p>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Fill</span>
-                <input type="color" :value="(selectedEl as RectEl).fill" @input="(selectedEl as RectEl).fill = ($event.target as HTMLInputElement).value" class="qrt-color-input" />
-              </label>
-              <label class="qrt-prop-field">
-                <span>Stroke</span>
-                <input type="color" :value="(selectedEl as RectEl).stroke" @input="(selectedEl as RectEl).stroke = ($event.target as HTMLInputElement).value" class="qrt-color-input" />
-              </label>
+          <!-- QR Code selected -->
+          <template v-if="selectedEl === 'qr'">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">QR SIGNATURE</p>
             </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field">
-                <span>Stroke (mm)</span>
-                <input type="number" v-model.number="(selectedEl as RectEl).strokeWidth" min="0" max="10" step="0.1" class="form-control form-control-sm" />
-              </label>
-              <label class="qrt-prop-field">
-                <span>Radius (mm)</span>
-                <input type="number" v-model.number="(selectedEl as RectEl).borderRadius" min="0" max="50" step="0.5" class="form-control form-control-sm" />
-              </label>
-            </div>
-            <div class="qrt-props-row">
-              <label class="qrt-prop-field wide">
-                <span>Opacity</span>
-                <input type="range" v-model.number="(selectedEl as RectEl).opacity" min="0" max="1" step="0.05" style="width:100%" />
-              </label>
-            </div>
-          </div>
-
-          <div class="qrt-props-group">
-            <button class="btn btn-sm" style="color:#c05050;border:1px solid #e8c0c0;background:transparent;width:100%" @click="deleteSelected">
-              <i class="bi bi-trash3"></i> Remove element
+            <button v-for="(style, id) in qrManifest.qrStyles" :key="id" class="signature-card" :class="{ active: design.qrStyle === id }" @click="design.qrStyle = id as QrStyleId">
+              <img :src="signaturePreview(id as QrStyleId)" alt="">
+              <span><b>{{ style.label }}</b><small>{{ style.medallion }}</small></span>
+              <i class="bi bi-check-circle-fill"></i>
             </button>
-          </div>
+            <p class="panel-kicker" style="margin-top:18px">POSITION &amp; SIZE</p>
+            <p class="field-hint">Drag the QR code on the canvas to reposition — it snaps to center. Drag the <b>bottom-right corner</b> to resize, or use arrow keys to nudge.</p>
+            <button v-if="qrWasEdited" class="reset-btn" @click="resetQrPos"><i class="bi bi-arrow-counterclockwise"></i> Reset to template default</button>
+          </template>
 
-        </template>
+          <!-- Copy block selected -->
+          <template v-else-if="selectedEl === 'copy'">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">COPY BLOCK</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the block to move it (snaps to center) or use arrow keys to nudge. Drag its right edge to resize width. Double-click any line to edit it directly.</p>
+            <section>
+              <p class="panel-kicker" style="margin-bottom:10px">ELEMENTS</p>
+              <div class="vis-toggles">
+                <button v-for="key in (['eyebrow','headline','descriptor','cta'] as ElementKey[])" :key="key"
+                        :class="['vis-btn', { active: vis[key] }]"
+                        @click="toggleVis(key)" :title="vis[key] ? 'Hide ' + key : 'Show ' + key">
+                  <i :class="vis[key] ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  {{ key.charAt(0).toUpperCase() + key.slice(1) }}
+                </button>
+              </div>
+            </section>
+            <section>
+              <label>Eyebrow<input v-model="design.eyebrow" maxlength="40" placeholder="e.g. ORIGINAL WORK" :disabled="!vis.eyebrow"></label>
+              <label>Headline<textarea v-model="design.headline" rows="2" maxlength="90" placeholder="e.g. Study No. 14" :disabled="!vis.headline"></textarea></label>
+              <label>Descriptor<input v-model="design.descriptor" maxlength="100" placeholder="e.g. Process · provenance · available pieces" :disabled="!vis.descriptor"></label>
+              <label>Call to action<input v-model="design.cta" maxlength="40" placeholder="e.g. Scan to explore" :disabled="!vis.cta"></label>
+            </section>
+          </template>
 
-        <div v-else class="qrt-no-selection">
-          <i class="bi bi-cursor-text"></i>
-          <p>Click an element to edit its properties</p>
+          <!-- Brand / Merchant selected -->
+          <template v-else-if="selectedEl === 'merchant'">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">BRAND NAME</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag the name to move it (snaps to center) or use arrow keys to nudge. Drag its right edge to resize width. Double-click it to edit directly.</p>
+            <section>
+              <div class="vis-toggles" style="margin-bottom:14px">
+                <button :class="['vis-btn', { active: vis.merchantName }]" @click="toggleVis('merchantName')">
+                  <i :class="vis.merchantName ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  Show name
+                </button>
+              </div>
+              <label>Business or maker<input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName"></label>
+            </section>
+          </template>
+
+          <!-- Brand mark selected -->
+          <template v-else-if="selectedEl === 'brandmark'">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">PESHKASH MARK</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move, corner handle to resize (aspect ratio locked).</p>
+            <section>
+              <div class="vis-toggles">
+                <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
+                  <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                  Show mark
+                </button>
+              </div>
+            </section>
+          </template>
+
+          <!-- Freeform shape / CTA badge / text / image selected -->
+          <template v-else-if="selectedElementId && selectedElement">
+            <div class="panel-back-row">
+              <button class="back-to-props" @click="selectedElementId = null"><i class="bi bi-arrow-left"></i></button>
+              <p class="panel-kicker">{{ { shape: 'SHAPE', cta: 'CTA BADGE', text: 'TEXT', image: 'IMAGE' }[selectedElement.kind] }}</p>
+            </div>
+            <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta' || selectedElement.kind === 'text'">, double-click the text to edit it</span>.</p>
+            <section>
+              <p class="panel-kicker" style="margin-bottom:10px">LAYER ORDER</p>
+              <div class="layer-order-grid">
+                <button class="layer-order-btn" @click="bringToFront(selectedElementId)" title="Bring to front"><i class="bi bi-chevron-bar-up"></i><span>To front</span></button>
+                <button class="layer-order-btn" @click="moveElement(selectedElementId, 'up')" title="Move forward one step"><i class="bi bi-chevron-up"></i><span>Forward</span></button>
+                <button class="layer-order-btn" @click="moveElement(selectedElementId, 'down')" title="Move backward one step"><i class="bi bi-chevron-down"></i><span>Backward</span></button>
+                <button class="layer-order-btn" @click="sendToBack(selectedElementId)" title="Send to back"><i class="bi bi-chevron-bar-down"></i><span>To back</span></button>
+              </div>
+              <p class="field-hint" style="margin-top:8px">
+                <i :class="(selectedElement.layer ?? 'front') === 'front' ? 'bi bi-layers-fill' : 'bi bi-layers'"></i>
+                Currently {{ (selectedElement.layer ?? 'front') === 'front' ? 'in front of' : 'behind' }} the QR code and text.
+              </p>
+            </section>
+            <section v-if="selectedElement.kind === 'shape' || selectedElement.kind === 'cta'">
+              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
+              <label>{{ selectedElement.kind === 'shape' && selectedElement.shape === 'frame' ? 'Border color' : 'Fill color' }}<input type="color" v-model="selectedElement.fill" class="color-input"></label>
+              <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
+              <label v-if="selectedElement.kind === 'shape' && (selectedElement.shape === 'rect' || selectedElement.shape === 'frame')">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+            </section>
+            <section v-else-if="selectedElement.kind === 'text'">
+              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200"></textarea></label>
+              <label>Font<select v-model="selectedElement.fontFamily" :style="{ fontFamily: selectedElement.fontFamily }">
+                <option v-for="f in TEXT_FONT_CHOICES" :key="f.value" :value="f.value" :style="{ fontFamily: f.value }">{{ f.label }}</option>
+              </select></label>
+              <label>Size<input type="number" min="8" max="400" v-model.number="selectedElement.fontSize"></label>
+              <div class="text-style-row">
+                <button class="vis-btn" :class="{ active: selectedElement.fontWeight === '700' }" @click="selectedElement.fontWeight = selectedElement.fontWeight === '700' ? '400' : '700'" title="Bold"><i class="bi bi-type-bold"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'left' }" @click="selectedElement.align = 'left'" title="Align left"><i class="bi bi-text-left"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'center' }" @click="selectedElement.align = 'center'" title="Align center"><i class="bi bi-text-center"></i></button>
+                <button class="vis-btn" :class="{ active: selectedElement.align === 'right' }" @click="selectedElement.align = 'right'" title="Align right"><i class="bi bi-text-right"></i></button>
+              </div>
+              <label>Color<input type="color" v-model="selectedElement.color" class="color-input"></label>
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+            </section>
+            <section v-else-if="selectedElement.kind === 'image'">
+              <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
+              <button class="reset-btn" @click="imageFileInput?.click(); replacingImageId = selectedElementId"><i class="bi bi-arrow-repeat"></i> Replace image</button>
+            </section>
+            <div class="el-action-row">
+              <button class="reset-btn" @click="duplicateElement(selectedElementId)"><i class="bi bi-copy"></i> Duplicate</button>
+              <button class="reset-btn reset-btn--danger" @click="deleteElement(selectedElementId)"><i class="bi bi-trash"></i> Delete</button>
+            </div>
+          </template>
+
+        </aside>
+      </main>
+    </template>
+
+    <div v-if="notice" class="notice" role="status"><i class="bi bi-check2-circle"></i>{{ notice }}</div>
+
+    <!-- ── Template creator ─────────────────────────────── -->
+    <div v-if="showCreator" class="creator-overlay" @click.self="showCreator = false">
+      <div class="creator-modal">
+        <div class="creator-head">
+          <div><p class="eyebrow">NEW TEMPLATE</p><h3>Design a custom template</h3></div>
+          <button class="creator-close" @click="showCreator = false" title="Close"><i class="bi bi-x-lg"></i></button>
         </div>
-
-      </aside>
-    </div>
-
-    <!-- Footer toolbar -->
-    <footer class="qrt-footer">
-      <div class="qrt-zoom-controls">
-        <button class="qrt-icon-btn sm" @click="setZoom(zoom - 0.1)"><i class="bi bi-dash"></i></button>
-        <button class="qrt-zoom-pct" @click="fitZoom">{{ Math.round(zoom * 100) }}%</button>
-        <button class="qrt-icon-btn sm" @click="setZoom(zoom + 0.1)"><i class="bi bi-plus"></i></button>
-        <button class="qrt-icon-btn sm" title="Fit to window" @click="fitZoom"><i class="bi bi-fullscreen-exit"></i></button>
-      </div>
-      <div class="qrt-unit-toggle">
-        <span>Unit</span>
-        <div class="qrt-unit-btns">
-          <button :class="{ active: unit === 'mm' }" @click="unit = 'mm'">mm</button>
-          <button :class="{ active: unit === 'cm' }" @click="unit = 'cm'">cm</button>
-          <button :class="{ active: unit === 'in' }" @click="unit = 'in'">in</button>
-        </div>
-      </div>
-      <div class="qrt-footer-hint">
-        <i class="bi bi-info-circle"></i>
-        300 DPI export · Peshkash mark auto-added · Del removes · Ctrl+Z undo
-      </div>
-    </footer>
-
-  </div>
-
-  <!-- ── PREVIEW MODAL ───────────────────────────────────────── -->
-  <Teleport to="body">
-    <div v-if="showPreview" class="qrt-preview-backdrop" @click.self="showPreview = false">
-      <div class="qrt-preview-modal">
-        <div class="qrt-preview-header">
-          <div>
-            <h3>Preview — {{ tpl.name }}</h3>
-            <p class="hint">Rendered at 300 DPI. Actual print quality.</p>
-          </div>
-          <button class="qrt-icon-btn" @click="showPreview = false"><i class="bi bi-x-lg"></i></button>
-        </div>
-
-        <div class="qrt-preview-qr-row">
-          <label class="qrt-preview-qr-label">
-            <span>QR Value to preview</span>
-            <input
-              v-model="previewQrValue"
-              class="form-control form-control-sm"
-              placeholder="https://peshkash.com/your-hash"
-              @change="renderPreview"
-            />
-          </label>
-          <button class="btn btn-outline-secondary btn-sm" :disabled="previewRendering" @click="renderPreview">
-            <i class="bi bi-arrow-clockwise"></i> Re-render
+        <label class="creator-name-field">Template name
+          <input v-model="creatorName" maxlength="60" placeholder="e.g. Rooftop Bar Table Tent">
+        </label>
+        <p class="creator-sub">Choose a shape</p>
+        <div class="format-grid">
+          <button v-for="preset in FORMAT_PRESETS" :key="preset.format"
+                  :class="['format-option', { active: creatorFormat === preset.format }]"
+                  @click="creatorFormat = preset.format">
+            <span class="format-swatch" :class="{ round: preset.format === 'round' }" :style="{ aspectRatio: `${preset.aspect.w} / ${preset.aspect.h}` }"></span>
+            <b>{{ preset.label }}</b>
+            <small>{{ preset.description }}</small>
           </button>
         </div>
-
-        <div class="qrt-preview-canvas-area">
-          <div v-if="previewRendering" class="qrt-preview-loading">
-            <peshkash-loader size="80" theme="dark" label="Rendering preview" />
-          </div>
-          <img v-else-if="previewDataUrl" :src="previewDataUrl" class="qrt-preview-img" :alt="`Preview of ${tpl.name}`" />
-        </div>
-
-        <div class="qrt-preview-footer">
-          <span class="hint">{{ tpl.widthMm }} × {{ tpl.heightMm }} mm · {{ tpl.elements.length }} element{{ tpl.elements.length !== 1 ? 's' : '' }}</span>
-          <div class="qrt-preview-footer-actions">
-            <button class="btn btn-outline-secondary btn-sm" @click="showPreview = false">Close</button>
-            <button class="btn btn-primary btn-sm" :disabled="!previewDataUrl" @click="downloadPreview">
-              <i class="bi bi-download"></i> Download PNG
-            </button>
-          </div>
+        <div class="creator-actions">
+          <button class="secondary-action" @click="showCreator = false">Cancel</button>
+          <button class="primary-action" @click="startCustomTemplate">Create template <i class="bi bi-arrow-right"></i></button>
         </div>
       </div>
     </div>
-  </Teleport>
+  </div>
 </template>
 
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, type Ref } from 'vue';
+import { useRoute } from 'vue-router';
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
+import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
+import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement } from '../features/qrStudio/types';
+import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
+import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES, FONT_PAIRINGS, fontPairingFor, DEFAULT_TYPOGRAPHY } from '../features/qrStudio/elementPresets';
+import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
+import '../features/qrStudio/qr-template-tokens.css';
+
+// Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
+const LOGO_SVG_W = 1536, LOGO_SVG_H = 512;
+const LOGO_CX1 = 335, LOGO_CX2 = 1312, LOGO_CY1 = 164, LOGO_CY2 = 415;
+
+const props = withDefaults(defineProps<{
+  embedded?: boolean;
+  vendorId?: number;
+  vendorName?: string;
+}>(), { embedded: false });
+const embedded = computed(() => props.embedded);
+const route = useRoute();
+const mode = ref<'library' | 'editor'>('library');
+const search = ref('');
+const activeCategory = ref('all');
+const activeTemplate = ref<QrTemplateDefinition | null>(null);
+const savedDesigns = ref<StudioDesign[]>([]);
+const saving = ref(false);
+const deleting = ref<number | string | null>(null);
+const notice = ref('');
+// Set from ?destination query param when opened from a QR asset "Design" button
+const destinationHint = ref('');
+
+// ── Template creator (build a template from scratch, compatible with the library) ────────────
+const showCreator = ref(false);
+const creatorFormat = ref<TemplateFormat>('landscape');
+const creatorName = ref('');
+
+// ── Canvas state ──────────────────────────────────────────────────────────────
+const stageRef = ref<HTMLElement>();
+const canvasWrapRef = ref<HTMLElement>();
+const imageFileInput = ref<HTMLInputElement>();
+// Set right before opening the file picker from an existing image's "Replace image" action; if
+// set when a file is chosen, that image's src is swapped in place instead of adding a new element.
+const replacingImageId = ref<string | null>(null);
+const canvasScale = ref(0.5);
+const designKey = ref(0);
+const selectedEl = ref<'qr' | 'copy' | 'merchant' | 'brandmark' | null>(null);
+// Left icon-rail: which slide-out (add/navigate) panel is open. Independent of selection — the
+// properties dock (right side) opens separately once something on canvas is selected.
+type RailPanel = 'design' | 'background' | 'typography' | 'elements' | 'layers';
+const activeRailPanel = ref<RailPanel | null>(null);
+function toggleRailPanel(panel: RailPanel): void {
+  activeRailPanel.value = activeRailPanel.value === panel ? null : panel;
+}
+// Which text line is currently in edit mode (contenteditable) — null means every element on the
+// canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
+const editingKey = ref<ElementKey | null>(null);
+
+// ── Freeform element bank (shapes / CTA badges) — separate selection track from the fixed slots
+const selectedElementId = ref<string | null>(null);
+const editingElementId = ref<string | null>(null);
+function findCanvasEl(id: string): CanvasElement | undefined {
+  return design.canvasElements?.find((el) => el.id === id);
+}
+const selectedElement = computed(() => selectedElementId.value ? findCanvasEl(selectedElementId.value) : undefined);
+const backCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'back'));
+const frontCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'front'));
+const selectedElementOpacity = computed<number>({
+  get: () => selectedElement.value?.opacity ?? 1,
+  set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
+});
+
+interface ElRect { x: number; y: number; w: number; h: number }
+const elPos = ref({
+  qr: { x: 0, y: 0, w: 0, h: 0 } as ElRect,
+  copy: { x: 0, y: 0, w: 0, h: 0 } as ElRect,
+  merchant: { x: 0, y: 0, w: 0, h: 0 } as ElRect,
+  brandmark: { x: 0, y: 0, w: 0, h: 0 } as ElRect,
+});
+const elPosDefault = ref({ qr: { x: 0, y: 0, w: 0, h: 0 } as ElRect });
+const qrWasEdited = computed(() => {
+  const q = elPos.value.qr; const d = elPosDefault.value.qr;
+  return Math.abs(q.x - d.x) > 0.5 || Math.abs(q.y - d.y) > 0.5 || Math.abs(q.w - d.w) > 0.5;
+});
+
+interface DragState { id: string; startCX: number; startCY: number; origX: number; origY: number }
+const dragState = ref<DragState | null>(null);
+// axis 'square' resizes both dimensions equally (QR); 'width' resizes only width (text blocks,
+// whose height is driven by content); 'free' resizes both independently (freeform shapes/CTAs)
+interface ResizeState { id: string; axis: 'square' | 'width' | 'free' | 'aspect'; startCX: number; startCY: number; origW: number; origH: number }
+const resizeState = ref<ResizeState | null>(null);
+const isDragging = ref(false);
+// Canva-style center snap guides — which axis the dragged element is currently snapped to
+const snapGuides = ref({ centerX: false, centerY: false });
+const SNAP_FRAC = 0.006; // snap tolerance as a fraction of the canvas short side
+
+// RAF-throttled pointer tracking — avoids flooding Vue's reactivity on every mousemove
+let _rafId: number | null = null;
+let _lastMoveEvent: PointerEvent | null = null;
+
+// Text element refs for DOM sync
+const eyebrowEl = ref<HTMLElement>();
+const headlineEl = ref<HTMLElement>();
+const descriptorEl = ref<HTMLElement>();
+const ctaEl = ref<HTMLElement>();
+const merchantEl = ref<HTMLElement>();
+
+// ── Canvas computed values ────────────────────────────────────────────────────
+const canvasW = computed(() => activeTemplate.value?.canvas.width ?? 800);
+const canvasH = computed(() => activeTemplate.value?.canvas.height ?? 600);
+const displayW = computed(() => Math.round(canvasW.value * canvasScale.value));
+const displayH = computed(() => Math.round(canvasH.value * canvasScale.value));
+const displayShort = computed(() => Math.min(displayW.value, displayH.value));
+
+const dark = computed(() => design.theme === 'dark');
+// A custom background (palette pick or hand-picked color) overrides the two-theme default; the
+// brand mark's light/dark asset still follows the theme flag so it stays legible either way.
+const bgColor = computed(() => design.background?.color ?? (dark.value ? '#1A1410' : '#F5F2EE'));
+const inkColor = computed(() => design.background?.ink ?? (dark.value ? '#F5F2EE' : '#1A1410'));
+const currentBgColor = computed(() => bgColor.value);
+// Whichever background is chosen, keep design.theme (drives the brand-mark asset + surface panel
+// tone) in sync with its actual lightness so those pieces never render backwards.
+function applyBackgroundPreset(preset: { color: string; ink: string }): void {
+  design.background = { color: preset.color, ink: preset.ink };
+  design.theme = inkForBackground(preset.color) === '#F5F2EE' ? 'dark' : 'light';
+}
+function setCustomBackground(hex: string): void {
+  const ink = inkForBackground(hex);
+  design.background = { color: hex, ink };
+  design.theme = ink === '#F5F2EE' ? 'dark' : 'light';
+}
+
+// Typography: one curated font pairing + a uniform size scale, applied to every fixed text slot
+// (eyebrow/headline/descriptor/cta/merchantName) so the copy block always restyles as a set.
+const typography = computed(() => design.typography ?? DEFAULT_TYPOGRAPHY);
+const currentPairing = computed(() => fontPairingFor(typography.value.pairingId));
+function setFontPairing(pairingId: string): void {
+  design.typography = { pairingId, scale: typography.value.scale };
+}
+function setTypeScale(scale: number): void {
+  design.typography = { pairingId: typography.value.pairingId, scale: Math.min(1.4, Math.max(0.75, scale)) };
+}
+
+const innerBgStyle = computed((): Record<string, string> => {
+  const t = activeTemplate.value; if (!t) return {};
+  const sh = displayShort.value;
+  const p = sh * 0.055; const surface = dark.value ? '#241C17' : '#FFFFFF';
+  const radius = t.format === 'tag' ? sh * 0.045 : sh * 0.018;
+  return { position: 'absolute', inset: `${p}px`, background: surface, opacity: dark.value ? '0.42' : '0.68', borderRadius: `${radius}px`, pointerEvents: 'none' };
+});
+
+const cornerSw = computed(() => Math.max(1.5, displayShort.value * 0.006));
+const cornerPaths = computed(() => {
+  const w = displayW.value, h = displayH.value, s = displayShort.value;
+  const inset = s * 0.055, arm = s * 0.08;
+  return [
+    `M${inset + arm} ${inset}H${inset}V${inset + arm}`,
+    `M${w - inset - arm} ${inset}H${w - inset}V${inset + arm}`,
+    `M${inset} ${h - inset - arm}V${h - inset}H${inset + arm}`,
+    `M${w - inset - arm} ${h - inset}H${w - inset}V${h - inset - arm}`,
+  ];
+});
+
+// QR element display style
+const qrElStyle = computed((): Record<string, string> => {
+  const { x, y, w, h } = elPos.value.qr; const s = canvasScale.value;
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, cursor: 'move' };
+});
+
+// Copy block display style
+const copyElStyle = computed((): Record<string, string> => {
+  const { x, y, w, h } = elPos.value.copy; const s = canvasScale.value;
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
+});
+
+// Merchant display style
+const merchantElStyle = computed((): Record<string, string> => {
+  const { x, y, w, h } = elPos.value.merchant; const s = canvasScale.value;
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
+});
+
+// Typography styles (in display px, matching SVG renderer proportions) — font + size scale come
+// from the design's typography pairing, kept in sync with renderTemplateSvg()'s textBlock().
+const eyebrowStyle = computed(() => ({
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '700',
+  fontSize: `${Math.round(displayShort.value * 0.027 * typography.value.scale)}px`,
+  letterSpacing: `${Math.round(displayShort.value * 0.006)}px`,
+  color: inkColor.value, textTransform: 'uppercase' as const,
+  marginBottom: `${Math.round(displayShort.value * 0.022)}px`,
+  display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
+}));
+const headlineStyle = computed(() => ({
+  fontFamily: currentPairing.value.displayFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.071 * typography.value.scale)}px`,
+  lineHeight: '1.1', color: inkColor.value,
+  marginBottom: `${Math.round(displayShort.value * 0.012)}px`,
+  display: 'block', outline: 'none',
+}));
+const descriptorStyle = computed(() => ({
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.032 * typography.value.scale)}px`,
+  color: inkColor.value, opacity: '0.72',
+  marginBottom: `${Math.round(displayShort.value * 0.014)}px`,
+  display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
+}));
+const ctaStyle = computed(() => ({
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '700',
+  fontSize: `${Math.round(displayShort.value * 0.026 * typography.value.scale)}px`,
+  letterSpacing: `${Math.round(displayShort.value * 0.004)}px`,
+  color: '#BB9057', textTransform: 'uppercase' as const,
+  display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
+}));
+const merchantTextStyle = computed(() => ({
+  fontFamily: currentPairing.value.displayFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.034 * typography.value.scale)}px`,
+  color: inkColor.value, display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
+}));
+
+// Brand mark: position the logo so its visual content (x:[335,1312] y:[164,415]) renders correctly
+const bmContainerStyle = computed((): Record<string, string> => {
+  const { x, y, w, h } = elPos.value.brandmark; const s = canvasScale.value;
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
+});
+const bmImgStyle = computed((): Record<string, string> => {
+  const { w: contentW, h: contentH } = elPos.value.brandmark; const s = canvasScale.value;
+  // Reverse the content crop: full SVG image is larger, positioned so content aligns to container
+  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
+  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
+  const imgW = (contentW / contentFracW) * s;
+  const imgH = (contentH / contentFracH) * s;
+  const offsetX = -(LOGO_CX1 / LOGO_SVG_W) * imgW;
+  const offsetY = -(LOGO_CY1 / LOGO_SVG_H) * imgH;
+  return { position: 'absolute', left: `${offsetX}px`, top: `${offsetY}px`, width: `${imgW}px`, height: `${imgH}px` };
+});
+
+// QR data URI for canvas display
+const qrDataUri = computed(() => svgDataUri(renderBrandedQrSvg(design.destination || 'https://peshkash.app', design.qrStyle, 600)));
+
+// Rendered SVG for export (uses current elPos)
+const renderedSvg = computed(() => {
+  const t = activeTemplate.value; if (!t) return '';
+  const sh = Math.min(t.canvas.width, t.canvas.height);
+  const { x, y, w } = elPos.value.qr;
+  return renderTemplateSvg(t, design, { qr: { x: x / t.canvas.width, y: y / t.canvas.height, size: w / sh } });
+});
+const renderedDataUri = computed(() => svgDataUri(renderedSvg.value));
+
+// ── Canvas init ───────────────────────────────────────────────────────────────
+function initElPos(t: QrTemplateDefinition): void {
+  const { width, height } = t.canvas;
+  const sh = Math.min(width, height);
+  const q = t.qr;
+  const qrSize = q.size * sh;
+  const qrX = q.x * width;
+  const qrY = q.y * height;
+  const padding = sh * 0.09;
+  const horizontal = ['landscape', 'ticket', 'label'].includes(t.format);
+  const qrOnLeft = qrX < width / 2;
+
+  const markBaseY = height - padding * 0.22;
+
+  let cx: number, cy: number, cw: number, ch: number;
+  if (horizontal) {
+    cx = qrOnLeft ? Math.max(width * 0.47, qrX + qrSize + padding) : padding * 1.2;
+    cy = height * 0.14;
+    cw = qrOnLeft ? width - cx - padding : qrX - cx - padding;
+    ch = height * 0.75;
+  } else {
+    const above = qrY > height * 0.35;
+    cx = width * 0.08;
+    cw = width * 0.84;
+    ch = height * 0.35;
+    // Always start below the QR's own bottom edge — the old cap here (Math.min(height*0.58, ...))
+    // could land ABOVE where a large QR actually ends, making the copy text visually overlap the
+    // QR. ch deliberately stays a flat height*0.35 in both branches rather than being narrowed to
+    // "fit" above the merchant strip: the box has overflow:hidden, and shrinking it below the
+    // text's actual rendered height (which this function has no way to measure — font sizes,
+    // typography scale and content length all vary) silently clips whichever line runs last,
+    // trading an unscannable QR for invisible CTA text.
+    cy = above ? height * 0.08 : (qrY + qrSize + sh * 0.04);
+  }
+
+  // Brand mark: compute content size to position the SVG correctly
+  const logoH = sh * 0.055; // desired content height in canvas units
+  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
+  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
+  const logoImgH = logoH / contentFracH;
+  const logoImgW = logoImgH * (LOGO_SVG_W / LOGO_SVG_H);
+  const logoContentW = contentFracW * logoImgW;
+  const bx = width - padding * 0.5 - logoContentW;
+  const by = markBaseY - logoH;
+
+  const qrRect = { x: qrX, y: qrY, w: qrSize, h: qrSize };
+  elPos.value = {
+    qr: { ...qrRect },
+    copy: { x: cx, y: cy, w: cw, h: ch },
+    merchant: { x: padding, y: markBaseY - sh * 0.05, w: width * 0.46, h: sh * 0.06 },
+    brandmark: { x: bx, y: by, w: logoContentW, h: logoH },
+  };
+  elPosDefault.value = { qr: { ...qrRect } };
+}
+
+function updateCanvasScale(): void {
+  const wrap = canvasWrapRef.value; const t = activeTemplate.value;
+  if (!wrap || !t) return;
+  const usableW = wrap.clientWidth - 20;
+  const usableH = wrap.clientHeight - 20;
+  if (usableW < 10 || usableH < 10) return;
+  const scaleW = usableW / t.canvas.width;
+  const scaleH = usableH / t.canvas.height;
+  canvasScale.value = Math.max(0.08, Math.min(scaleW, scaleH, 1));
+}
+
+function resetQrPos(): void {
+  elPos.value.qr = { ...elPosDefault.value.qr };
+}
+
+// ── Drag & Resize ─────────────────────────────────────────────────────────────
+function startDragListeners(): void {
+  isDragging.value = true;
+  window.addEventListener('pointermove', onWindowMove, { passive: true });
+  window.addEventListener('pointerup', onWindowUp);
+  window.addEventListener('pointercancel', onWindowUp);
+}
+// Pointer capture is a best-effort enhancement (keeps receiving events if the pointer leaves the
+// element); it can throw NotFoundError in some environments. A throw here must never abort the
+// rest of drag setup — window-level listeners are what actually drive the drag.
+function safeSetPointerCapture(el: Element | null, pointerId: number): void {
+  try { el?.setPointerCapture(pointerId); } catch { /* capture is optional */ }
+}
+function startQrDrag(e: PointerEvent): void {
+  if (resizeState.value) return;
+  selectedEl.value = 'qr';
+  selectedElementId.value = null;
+  dragState.value = { id: 'qr', startCX: e.clientX, startCY: e.clientY, origX: elPos.value.qr.x, origY: elPos.value.qr.y };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+function startQrResize(e: PointerEvent): void {
+  resizeState.value = { id: 'qr', axis: 'square', startCX: e.clientX, startCY: e.clientY, origW: elPos.value.qr.w, origH: elPos.value.qr.h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+function startElDrag(id: 'copy' | 'merchant' | 'brandmark', e: PointerEvent): void {
+  selectedEl.value = id;
+  selectedElementId.value = null;
+  const { x, y } = elPos.value[id];
+  dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: x, origY: y };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Width-only resize handle for the text blocks — their height is driven by content, not a drag.
+function startElResize(id: 'copy' | 'merchant', e: PointerEvent): void {
+  const { w, h } = elPos.value[id];
+  resizeState.value = { id, axis: 'width', startCX: e.clientX, startCY: e.clientY, origW: w, origH: h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Uniform resize for the brand mark — aspect ratio must stay locked (the logo isn't square).
+function startBrandmarkResize(e: PointerEvent): void {
+  const { w, h } = elPos.value.brandmark;
+  resizeState.value = { id: 'brandmark', axis: 'aspect', startCX: e.clientX, startCY: e.clientY, origW: w, origH: h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Grab-anywhere drag for the copy block / merchant name / brand mark — Canva-style: pointerdown on
+// the block body starts a drag immediately, unless it landed on the one line currently in
+// text-edit mode (isContentEditable), in which case native cursor placement/selection takes over.
+function onBlockPointerDown(id: 'copy' | 'merchant' | 'brandmark', e: PointerEvent): void {
+  if ((e.target as HTMLElement).isContentEditable) return;
+  startElDrag(id, e);
+}
+
+// ── Element bank (freeform shapes / CTA badges / text / images) ───────────────
+function addElement(presetId: string): void {
+  const preset = ELEMENT_PRESETS.find((p) => p.id === presetId);
+  const t = activeTemplate.value;
+  if (!preset || !t) return;
+  const el = preset.build(t.canvas.width, t.canvas.height);
+  if (!design.canvasElements) design.canvasElements = [];
+  design.canvasElements.push(el);
+  selectedEl.value = null;
+  selectedElementId.value = el.id;
+}
+// Downscales an uploaded image client-side (long edge capped, re-encoded as JPEG) before storing
+// it as an inline data: URI — there's no asset-upload backend, and the design is persisted whole
+// as JSON, so keeping the payload small matters.
+const IMAGE_MAX_EDGE = 900;
+function downscaleImage(file: File): Promise<{ dataUrl: string; w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.85), w, h });
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+async function onImageFileChosen(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ''; // allow choosing the same file again later
+  const t = activeTemplate.value;
+  const replaceId = replacingImageId.value;
+  replacingImageId.value = null;
+  if (!file || !t) return;
+  try {
+    const { dataUrl, w, h } = await downscaleImage(file);
+    const existing = replaceId ? findCanvasEl(replaceId) : undefined;
+    if (existing && existing.kind === 'image') {
+      // Keep position + width, adjust height to the new image's aspect ratio.
+      existing.src = dataUrl;
+      existing.h = existing.w * (h / w);
+      return;
+    }
+    const short = Math.min(t.canvas.width, t.canvas.height);
+    const boxW = short * 0.4;
+    const boxH = boxW * (h / w);
+    const el: ImageElement = {
+      id: newId(), kind: 'image', src: dataUrl,
+      x: (t.canvas.width - boxW) / 2, y: (t.canvas.height - boxH) / 2,
+      w: boxW, h: boxH, opacity: 1, layer: 'front',
+    };
+    if (!design.canvasElements) design.canvasElements = [];
+    design.canvasElements.push(el);
+    selectedEl.value = null;
+    selectedElementId.value = el.id;
+  } catch {
+    notice.value = "Couldn't read that image — try a different file.";
+    window.setTimeout(() => { notice.value = ''; }, 3000);
+  }
+}
+function deleteElement(id: string): void {
+  if (!design.canvasElements) return;
+  design.canvasElements = design.canvasElements.filter((el) => el.id !== id);
+  if (selectedElementId.value === id) selectedElementId.value = null;
+  if (editingElementId.value === id) editingElementId.value = null;
+}
+function selectElement(id: string): void {
+  selectedElementId.value = id;
+  selectedEl.value = null;
+}
+function duplicateElement(id: string): void {
+  const el = findCanvasEl(id);
+  if (!el || !design.canvasElements) return;
+  const short = activeTemplate.value ? Math.min(activeTemplate.value.canvas.width, activeTemplate.value.canvas.height) : 0;
+  const offset = short * 0.02;
+  const copyEl: CanvasElement = { ...el, id: crypto.randomUUID(), x: el.x + offset, y: el.y + offset };
+  const idx = design.canvasElements.findIndex((e) => e.id === id);
+  design.canvasElements.splice(idx + 1, 0, copyEl);
+  selectElement(copyEl.id);
+}
+// Layers panel display order: front-layer elements first (topmost = highest stacking), then
+// back-layer — each group listed with its topmost (last-rendered, last-in-array) element first.
+const layerRows = computed(() => {
+  const all = design.canvasElements ?? [];
+  const front = all.filter((el) => (el.layer ?? 'front') === 'front').slice().reverse();
+  const back = all.filter((el) => (el.layer ?? 'front') === 'back').slice().reverse();
+  return [...front, ...back];
+});
+function layerLabel(el: CanvasElement): string {
+  if (el.name) return el.name;
+  if (el.kind === 'cta') return `${el.style === 'tag' ? 'Tag' : el.style === 'ribbon' ? 'Ribbon' : 'Button'}: ${el.text || 'CTA'}`;
+  if (el.kind === 'text') return `Text: ${el.text || 'empty'}`;
+  if (el.kind === 'image') return 'Image';
+  const names: Record<string, string> = { rect: 'Rectangle', circle: 'Circle', line: 'Line', triangle: 'Triangle', star: 'Star', tag: 'Tag shape', hexagon: 'Hexagon', diamond: 'Diamond', arrow: 'Arrow', frame: 'Frame' };
+  return names[el.shape] || 'Shape';
+}
+// Swatch color/thumbnail shown next to each row in the Layers panel — text and shapes/CTAs use
+// their color; images use their own thumbnail instead of a flat swatch.
+function layerSwatchStyle(el: CanvasElement): Record<string, string> {
+  if (el.kind === 'image') return { backgroundImage: `url(${el.src})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  if (el.kind === 'text') return { background: el.color };
+  return { background: el.fill };
+}
+// Moves an element one step toward the front (up) or back (down) WITHIN its own layer — array
+// order is stacking order, so this is a plain adjacent swap.
+function moveElement(id: string, direction: 'up' | 'down'): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const layer = list[i].layer ?? 'front';
+  const j = direction === 'up' ? i + 1 : i - 1;
+  // find the nearest neighbor in the same layer to swap with
+  let k = j;
+  while (k >= 0 && k < list.length && (list[k].layer ?? 'front') !== layer) {
+    k += direction === 'up' ? 1 : -1;
+  }
+  if (k < 0 || k >= list.length) return;
+  [list[i], list[k]] = [list[k], list[i]];
+}
+// Canva's classic 4-action stacking model: Forward/Backward (moveElement, one step) plus these
+// two jumps — bring to front means "front layer, topmost" (end of array, since front renders
+// last); send to back means "back layer, bottommost" (start of array, since back renders first).
+function bringToFront(id: string): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const [el] = list.splice(i, 1);
+  el.layer = 'front';
+  list.push(el);
+}
+function sendToBack(id: string): void {
+  const list = design.canvasElements;
+  if (!list) return;
+  const i = list.findIndex((el) => el.id === id);
+  if (i === -1) return;
+  const [el] = list.splice(i, 1);
+  el.layer = 'back';
+  list.unshift(el);
+}
+function startCanvasElDrag(id: string, e: PointerEvent): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  selectElement(id);
+  dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: el.x, origY: el.y };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+function startCanvasElResize(id: string, e: PointerEvent): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  resizeState.value = { id, axis: 'free', startCX: e.clientX, startCY: e.clientY, origW: el.w, origH: el.h };
+  safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
+  startDragListeners();
+}
+// Grab-anywhere drag for freeform elements, same pattern as the copy/merchant blocks — CTA labels
+// stay editable via double-click without fighting the drag.
+function onCanvasElPointerDown(id: string, e: PointerEvent): void {
+  if ((e.target as HTMLElement).isContentEditable) return;
+  startCanvasElDrag(id, e);
+}
+function startElementTextEdit(id: string, e: MouseEvent): void {
+  editingElementId.value = id;
+  const clientX = e.clientX, clientY = e.clientY;
+  nextTick(() => {
+    const el = document.querySelector<HTMLElement>(`[data-el-text="${id}"]`);
+    if (!el) return;
+    el.focus();
+    placeCaretAt(el, clientX, clientY);
+  });
+}
+function endElementTextEdit(): void { editingElementId.value = null; }
+function onElementInputText(id: string, value: string): void {
+  const el = findCanvasEl(id);
+  if (el && (el.kind === 'cta' || el.kind === 'text')) el.text = value;
+}
+function onElementResizeHeight(id: string, canvasHeight: number): void {
+  const el = findCanvasEl(id);
+  if (el) el.h = canvasHeight;
+}
+function textElFor(key: ElementKey): HTMLElement | undefined {
+  switch (key) {
+    case 'eyebrow': return eyebrowEl.value;
+    case 'headline': return headlineEl.value;
+    case 'descriptor': return descriptorEl.value;
+    case 'cta': return ctaEl.value;
+    case 'merchantName': return merchantEl.value;
+    default: return undefined;
+  }
+}
+function startTextEdit(key: ElementKey, e: MouseEvent): void {
+  editingKey.value = key;
+  const clientX = e.clientX, clientY = e.clientY;
+  nextTick(() => {
+    const el = textElFor(key);
+    if (!el) return;
+    el.focus();
+    placeCaretAt(el, clientX, clientY);
+  });
+}
+function endTextEdit(): void { editingKey.value = null; }
+function placeCaretAt(el: HTMLElement, x: number, y: number): void {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  let range: Range | null = null;
+  if (doc.caretRangeFromPoint) {
+    range = doc.caretRangeFromPoint(x, y);
+  } else if (doc.caretPositionFromPoint) {
+    const pos = doc.caretPositionFromPoint(x, y);
+    if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
+  }
+  if (range && el.contains(range.startContainer)) {
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    range.collapse(true);
+    sel?.addRange(range);
+  }
+}
+// Resolves the mutable {x,y,w,h} for any draggable/resizable id — the four fixed slots (backed
+// by elPos) or a freeform canvas element (backed by its own object in design.canvasElements).
+function getMutableRect(id: string): ElRect | undefined {
+  if (id === 'qr' || id === 'copy' || id === 'merchant' || id === 'brandmark') return elPos.value[id];
+  return findCanvasEl(id);
+}
+function applyMove(e: PointerEvent): void {
+  const t = activeTemplate.value; if (!t) return;
+  const s = canvasScale.value;
+  if (dragState.value) {
+    const { id, startCX, startCY, origX, origY } = dragState.value;
+    const el = getMutableRect(id);
+    if (el) {
+      const maxX = t.canvas.width - el.w;
+      const maxY = t.canvas.height - el.h;
+      let nx = Math.max(0, Math.min(maxX, origX + (e.clientX - startCX) / s));
+      let ny = Math.max(0, Math.min(maxY, origY + (e.clientY - startCY) / s));
+
+      // Canva-style center snapping — snap the element's center to the canvas center on each axis
+      // independently, within a small tolerance, and surface which axis snapped for the guide lines.
+      const sh = Math.min(t.canvas.width, t.canvas.height);
+      const tol = sh * SNAP_FRAC;
+      const canvasCX = t.canvas.width / 2, canvasCY = t.canvas.height / 2;
+      const snapX = Math.abs(nx + el.w / 2 - canvasCX) < tol;
+      const snapY = Math.abs(ny + el.h / 2 - canvasCY) < tol;
+      if (snapX) nx = canvasCX - el.w / 2;
+      if (snapY) ny = canvasCY - el.h / 2;
+      snapGuides.value = { centerX: snapX, centerY: snapY };
+
+      el.x = nx;
+      el.y = ny;
+    }
+  }
+  if (resizeState.value) {
+    const rs = resizeState.value;
+    const el = getMutableRect(rs.id);
+    if (el) {
+      if (rs.axis === 'square') {
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const newW = Math.max(sh * 0.08, Math.min(sh * 0.72, rs.origW + dCanvas));
+        el.w = newW;
+        el.h = newW;
+      } else if (rs.axis === 'width') {
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const maxW = t.canvas.width - el.x;
+        const newW = Math.max(t.canvas.width * 0.12, Math.min(maxW, rs.origW + dCanvas));
+        el.w = newW;
+      } else if (rs.axis === 'aspect') {
+        // Scale both dimensions by the same factor — preserves whatever aspect ratio the element
+        // started with (the brand mark's logo shape, unlike QR, isn't literally square).
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const dCanvas = (e.clientX - rs.startCX) / s;
+        const minW = sh * 0.04;
+        const newW = Math.max(minW, rs.origW + dCanvas);
+        const factor = newW / rs.origW;
+        el.w = newW;
+        el.h = rs.origH * factor;
+      } else {
+        const sh = Math.min(t.canvas.width, t.canvas.height);
+        const minSize = sh * 0.03;
+        const dX = (e.clientX - rs.startCX) / s;
+        const dY = (e.clientY - rs.startCY) / s;
+        el.w = Math.max(minSize, Math.min(t.canvas.width - el.x, rs.origW + dX));
+        el.h = Math.max(minSize, Math.min(t.canvas.height - el.y, rs.origH + dY));
+      }
+    }
+  }
+}
+function onWindowMove(e: PointerEvent): void {
+  _lastMoveEvent = e;
+  if (_rafId === null) {
+    _rafId = requestAnimationFrame(() => {
+      _rafId = null;
+      if (_lastMoveEvent) applyMove(_lastMoveEvent);
+    });
+  }
+}
+function onWindowUp(): void {
+  if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null; }
+  if (_lastMoveEvent) { applyMove(_lastMoveEvent); _lastMoveEvent = null; }
+  const hadGesture = !!(dragState.value || resizeState.value);
+  isDragging.value = false;
+  dragState.value = null;
+  resizeState.value = null;
+  snapGuides.value = { centerX: false, centerY: false };
+  window.removeEventListener('pointermove', onWindowMove);
+  window.removeEventListener('pointerup', onWindowUp);
+  window.removeEventListener('pointercancel', onWindowUp);
+  if (hadGesture) flushHistoryPush();
+}
+
+// ── Keyboard nudge — arrow keys move the selected element by a small step, Shift for a bigger one.
+// Delete/Backspace removes the selected freeform element (fixed slots use visibility toggles instead).
+function onCanvasKeydown(e: KeyboardEvent): void {
+  if (mode.value !== 'editor' || editingKey.value || editingElementId.value) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+  // Undo/redo work with nothing selected — they don't depend on activeId below.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault();
+    redo();
+    return;
+  }
+
+  const activeId = selectedEl.value ?? selectedElementId.value;
+  if (!activeId) return;
+
+  if (selectedElementId.value && (e.key === 'Delete' || e.key === 'Backspace')) {
+    e.preventDefault();
+    deleteElement(selectedElementId.value);
+    return;
+  }
+  if (selectedElementId.value && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+    e.preventDefault();
+    duplicateElement(selectedElementId.value);
+    return;
+  }
+
+  const delta: Record<string, [number, number]> = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  };
+  const d = delta[e.key];
+  if (!d) return;
+  const t = activeTemplate.value; if (!t) return;
+  const el = getMutableRect(activeId);
+  if (!el) return;
+  e.preventDefault();
+  const sh = Math.min(t.canvas.width, t.canvas.height);
+  const step = sh * (e.shiftKey ? 0.02 : 0.004);
+  const maxX = t.canvas.width - el.w, maxY = t.canvas.height - el.h;
+  el.x = Math.max(0, Math.min(maxX, el.x + d[0] * step));
+  el.y = Math.max(0, Math.min(maxY, el.y + d[1] * step));
+}
+
+// ── Design state (must be before watches) ────────────────────────────────────
+const blankDesign = (): StudioDesign => ({
+  name: '', libraryTemplateId: '', manifestVersion: qrManifest.version,
+  qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70,
+  merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app',
+  visibility: {},
+  canvasElements: [],
+});
+const design = reactive<StudioDesign>(blankDesign());
+
+// ── Undo / redo ────────────────────────────────────────────────────────────────
+// A design tool nobody trusts without undo. History is a stack of serialized {design, elPos}
+// snapshots — cheap enough for these small JSON payloads, and side-steps having to hand-write a
+// separate inverse for every kind of edit (drag, resize, color, text, add/delete...).
+interface HistorySnapshot { design: StudioDesign; elPos: typeof elPos.value }
+const HISTORY_LIMIT = 60;
+const historyStack = ref<string[]>([]);
+const historyIndex = ref(-1);
+let restoringHistory = false;
+const canUndo = computed(() => historyIndex.value > 0);
+const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1);
+function pushHistory(): void {
+  if (restoringHistory || mode.value !== 'editor') return;
+  const snap: HistorySnapshot = { design: JSON.parse(JSON.stringify(design)), elPos: JSON.parse(JSON.stringify(elPos.value)) };
+  const serialized = JSON.stringify(snap);
+  // Skip no-op pushes (nothing actually changed since the last snapshot).
+  if (historyStack.value[historyIndex.value] === serialized) return;
+  historyStack.value = historyStack.value.slice(0, historyIndex.value + 1);
+  historyStack.value.push(serialized);
+  if (historyStack.value.length > HISTORY_LIMIT) historyStack.value.shift();
+  historyIndex.value = historyStack.value.length - 1;
+}
+function restoreHistoryAt(index: number): void {
+  const raw = historyStack.value[index];
+  if (raw === undefined) return;
+  const snap: HistorySnapshot = JSON.parse(raw);
+  restoringHistory = true;
+  Object.assign(design, blankDesign(), snap.design);
+  elPos.value = snap.elPos;
+  selectedEl.value = null;
+  selectedElementId.value = null;
+  editingKey.value = null;
+  editingElementId.value = null;
+  historyIndex.value = index;
+  nextTick(() => { restoringHistory = false; });
+}
+function undo(): void { if (canUndo.value) restoreHistoryAt(historyIndex.value - 1); }
+function redo(): void { if (canRedo.value) restoreHistoryAt(historyIndex.value + 1); }
+// Rather than hand-instrument every mutation site (drag, resize, color pickers, text edits, add/
+// delete...), a debounced deep watch on the whole design + elPos catches everything generically:
+// one history entry ~500ms after edits settle. Drag-end also flushes immediately (see onWindowUp)
+// so undo lands cleanly on a completed gesture rather than waiting out the debounce.
+const HISTORY_DEBOUNCE_MS = 500;
+let historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleHistoryPush(): void {
+  if (restoringHistory || mode.value !== 'editor') return;
+  if (historyDebounceTimer) clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = setTimeout(() => { historyDebounceTimer = null; pushHistory(); }, HISTORY_DEBOUNCE_MS);
+}
+function flushHistoryPush(): void {
+  if (historyDebounceTimer) { clearTimeout(historyDebounceTimer); historyDebounceTimer = null; }
+  pushHistory();
+}
+watch(design, scheduleHistoryPush, { deep: true });
+watch(elPos, scheduleHistoryPush, { deep: true });
+
+// Helper: true = visible (default), false = hidden
+const vis = computed(() => ({
+  eyebrow:      design.visibility?.eyebrow      !== false,
+  headline:     design.visibility?.headline     !== false,
+  descriptor:   design.visibility?.descriptor   !== false,
+  cta:          design.visibility?.cta          !== false,
+  merchantName: design.visibility?.merchantName !== false,
+  brandmark:    design.visibility?.brandmark    !== false,
+}));
+
+function toggleVis(key: ElementKey): void {
+  if (!design.visibility) design.visibility = {};
+  design.visibility[key] = design.visibility[key] === false ? true : false;
+}
+
+// ── Sync panel text fields → canvas contenteditable ──────────────────────────
+function syncToCanvas(elRef: Ref<HTMLElement | undefined>, val: string): void {
+  const el = elRef.value;
+  if (el && document.activeElement !== el) el.innerText = val;
+}
+watch(() => design.eyebrow, (v) => syncToCanvas(eyebrowEl, v));
+watch(() => design.headline, (v) => syncToCanvas(headlineEl, v));
+watch(() => design.descriptor, (v) => syncToCanvas(descriptorEl, v));
+watch(() => design.cta, (v) => syncToCanvas(ctaEl, v));
+watch(() => design.merchantName, (v) => syncToCanvas(merchantEl, v));
+const filteredTemplates = computed(() => {
+  const query = search.value.trim().toLowerCase();
+  return qrManifest.templates.filter((t) => {
+    if (activeCategory.value !== 'all' && t.category !== activeCategory.value) return false;
+    return !query || [t.label, t.categoryLabel, t.merchantType, ...t.tags].join(' ').toLowerCase().includes(query);
+  });
+});
+const destinationValid = computed(() => { try { return new URL(design.destination).protocol === 'https:'; } catch { return false; } });
+
+function templateById(id: string): QrTemplateDefinition | undefined { return qrManifest.templates.find((t) => t.id === id); }
+function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles['obsidian-ring'].folder}/${template.file}`; }
+function signaturePreview(id: QrStyleId): string { return svgDataUri(renderBrandedQrSvg('https://peshkash.app/scan', id, 480)); }
+
+// Resolves a design's template definition — from the fixed library, or reconstructed from a
+// saved CustomTemplateSpec when the design was built with the template creator.
+function resolveTemplate(d: StudioDesign): QrTemplateDefinition {
+  const fromLibrary = templateById(d.libraryTemplateId);
+  if (fromLibrary) return fromLibrary;
+  if (d.customTemplate) {
+    return synthesizeCustomTemplate(d.customTemplate, { id: d.libraryTemplateId || 'custom', label: d.name || 'Custom template' });
+  }
+  return qrManifest.templates[0];
+}
+function templateLabelFor(saved: StudioDesign): string {
+  const fromLibrary = templateById(saved.libraryTemplateId);
+  if (fromLibrary) return fromLibrary.label;
+  return saved.customTemplate ? 'Custom template' : 'Library template';
+}
+
+function applyDesign(next: StudioDesign): void {
+  Object.assign(design, blankDesign(), next);
+  activeTemplate.value = resolveTemplate(design);
+  mode.value = 'editor';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function startWithTemplate(template: QrTemplateDefinition): void {
+  designKey.value++;
+  selectedEl.value = null;
+  const vendorLabel = props.vendorName || template.merchantType;
+  applyDesign({
+    ...blankDesign(),
+    name: `${vendorLabel} — ${template.label}`,
+    libraryTemplateId: template.id, theme: template.defaultTheme,
+    widthMm: 120, heightMm: 120 * (template.canvas.height / template.canvas.width),
+    merchantName: props.vendorName || template.merchantType,
+    ...template.defaultCopy,
+    destination: destinationHint.value || template.sampleDestination,
+  });
+  initElPos(template);
+  nextTick(updateCanvasScale);
+}
+function startCustomTemplate(): void {
+  const preset = FORMAT_PRESETS.find((p) => p.format === creatorFormat.value) ?? FORMAT_PRESETS[0];
+  const spec: CustomTemplateSpec = buildCustomTemplateSpec(creatorFormat.value);
+  const id = `custom-${Date.now().toString(36)}`;
+  const label = creatorName.value.trim() || 'Custom template';
+  const template = synthesizeCustomTemplate(spec, { id, label, merchantType: props.vendorName });
+  designKey.value++;
+  selectedEl.value = null;
+  applyDesign({
+    ...blankDesign(),
+    name: label,
+    libraryTemplateId: id,
+    customTemplate: spec,
+    theme: template.defaultTheme,
+    widthMm: preset.defaultMm.w,
+    heightMm: preset.defaultMm.h,
+    merchantName: props.vendorName || '',
+    ...template.defaultCopy,
+    destination: destinationHint.value || template.sampleDestination,
+  });
+  initElPos(template);
+  nextTick(updateCanvasScale);
+  showCreator.value = false;
+  creatorName.value = '';
+}
+function editSaved(saved: StudioDesign): void {
+  designKey.value++;
+  selectedEl.value = null;
+  applyDesign(saved);
+  if (activeTemplate.value) initElPos(activeTemplate.value);
+  nextTick(updateCanvasScale);
+}
+function closeEditor(): void { mode.value = 'library'; activeTemplate.value = null; selectedEl.value = null; }
+function syncHeight(): void {
+  if (!activeTemplate.value) return;
+  design.widthMm = Math.max(24, Math.min(1000, Number(design.widthMm) || 120));
+  design.heightMm = design.widthMm * (activeTemplate.value.canvas.height / activeTemplate.value.canvas.width);
+}
+function fromApi(row: Record<string, unknown>): StudioDesign & { vendorId?: number } {
+  const settings = (row.settings || {}) as Partial<StudioDesign>;
+  const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object' ? row.elements[0] as Partial<StudioDesign> : {};
+  return { ...blankDesign(), ...elements, ...settings, id: row.id as number,
+    vendorId: row.vendorId ? Number(row.vendorId) : undefined,
+    name: String(row.name || settings.name || 'Untitled design'),
+    libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0].id),
+    manifestVersion: String(row.manifestVersion || settings.manifestVersion || qrManifest.version),
+    qrStyle: (row.qrStyle || settings.qrStyle || 'obsidian-ring') as QrStyleId,
+    theme: (row.theme || settings.theme || 'light') as StudioDesign['theme'], widthMm: Number(row.widthMm || settings.widthMm || 120),
+    heightMm: Number(row.heightMm || settings.heightMm || 70), updatedAt: String(row.updatedAt || '') };
+}
+async function loadDesigns(): Promise<void> {
+  try {
+    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
+    const all = data.map(fromApi);
+    savedDesigns.value = props.vendorId ? all.filter((d) => d.vendorId === props.vendorId) : all;
+  } catch { savedDesigns.value = []; }
+}
+async function saveDesign(): Promise<void> {
+  if (!destinationValid.value || !activeTemplate.value) return;
+  saving.value = true;
+  const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
+    vendorId: props.vendorId,
+    elements: [{ ...design }], libraryTemplateId: activeTemplate.value.id, manifestVersion: qrManifest.version,
+    qrStyle: design.qrStyle, theme: design.theme, settings: { ...design } };
+  try {
+    const isRemote = typeof design.id === 'number';
+    const { data } = await axios.request<Record<string, unknown>>({ url: `${API_BASE_URL}/admin/qr-templates${isRemote ? `/${design.id}` : ''}`, method: isRemote ? 'PUT' : 'POST', data: payload });
+    Object.assign(design, fromApi(data)); notice.value = 'Design saved to your Peshkash workspace.';
+  } catch {
+    notice.value = 'Couldn\'t save — check your connection and try again.';
+  }
+  finally { saving.value = false; await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); }
+}
+async function deleteDesign(id: number | string): Promise<void> {
+  deleting.value = id;
+  try {
+    await axios.delete(`${API_BASE_URL}/admin/qr-templates/${id}`);
+    await loadDesigns();
+    notice.value = 'Design deleted.';
+    window.setTimeout(() => { notice.value = ''; }, 3000);
+  } catch { notice.value = 'Couldn\'t delete — try again.'; }
+  finally { deleting.value = null; }
+}
+function safeFilename(ext: string): string { return `${(design.name || 'peshkash-qr').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.${ext}`; }
+function triggerDownload(href: string, name: string): void { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
+function downloadSvg(): void { const blob = new Blob([renderedSvg.value], { type: 'image/svg+xml;charset=utf-8' }); const url = URL.createObjectURL(blob); triggerDownload(url, safeFilename('svg')); URL.revokeObjectURL(url); }
+async function downloadPng(): Promise<void> {
+  if (!activeTemplate.value) return;
+  const img = new Image(); const loaded = new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; });
+  img.src = renderedDataUri.value; await loaded;
+  const scale = Math.max(2, 3000 / activeTemplate.value.canvas.width); const canvas = document.createElement('canvas');
+  canvas.width = Math.round(activeTemplate.value.canvas.width * scale); canvas.height = Math.round(activeTemplate.value.canvas.height * scale);
+  canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height); triggerDownload(canvas.toDataURL('image/png'), safeFilename('png'));
+}
+
+watch(activeTemplate, () => {
+  if (!activeTemplate.value) return;
+  initElPos(activeTemplate.value);
+  nextTick(updateCanvasScale);
+  // Fresh template/design loaded — history should start clean from this exact baseline, not carry
+  // over undo entries from whatever was open before.
+  historyStack.value = [];
+  historyIndex.value = -1;
+  pushHistory();
+});
+// The rail slide-out and properties dock opening/closing resizes canvas-wrap without firing a
+// window 'resize' event — a ResizeObserver on the wrap itself catches that (and any other
+// container-driven resize) instead of hand-tracking every state change that affects its width.
+let canvasResizeObserver: ResizeObserver | undefined;
+watch(canvasWrapRef, (el) => {
+  canvasResizeObserver?.disconnect();
+  if (!el) return;
+  canvasResizeObserver = new ResizeObserver(() => updateCanvasScale());
+  canvasResizeObserver.observe(el);
+});
+onMounted(async () => {
+  window.addEventListener('resize', updateCanvasScale);
+  window.addEventListener('keydown', onCanvasKeydown);
+  // ?destination=:url — opened from a QR asset "Design" button: pre-set destination
+  if (route.query.destination) destinationHint.value = String(route.query.destination);
+  await loadDesigns();
+  // ?edit=:id — opened from Print Studio "Edit Template" button: jump straight to editor
+  const editId = route.query.edit;
+  if (editId) {
+    const target = savedDesigns.value.find((d) => String(d.id) === String(editId));
+    if (target) editSaved(target);
+  }
+});
+onUnmounted(() => {
+  window.removeEventListener('resize', updateCanvasScale);
+  window.removeEventListener('keydown', onCanvasKeydown);
+  canvasResizeObserver?.disconnect();
+  onWindowUp();
+});
+</script>
+
 <style scoped>
-/* ─── List page ─────────────────────────────────────────────────────────────── */
-.qrt-list-page {
-  background: #EDE8E0;
-  min-height: 100vh;
-  padding: 0 0 64px;
-}
-
-.qrt-list-page--embedded {
-  min-height: 0;
-  height: 100%;
-  overflow-y: auto;
-}
-
-/* Hero banner */
-.qrt-hero {
-  align-items: center;
-  background: #1A1410;
-  display: flex;
-  gap: 28px;
-  padding: 40px 48px;
-  flex-wrap: wrap;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Decorative corner brackets on the hero */
-.qrt-hero-bracket {
-  opacity: 0.6;
-  pointer-events: none;
-  position: absolute;
-}
-.qrt-hero-bracket--tl { top: 16px; left: 16px; }
-.qrt-hero-bracket--tr { top: 16px; right: 16px; }
-.qrt-hero-bracket--bl { bottom: 16px; left: 16px; }
-.qrt-hero-bracket--br { bottom: 16px; right: 16px; }
-
-.qrt-hero-mark {
-  flex-shrink: 0;
-  opacity: 1;
-}
-
-.qrt-hero-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.qrt-hero-eyebrow {
-  color: #BD945A;
-  font-family: 'Urbanist', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  margin: 0 0 8px;
-  text-transform: uppercase;
-}
-
-.qrt-hero-text h2 {
-  color: #F5F2EE;
-  font-family: 'Rufina', Georgia, serif;
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  margin: 0 0 10px;
-}
-
-.qrt-hero-text p {
-  color: #8C7667;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  margin: 0;
-  max-width: 460px;
-}
-
-.qrt-hero-cta {
-  flex-shrink: 0;
-}
-
-.hint {
-  color: #8C7667;
-  font-size: 0.82rem;
-  margin: 0;
-}
-
-.qrt-empty {
-  align-items: center;
-  background: #F5F2EE;
-  border: 1px dashed #E8DBCE;
-  border-radius: 8px;
-  color: #8C7667;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.qrt-empty i {
-  font-size: 2.5rem;
-  opacity: 0.5;
-}
-
-.qrt-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-}
-
-.qrt-card {
-  background: #F5F2EE;
-  border: 1px solid #E8DBCE;
-  border-radius: 8px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: box-shadow 0.15s, transform 0.12s, border-color 0.15s;
-}
-
-.qrt-card:hover {
-  border-color: #BD945A;
-  box-shadow: 0 8px 28px rgba(189, 148, 90, 0.18);
-  transform: translateY(-2px);
-}
-
-.qrt-card-thumb {
-  background: #E8DBCE;
-  border-bottom: 1px solid #E8DBCE;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.qrt-card-canvas-preview {
-  background: #F5F2EE;
-  border-radius: 3px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-height: 90px;
-  max-width: 100%;
-}
-
-.qrt-thumb-icon {
-  color: #BD945A;
-  font-size: 2rem;
-  opacity: 0.6;
-}
-
-.qrt-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 14px 10px;
-}
-
-.qrt-card-info strong {
-  color: #1A1410;
-  font-size: 0.9rem;
-}
-
-.qrt-card-size {
-  color: #8C7667;
-  font-size: 0.78rem;
-}
-
-.qrt-card-actions {
-  align-items: center;
-  border-top: 1px solid #E8DBCE;
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
-  padding: 8px 10px;
-}
-
-/* ─── Editor shell ────────────────────────────────────────────────────────── */
-.qrt-editor {
-  background: #E8DBCE;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.qrt-editor--embedded {
-  height: 100%;
-}
-
-/* Header — dark, branded */
-.qrt-header {
-  align-items: center;
-  background: #1A1410;
-  border-bottom: 1px solid #2E241C;
-  display: flex;
-  flex-shrink: 0;
-  gap: 10px;
-  padding: 9px 14px;
-  z-index: 10;
-}
-
-.qrt-back-btn {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  color: #C5AF9D;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 1rem;
-  height: 32px;
-  justify-content: center;
-  padding: 0 8px;
-  transition: background 0.12s, color 0.12s;
-}
-
-.qrt-back-btn:hover { background: rgba(197,175,157,0.12); color: #F5F2EE; }
-
-.qrt-header-brand {
-  align-items: center;
-  display: flex;
-  flex-shrink: 0;
-  opacity: 1;
-}
-
-.qrt-name-input {
-  background: transparent;
-  border: 0;
-  border-bottom: 1.5px solid rgba(197,175,157,0.25);
-  border-radius: 0;
-  color: #F5F2EE;
-  flex: 1;
-  font-size: 0.95rem;
-  font-weight: 600;
-  max-width: 300px;
-  outline: none;
-  padding: 4px 2px;
-  transition: border-color 0.15s;
-}
-
-.qrt-name-input::placeholder { color: #4A3F2E; }
-.qrt-name-input:focus { border-bottom-color: #BD945A; }
-
-.qrt-header-actions {
-  align-items: center;
-  display: flex;
-  gap: 7px;
-  margin-left: auto;
-}
-
-/* Override icon buttons and Bootstrap buttons for dark header */
-.qrt-header .qrt-icon-btn { color: #C5AF9D; }
-.qrt-header .qrt-icon-btn:hover:not(:disabled) { background: rgba(197,175,157,0.12); color: #F5F2EE; }
-.qrt-header .qrt-icon-btn:disabled { color: #3A2E24; cursor: default; }
-
-.qrt-header .btn-outline-secondary {
-  --bs-btn-color: #C5AF9D;
-  --bs-btn-border-color: #3A2E24;
-  --bs-btn-hover-bg: rgba(197,175,157,0.1);
-  --bs-btn-hover-border-color: #8C7667;
-  --bs-btn-hover-color: #F5F2EE;
-  --bs-btn-active-bg: rgba(197,175,157,0.15);
-  --bs-btn-active-color: #F5F2EE;
-}
-
-.qrt-save-status {
-  align-items: center;
-  display: inline-flex;
-  font-size: 0.78rem;
-  gap: 4px;
-}
-
-.qrt-save-status.saved { color: #6BBF8C; }
-.qrt-save-status.error { color: #E07070; }
-
-/* Body */
-.qrt-body {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 200px 1fr 220px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Left sidebar */
-.qrt-sidebar-left {
-  background: #F5F2EE;
-  border-right: 1px solid #E8DBCE;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 14px 10px;
-}
-
-.qrt-sidebar-section-label {
-  align-items: center;
-  color: #8C7667;
-  display: flex;
-  font-size: 0.68rem;
-  font-weight: 700;
-  gap: 6px;
-  letter-spacing: 0.08em;
-  margin: 14px 0 7px;
-  text-transform: uppercase;
-}
-
-.qrt-sidebar-section-label:first-child { margin-top: 0; }
-
-.qrt-layer-count {
-  background: #E8DBCE;
-  border-radius: 10px;
-  color: #8C7667;
-  font-size: 0.67rem;
-  padding: 1px 6px;
-}
-
-.qrt-add-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.qrt-add-btn {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #E8DBCE;
-  border-radius: 6px;
-  color: #1A1410;
-  cursor: pointer;
-  display: flex;
-  flex-direction: row;
-  font-size: 0.8rem;
-  font-weight: 500;
-  gap: 9px;
-  padding: 8px 10px;
-  text-align: left;
-  transition: background 0.1s, border-color 0.12s;
-}
-
-.qrt-add-btn i { color: #BD945A; flex-shrink: 0; font-size: 1rem; }
-.qrt-add-hint { color: #C5AF9D; font-size: 0.68rem; font-weight: 400; margin-left: auto; }
-.qrt-add-btn:hover { background: #fff; border-color: #BD945A; }
-.qrt-add-btn:hover .qrt-add-hint { color: #BD945A; }
-
-.qrt-layers {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.qrt-layers-empty {
-  color: #C5AF9D;
-  font-size: 0.78rem;
-  padding: 10px 4px;
-  text-align: center;
-}
-
-.qrt-layer-row {
-  align-items: center;
-  border-left: 2px solid transparent;
-  border-radius: 0 5px 5px 0;
-  cursor: pointer;
-  display: flex;
-  font-size: 0.79rem;
-  gap: 7px;
-  padding: 5px 6px 5px 5px;
-  transition: background 0.1s, border-color 0.1s;
-}
-
-.qrt-layer-row i { color: #BD945A; flex-shrink: 0; font-size: 0.82rem; }
-.qrt-layer-row:hover { background: #E8DBCE; }
-.qrt-layer-row.selected { background: rgba(189,148,90,0.10); border-left-color: #BD945A; color: #1A1410; font-weight: 600; }
-
-.qrt-layer-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.qrt-layer-btns {
-  display: flex;
-  gap: 1px;
-  opacity: 0;
-  transition: opacity 0.1s;
-}
-
-.qrt-layer-row:hover .qrt-layer-btns,
-.qrt-layer-row.selected .qrt-layer-btns { opacity: 1; }
-
-.qrt-layer-btn {
-  background: transparent;
-  border: 0;
-  border-radius: 3px;
-  color: #8C7667;
-  cursor: pointer;
-  font-size: 0.7rem;
-  padding: 2px 4px;
-}
-
-.qrt-layer-btn:hover { background: #E8DBCE; }
-
-/* Canvas area */
-.qrt-canvas-area {
-  align-items: center;
-  background-color: #D6CEBC;
-  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
-  background-size: 20px 20px;
-  display: flex;
-  justify-content: center;
-  overflow: auto;
-  padding: 48px;
-  position: relative;
-}
-
-.qrt-canvas-wrap {
-  position: relative;
-}
-
-.qrt-canvas {
-  background: #fff;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
-.qrt-canvas-badge {
-  background: rgba(26,20,16,0.60);
-  border-radius: 0 0 5px 5px;
-  color: #E8DBCE;
-  font-size: 0.67rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  padding: 3px 10px;
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-/* Non-editable brand footer strip below the canvas */
-.qrt-brand-footer {
-  align-items: center;
-  background: #f5f1eb;
-  border-top: 1px solid #e0d4be;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.14);
-  display: flex;
-  gap: 6px;
-  height: 24px;
-  padding: 0 8px;
-  pointer-events: none;
-  user-select: none;
-}
-
-.qrt-brand-footer-mark {
-  display: flex;
-  align-items: center;
-  height: 14px;
-  width: 10px;
-  flex-shrink: 0;
-}
-
-.qrt-brand-footer-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.qrt-brand-powered {
-  color: #9a8870;
-  font-size: 0.5rem;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-}
-
-.qrt-brand-name {
-  color: #BD945A;
-  font-family: 'Rufina', Georgia, 'Times New Roman', serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-/* Elements */
-.qrt-el {
-  outline: none;
-}
-
-.qrt-el--selected {
-  outline: 2px solid #BD945A;
-  outline-offset: 0px;
-  z-index: 100 !important;
-}
-
-/* Resize handles */
-.qrt-handle {
-  background: #fff;
-  border: 2px solid #BD945A;
-  border-radius: 2px;
-  cursor: nwse-resize;
-  height: 8px;
-  position: absolute;
-  width: 8px;
-  z-index: 200;
-}
-
-.qrt-handle--nw { cursor: nwse-resize; left: -5px; top: -5px; }
-.qrt-handle--n  { cursor: ns-resize;   left: calc(50% - 4px); top: -5px; }
-.qrt-handle--ne { cursor: nesw-resize; right: -5px; top: -5px; }
-.qrt-handle--e  { cursor: ew-resize;   right: -5px; top: calc(50% - 4px); }
-.qrt-handle--se { cursor: nwse-resize; right: -5px; bottom: -5px; }
-.qrt-handle--s  { cursor: ns-resize;   left: calc(50% - 4px); bottom: -5px; }
-.qrt-handle--sw { cursor: nesw-resize; left: -5px; bottom: -5px; }
-.qrt-handle--w  { cursor: ew-resize;   left: -5px; top: calc(50% - 4px); }
-
-/* Right sidebar */
-.qrt-sidebar-right {
-  background: #F5F2EE;
-  border-left: 1px solid #E8DBCE;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.qrt-props-group {
-  border-bottom: 1px solid #E8DBCE;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-}
-
-.qrt-props-group:last-child { border-bottom: none; margin-bottom: 0; }
-
-.qrt-props-label {
-  align-items: center;
-  color: #8C7667;
-  display: flex;
-  font-size: 0.68rem;
-  font-weight: 700;
-  gap: 6px;
-  letter-spacing: 0.07em;
-  margin: 0 0 8px;
-  text-transform: uppercase;
-}
-
-.qrt-type-badge {
-  background: #E8DBCE;
-  border-radius: 4px;
-  color: #8C7667;
-  font-size: 0.64rem;
-  font-weight: 500;
-  padding: 1px 5px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.qrt-props-row {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.qrt-props-row:last-child { margin-bottom: 0; }
-
-.qrt-prop-field {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  font-size: 0.75rem;
-  gap: 3px;
-  min-width: 0;
-}
-
-.qrt-prop-field span { color: #8C7667; font-size: 0.71rem; }
-.qrt-prop-field.wide { flex: 1 1 100%; }
-
-.qrt-unit-input {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #E8DBCE;
-  border-radius: 4px;
-  display: flex;
-  overflow: hidden;
-}
-
-.qrt-unit-input input {
-  background: transparent;
-  border: none;
-  flex: 1;
-  font-size: 0.79rem;
-  min-width: 0;
-  outline: none;
-  padding: 4px 5px;
-  width: 100%;
-}
-
-.qrt-unit-input span {
-  background: #F5F2EE;
-  border-left: 1px solid #E8DBCE;
-  color: #8C7667;
-  font-size: 0.67rem;
-  padding: 4px 6px;
-  white-space: nowrap;
-}
-
-.qrt-color-input {
-  border: 1px solid #E8DBCE;
-  border-radius: 4px;
-  cursor: pointer;
-  height: 28px;
-  padding: 1px 2px;
-  width: 100%;
-}
-
-.qrt-align-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.qrt-align-btns button {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #E8DBCE;
-  border-radius: 4px;
-  color: #8C7667;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 0.82rem;
-  height: 28px;
-  justify-content: center;
-  width: 28px;
-}
-
-.qrt-align-btns button:hover { background: rgba(189,148,90,0.08); border-color: #BD945A; color: #BD945A; }
-
-.qrt-no-selection {
-  align-items: center;
-  color: #C5AF9D;
-  display: flex;
-  flex-direction: column;
-  font-size: 0.8rem;
-  gap: 8px;
-  margin-top: 20px;
-  text-align: center;
-}
-
-.qrt-no-selection i { font-size: 1.8rem; opacity: 0.5; }
-.qrt-no-selection p { margin: 0; }
-
-.input-hint {
-  color: #8C7667;
-  font-size: 0.69rem;
-  margin-top: 2px;
-}
-
-/* Footer toolbar */
-.qrt-footer {
-  align-items: center;
-  background: #F5F2EE;
-  border-top: 1px solid #E8DBCE;
-  display: flex;
-  flex-shrink: 0;
-  gap: 20px;
-  padding: 7px 16px;
-  z-index: 10;
-}
-
-.qrt-zoom-controls {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-}
-
-.qrt-zoom-pct {
-  background: #E8DBCE;
-  border: 0;
-  border-radius: 4px;
-  color: #1A1410;
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 600;
-  min-width: 44px;
-  padding: 3px 6px;
-  text-align: center;
-}
-
-.qrt-zoom-pct:hover { background: #C5AF9D; color: #1A1410; }
-
-.qrt-unit-toggle {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.qrt-unit-toggle > span {
-  color: #8C7667;
-  font-size: 0.76rem;
-}
-
-.qrt-unit-btns {
-  display: flex;
-  border: 1px solid #E8DBCE;
-  border-radius: 5px;
-  overflow: hidden;
-}
-
-.qrt-unit-btns button {
-  background: transparent;
-  border: none;
-  color: #8C7667;
-  cursor: pointer;
-  font-size: 0.74rem;
-  padding: 3px 9px;
-}
-
-.qrt-unit-btns button.active {
-  background: #BD945A;
-  color: #fff;
-  font-weight: 600;
-}
-
-.qrt-footer-hint {
-  align-items: center;
-  color: #C5AF9D;
-  display: flex;
-  font-size: 0.72rem;
-  gap: 5px;
-  margin-left: auto;
-}
-
-/* Shared icon button */
-.qrt-icon-btn {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  color: #1A1410;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 0.9rem;
-  height: 30px;
-  justify-content: center;
-  width: 30px;
-  transition: background 0.1s, color 0.1s;
-}
-
-.qrt-icon-btn:hover:not(:disabled) { background: #E8DBCE; }
-.qrt-icon-btn:disabled { color: #C5AF9D; cursor: default; }
-.qrt-icon-btn.danger { color: #c05050; }
-.qrt-icon-btn.danger:hover { background: rgba(192,80,80,0.08); }
-.qrt-icon-btn.sm { height: 26px; width: 26px; font-size: 0.8rem; }
-
-/* Reuse bootstrap btn styles */
-.btn { font-size: 0.84rem; }
-.btn-sm { font-size: 0.78rem; padding: 4px 10px; }
-
-/* ─── Preset & saved sections ────────────────────────────────────────────── */
-.qrt-section-header {
-  align-items: flex-end;
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.qrt-section-title {
-  color: #1A1410;
-  font-family: 'Rufina', Georgia, serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0 0 3px;
-}
-
-.qrt-section-sub {
-  color: #8C7667;
-  font-size: 0.78rem;
-  margin: 0;
-}
-
-.qrt-presets-section {
-  margin-bottom: 48px;
-  padding: 40px 48px 0;
-}
-
-.qrt-saved-section {
-  margin-bottom: 24px;
-  padding: 0 48px;
-}
-
-.qrt-presets-grid {
-  display: grid;
-  gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-}
-
-/* Preset card */
-.qrt-preset-card {
-  background: #F5F2EE;
-  border: 1.5px solid #E8DBCE;
-  border-radius: 10px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
-}
-
-.qrt-preset-card:hover {
-  border-color: #BD945A;
-  box-shadow: 0 10px 32px rgba(189, 148, 90, 0.22);
-  transform: translateY(-3px);
-}
-
-/* Layout preview area */
-.qrt-preset-visual-wrap {
-  align-items: center;
-  background: #D6CEBC;
-  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
-  background-size: 8px 8px;
-  display: flex;
-  justify-content: center;
-  min-height: 130px;
-  padding: 20px;
-}
-
-.qrt-preset-visual {
-  box-shadow: 0 3px 16px rgba(0,0,0,0.22);
-  max-height: 100px;
-  max-width: 100%;
-  overflow: hidden;
-  position: relative;
-  width: 100%;
-}
-
-.qrt-preset-info {
-  border-top: 1px solid #E8DBCE;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px 6px;
-}
-
-.qrt-preset-info strong {
-  color: #1A1410;
-  font-size: 0.86rem;
-  font-weight: 600;
-}
-
-.qrt-preset-info span {
-  color: #8C7667;
-  font-size: 0.71rem;
-  line-height: 1.35;
-}
-
-.qrt-preset-cta {
-  align-items: center;
-  border-top: 1px solid #E8DBCE;
-  color: #BD945A;
-  display: flex;
-  font-size: 0.75rem;
-  font-weight: 600;
-  gap: 6px;
-  letter-spacing: 0.01em;
-  opacity: 0;
-  padding: 7px 12px 9px;
-  transition: opacity 0.15s;
-}
-
-.qrt-preset-card:hover .qrt-preset-cta { opacity: 1; }
-
-/* ─── Preview modal ──────────────────────────────────────────────────────── */
-.qrt-preview-backdrop {
-  align-items: center;
-  background: rgba(15, 12, 8, 0.65);
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  left: 0;
-  padding: 24px;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 1000;
-}
-
-.qrt-preview-modal {
-  background: #F5F2EE;
-  border-radius: 12px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-  max-width: 700px;
-  overflow: hidden;
-  width: 100%;
-}
-
-.qrt-preview-header {
-  align-items: flex-start;
-  background: #1A1410;
-  border-bottom: 1px solid #2E241C;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 14px 20px;
-}
-
-.qrt-preview-header h3 {
-  color: #F5F2EE;
-  font-family: 'Rufina', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 2px;
-}
-
-.qrt-preview-header .qrt-icon-btn { color: #C5AF9D; }
-.qrt-preview-header .qrt-icon-btn:hover { background: rgba(197,175,157,0.12); color: #F5F2EE; }
-
-.qrt-preview-qr-row {
-  align-items: flex-end;
-  border-bottom: 1px solid #E8DBCE;
-  display: flex;
-  gap: 10px;
-  padding: 12px 20px;
-}
-
-.qrt-preview-qr-label {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  font-size: 0.78rem;
-  gap: 4px;
-}
-
-.qrt-preview-qr-label span { color: #8C7667; font-weight: 500; }
-
-.qrt-preview-canvas-area {
-  align-items: center;
-  background-color: #D6CEBC;
-  background-image: radial-gradient(circle, rgba(26,20,16,0.18) 1px, transparent 1px);
-  background-size: 16px 16px;
-  display: flex;
-  flex: 1;
-  justify-content: center;
-  min-height: 200px;
-  overflow: auto;
-  padding: 32px;
-}
-
-.qrt-preview-loading {
-  align-items: center;
-  color: #8C7667;
-  display: flex;
-  font-size: 0.88rem;
-  gap: 8px;
-}
-
-.qrt-preview-img {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-  max-height: 440px;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-.qrt-preview-footer {
-  align-items: center;
-  background: #F5F2EE;
-  border-top: 1px solid #E8DBCE;
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 20px;
-}
-
-.qrt-preview-footer .hint { color: #8C7667; font-size: 0.82rem; }
-
-.qrt-preview-footer-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* ─── Panel toggle buttons (hidden on desktop, shown on tablet) ───────────── */
-.qrt-panel-btn { display: none; }
-
-/* ─── Tablet layout (< 1100px) ─────────────────────────────────────────────── */
-@media (max-width: 1099px) {
-  .qrt-panel-btn { display: inline-flex; }
-  .qrt-panel-btn.active { background: rgba(197,175,157,0.16); color: #BD945A; }
-
-  .qrt-body {
-    grid-template-columns: 1fr;
-    position: relative;
+@import url('https://fonts.googleapis.com/css2?family=Rufina:wght@400;700&family=Urbanist:wght@400;500;600;700&display=swap');
+
+/* ── Base ── */
+.studio{--ink:#1a1410;--cream:#f5f2ee;--gold:#bd945a;--muted:#6d6256;background:var(--cream);color:var(--ink);font-family:Urbanist,Arial,sans-serif}
+.studio *{box-sizing:border-box}
+.studio button,.studio input,.studio textarea{font:inherit}
+.studio button{color:inherit}
+
+/* ── Library ── */
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 14px}
+.saved-section,.library-section{padding:48px clamp(24px,6vw,90px)}
+.saved-section{background:#eee8e1;padding-bottom:36px}
+.section-heading,.library-heading{display:flex;align-items:end;justify-content:space-between;gap:30px;margin-bottom:22px}
+.section-heading h2,.library-heading h2{font:400 clamp(28px,3vw,40px)/1.15 Rufina,serif;margin:0}
+.section-heading>span{font-size:12px;color:var(--muted)}
+.saved-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.saved-card{border:1px solid #d9d0c7;background:#f9f6f2;display:flex;align-items:stretch}
+.saved-card:hover{border-color:var(--gold)}
+.saved-card-body{border:0;background:transparent;text-align:left;padding:13px;display:flex;align-items:center;gap:11px;cursor:pointer;flex:1;min-width:0}
+.saved-monogram{width:42px;height:42px;background:var(--ink);color:var(--gold);display:grid;place-items:center;font:700 20px Rufina,serif;flex-shrink:0}
+.saved-card-body span:nth-child(2){display:grid;gap:3px;flex:1;min-width:0}
+.saved-card b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.saved-card small{color:var(--muted);font-size:10px}
+.saved-delete{border:0;border-left:1px solid #e4ddd6;background:transparent;padding:0 13px;cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0}
+.saved-delete:hover:not(:disabled){color:#a44c41;background:#fdf5f4}
+.saved-delete:disabled{opacity:.4;cursor:default}
+.library-count{display:flex;align-items:center;gap:9px}
+.library-count strong{font:400 44px Rufina,serif}
+.library-count span{font-size:11px;color:var(--muted);line-height:1.3}
+.library-toolbar{display:flex;justify-content:space-between;gap:18px;margin-bottom:18px}
+.search-box{height:44px;min-width:min(400px,100%);display:flex;align-items:center;gap:10px;border-bottom:1px solid #c8bdb2}
+.search-box input{border:0;background:transparent;outline:0;flex:1;color:var(--ink)}
+.category-list{display:flex;gap:6px;overflow:auto;padding-bottom:14px;margin-bottom:20px}
+.category-list button{white-space:nowrap;border:1px solid #d4cbc2;background:transparent;padding:7px 11px;font-size:11px;letter-spacing:.04em;cursor:pointer}
+.category-list button.active{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+.template-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px 20px}
+.template-card{min-width:0}
+.template-preview{width:100%;aspect-ratio:1.32;border:1px solid #ded6cf;background:#e9e3dd;padding:20px;display:grid;place-items:center;overflow:hidden;position:relative;cursor:pointer}
+.template-preview img{width:100%;height:100%;object-fit:contain;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.template-preview:hover img{transform:scale(1.035)}
+.use-template{position:absolute;right:11px;bottom:11px;background:var(--ink);color:var(--cream);padding:8px 10px;font-size:11px;opacity:0;transform:translateY(4px);transition:.2s}
+.template-preview:hover .use-template{opacity:1;transform:none}
+.template-meta{display:flex;align-items:start;justify-content:space-between;margin-top:12px;gap:10px}
+.template-meta p{margin:0 0 3px;color:var(--gold);font-size:10px;text-transform:uppercase;letter-spacing:.12em}
+.template-meta h3{font:400 19px Rufina,serif;margin:0}
+.format-pill{font-size:9px;text-transform:uppercase;letter-spacing:.1em;border:1px solid #d7cec5;padding:4px 6px;white-space:nowrap}
+.tag-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.tag-row span{font-size:10px;color:var(--muted);background:#eee8e1;padding:3px 6px}
+.empty-state{text-align:center;padding:72px;border:1px dashed #cfc3b8}
+.empty-state i{font-size:30px;color:var(--gold)}
+.empty-state h3{font:400 26px Rufina,serif;margin:12px 0 4px}
+.empty-state p{color:var(--muted)}
+
+/* ── Create-template CTA ── */
+.create-template-cta{width:100%;display:flex;align-items:center;gap:16px;border:1.5px dashed #c8bdb2;background:#f6f2ed;padding:16px 18px;margin-bottom:28px;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+.create-template-cta:hover{border-color:var(--gold);background:#fbf7f0}
+.create-template-cta .cta-icon{width:38px;height:38px;flex-shrink:0;border-radius:50%;background:var(--ink);color:var(--gold);display:grid;place-items:center;font-size:14px}
+.create-template-cta .cta-text{flex:1;display:grid;gap:2px}
+.create-template-cta .cta-text b{font-size:14px}
+.create-template-cta .cta-text small{font-size:11px;color:var(--muted)}
+.create-template-cta>i{color:var(--gold);font-size:14px;flex-shrink:0}
+
+/* ── Template creator modal ── */
+.creator-overlay{position:fixed;inset:0;background:rgba(26,20,16,.5);display:grid;place-items:center;z-index:60;padding:24px}
+.creator-modal{background:#fbf9f6;width:min(640px,100%);max-height:88vh;overflow-y:auto;padding:28px 30px;box-shadow:0 24px 60px rgba(26,20,16,.3)}
+.creator-head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.creator-head h3{font:400 24px Rufina,serif;margin:0}
+.creator-close{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;padding:4px}
+.creator-close:hover{color:var(--ink)}
+.creator-name-field{display:grid;gap:6px;font-size:11px;color:var(--muted);margin-bottom:22px}
+.creator-name-field input{border:1px solid #d9d0c7;background:#fff;padding:10px 12px;outline:0;color:var(--ink);font-size:14px}
+.creator-name-field input:focus{border-color:var(--gold)}
+.creator-sub{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 12px}
+.format-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:26px}
+.format-option{border:1.5px solid #ddd4cc;background:#fff;padding:14px 12px;cursor:pointer;text-align:left;display:grid;gap:8px;justify-items:start}
+.format-option:hover{border-color:var(--gold)}
+.format-option.active{border-color:var(--gold);background:#fdf8f2}
+.format-option .format-swatch{width:34px;background:#e4dcd2;border:1px solid #cfc3b8;display:block}
+.format-option .format-swatch.round{border-radius:50%}
+.format-option b{font-size:12px}
+.format-option small{font-size:10px;color:var(--muted);line-height:1.4}
+.creator-actions{display:flex;justify-content:flex-end;gap:10px}
+
+/* ── Editor bar ── */
+.editor-bar{height:64px;background:var(--ink);color:var(--cream);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 22px;position:sticky;top:0;z-index:20}
+.back-button,.secondary-action{border:0;background:transparent;color:inherit;cursor:pointer}
+.back-button{justify-self:start;display:flex;align-items:center;gap:8px;font-size:13px}
+.editor-title{text-align:center;display:grid}
+.editor-title span{font-size:9px;color:var(--gold);letter-spacing:.16em;text-transform:uppercase}
+.editor-title b{font:400 15px Rufina,serif}
+.editor-actions{justify-self:end;display:flex;gap:7px;align-items:center}
+.secondary-action{padding:9px;font-size:13px}
+.secondary-action:disabled{opacity:.35;cursor:default}
+.editor-actions-divider{width:1px;height:20px;background:rgba(245,242,238,.18);margin:0 2px}
+.primary-action{border:1px solid var(--gold);background:var(--gold);color:var(--ink)!important;padding:10px 16px;font-weight:700;display:inline-flex;align-items:center;gap:10px;cursor:pointer}
+.primary-action:hover{background:#d3ab76}
+.primary-action:disabled{opacity:.5;cursor:default}
+
+/* ── Editor shell: 2-col ── */
+.editor-shell{
+  display:grid;
+  grid-template-columns:56px 0px minmax(360px,1fr) 0px;
+  grid-template-areas:"rail railpanel canvas props";
+  height:calc(100vh - 64px);overflow:hidden;
+  transition:grid-template-columns .18s ease;
+}
+.editor-shell.rail-panel-open{grid-template-columns:56px 288px minmax(360px,1fr) 0px}
+.editor-shell.props-open{grid-template-columns:56px 0px minmax(360px,1fr) 296px}
+.editor-shell.rail-panel-open.props-open{grid-template-columns:56px 288px minmax(360px,1fr) 296px}
+.studio--embedded .editor-shell{height:auto;min-height:600px;overflow:visible}
+
+/* ── Canvas stage ── */
+.canvas-stage{grid-area:canvas;padding:24px 28px 16px;background:#e8e2dc;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.studio--embedded .canvas-stage{height:auto;min-height:420px}
+
+/* ── Icon rail + slide-out panel ── */
+.rail{grid-area:rail;background:#f4efe9;border-right:1px solid #dfd7d0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 4px;overflow-y:auto}
+/* <button> defaults to white-space:nowrap in the browser's UA stylesheet — without overriding it
+   here, a label longer than the rail's width (e.g. "Background") gets silently clipped instead of
+   wrapping to a second line. */
+.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 1px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:8px;font-weight:600;letter-spacing:.01em}
+.rail-btn i{font-size:17px}
+/* align-items:center above sizes the label to its unwrapped content by default (cross-axis
+   auto-width), so white-space:normal alone has nothing to wrap against — constrain it to the
+   button's own width so long labels ("Background") actually wrap instead of overflowing. */
+.rail-btn span{width:100%;white-space:normal;text-align:center;line-height:1.25}
+.rail-btn:hover{background:#efe7dd;color:var(--ink)}
+.rail-btn.active{background:#fdf8f2;color:var(--gold);box-shadow:inset 0 0 0 1.5px var(--gold)}
+.properties-panel--left{grid-area:railpanel}
+.properties-panel--right{grid-area:props}
+.properties-panel--left{border-left:0;border-right:1px solid #dfd7d0}
+.stage-ruler{display:flex;justify-content:space-between;color:#776c62;font-size:10px;letter-spacing:.06em;margin-bottom:8px;flex-shrink:0}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:280px}
+.canvas-root{position:relative;flex-shrink:0;box-shadow:0 18px 44px rgba(26,20,16,.22);user-select:none}
+.canvas-bg{position:absolute;inset:0;pointer-events:none}
+.canvas-corners{position:absolute;inset:0;pointer-events:none}
+.preview-caption{display:flex;justify-content:center;gap:7px;color:#776c62;font-size:10px;letter-spacing:.04em;margin-top:10px;flex-shrink:0}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#5c8a68;margin:auto 0}
+
+/* ── Canvas elements ── */
+.canvas-el{position:absolute;box-sizing:border-box}
+.canvas-el.selected>.sel-ring{display:block}
+
+/* QR element */
+.el--qr{cursor:grab;will-change:left,top,width,height}
+.el--qr:hover::after{content:'';position:absolute;inset:-2px;border:1.5px dashed rgba(189,148,90,.5)}
+.el--qr.selected::after{display:none}
+/* Grabbing state — applied to canvas-wrap during active drag */
+.canvas-wrap.is-dragging{cursor:grabbing}
+.canvas-wrap.is-dragging .el--qr{cursor:grabbing}
+
+/* Selection ring */
+.sel-ring{display:none;position:absolute;inset:-3px;border:2px solid var(--gold);pointer-events:none}
+
+/* Resize handle — bottom-right square for QR, right-edge grip for text blocks (width only) */
+.resize-handle{position:absolute;right:-5px;bottom:-5px;width:14px;height:14px;background:var(--gold);cursor:nwse-resize;border-radius:2px;z-index:2}
+.resize-handle--h{top:50%;bottom:auto;right:-6px;transform:translateY(-50%);width:8px;height:28px;cursor:ew-resize;border-radius:3px}
+
+/* QR reset mini-button */
+.qr-reset-btn{position:absolute;top:-26px;right:0;border:1px solid var(--gold);background:rgba(26,20,16,.75);color:var(--gold);font-size:10px;padding:3px 7px;cursor:pointer;display:flex;align-items:center;gap:4px}
+
+/* Copy / merchant blocks — grab anywhere to drag, like the QR element */
+.el--copy,.el--merchant{cursor:grab;will-change:left,top}
+.el--copy:hover:not(.selected),.el--merchant:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
+.el--copy.selected,.el--merchant.selected{outline:none}
+.canvas-wrap.is-dragging .el--copy,.canvas-wrap.is-dragging .el--merchant{cursor:grabbing}
+
+/* Text lines — plain text by default (drags with the block); double-click enters edit mode */
+.t-line{min-height:1.2em;word-break:break-word;cursor:grab}
+.t-line:focus{outline:2px solid rgba(189,148,90,.35);outline-offset:1px}
+.t-line[contenteditable="true"]{cursor:text}
+.canvas-wrap.is-dragging .t-line{cursor:grabbing}
+
+/* Brand mark (locked) */
+.el--brandmark{cursor:grab;overflow:hidden}
+.el--brandmark:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
+.canvas-wrap.is-dragging .el--brandmark{cursor:grabbing}
+.el--brandmark img{pointer-events:none;display:block}
+
+/* Canva-style center snap guides */
+.snap-guide{position:absolute;background:#ff4d6d;pointer-events:none;z-index:6}
+.snap-guide--v{top:0;bottom:0;width:1px}
+.snap-guide--h{left:0;right:0;height:1px}
+
+/* Freeform element bank items on the canvas (shapes / CTA badges) */
+.el--dyn{cursor:grab}
+.el--dyn:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
+.canvas-wrap.is-dragging .el--dyn{cursor:grabbing}
+.dyn-shape{display:flex;align-items:center;overflow:hidden}
+.dyn-cta-text{width:100%;height:100%;display:flex;align-items:center;font-weight:700;letter-spacing:.02em;font-family:Urbanist,Arial,sans-serif;white-space:nowrap;overflow:hidden;outline:none;cursor:grab}
+.dyn-cta-text[contenteditable="true"]{cursor:text}
+.el-delete-btn{position:absolute;top:-26px;left:0;border:1px solid #a44c41;background:rgba(26,20,16,.75);color:#e8887c;font-size:10px;padding:3px 7px;cursor:pointer;display:flex;align-items:center;gap:4px}
+.el-delete-btn:hover{background:#a44c41;color:#fff}
+
+/* ── Properties panel ── */
+.properties-panel{background:#fbf9f6;padding:22px 20px;overflow-y:auto;border-left:1px solid #dfd7d0;display:flex;flex-direction:column;gap:0}
+.properties-panel section+section{border-top:1px solid #e4ddd6;margin-top:22px;padding-top:20px}
+.panel-kicker{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 14px}
+.panel-back-row{display:flex;align-items:center;gap:4px;margin-bottom:14px}
+.panel-back-row .panel-kicker{margin:0}
+.back-to-props{border:0;background:transparent;color:var(--gold);cursor:pointer;padding:0 6px 0 0;font-size:13px;line-height:1}
+.properties-panel label{display:grid;gap:5px;font-size:11px;color:var(--muted);margin-bottom:13px}
+.properties-panel input,.properties-panel textarea{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink);resize:vertical}
+.properties-panel input:focus,.properties-panel textarea:focus{border-color:var(--gold)}
+.field-note{font-size:10px;color:#53725a;display:flex;gap:6px;line-height:1.4}
+.field-note.invalid{color:#a44c41}
+.field-hint{font-size:10px;color:var(--muted);line-height:1.55;margin-bottom:12px}
+.canvas-edit-hint{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;line-height:1.5;background:#f0ebe4;padding:10px;border-left:2px solid var(--gold)}
+.bg-swatch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bg-swatch{position:relative;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid;place-items:center;padding:0}
+.bg-swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px rgba(189,148,90,.25)}
+.bg-swatch i{font-size:13px}
+.bg-swatch--custom{background:conic-gradient(from 0deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);color:#fff;position:relative;overflow:hidden}
+.bg-swatch--custom i{text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.bg-swatch--custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.standard-card{background:#eee8e1;padding:12px;font-size:10px}
+.standard-card div{display:flex;gap:7px;color:#41614a}
+.standard-card ul{padding-left:16px;margin:9px 0 0;color:var(--muted);line-height:1.8}
+.signature-card{width:100%;display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:10px;text-align:left;border:1px solid #ddd4cc;background:#fff;padding:8px;margin-bottom:7px;cursor:pointer}
+.signature-card.active{border-color:var(--gold);box-shadow:inset 3px 0 var(--gold)}
+.signature-card img{width:50px;height:50px;object-fit:contain}
+.signature-card span{display:grid;gap:3px}
+.signature-card b{font-size:12px}
+.signature-card small{font-size:9px;line-height:1.3;color:var(--muted)}
+.signature-card>i{color:var(--gold);opacity:0}
+.signature-card.active>i{opacity:1}
+.reset-btn{width:100%;border:1px solid #ddd4cc;background:transparent;padding:9px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:7px;justify-content:center;margin-top:4px}
+.reset-btn:hover{border-color:var(--gold)}
+.el-action-row{display:flex;gap:8px}
+.el-action-row .reset-btn{margin-top:4px}
+.reset-btn--danger:hover{border-color:#a44c41;color:#a44c41}
+.layer-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.layer-order-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:1px solid #d9d0c7;background:#fff;font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--muted);cursor:pointer}
+.layer-order-btn:hover{border-color:var(--gold);color:var(--ink)}
+.layer-order-btn i{font-size:13px}
+
+/* ── Typography (font pairing + size scale) ── */
+.font-pairing-list{display:flex;flex-direction:column;gap:6px}
+.font-pairing-btn{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #d9d0c7;background:#fff;cursor:pointer;text-align:left}
+.font-pairing-btn:hover{border-color:var(--gold)}
+.font-pairing-btn.active{border-color:var(--gold);background:#fdf8f2;box-shadow:inset 3px 0 var(--gold)}
+.font-pairing-sample{font-size:17px;line-height:1;color:var(--ink);width:22px;flex-shrink:0;text-align:center}
+.font-pairing-label{flex:1;font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.font-pairing-btn.active .font-pairing-label{color:var(--ink)}
+.font-pairing-btn>i{color:var(--gold);font-size:12px}
+.type-scale-row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.scale-btn{width:22px;height:22px;display:grid;place-items:center;border:1px solid #d9d0c7;background:#fff;cursor:pointer;padding:0;color:var(--muted)}
+.scale-btn:hover:not(:disabled){border-color:var(--gold);color:var(--ink)}
+.scale-btn:disabled{opacity:.35;cursor:not-allowed}
+.scale-value{font-size:10.5px;font-weight:600;color:var(--ink);min-width:34px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ── Visibility toggles ── */
+.vis-toggles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.vis-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid #d9d0c7;background:#fff;font-size:10px;font-weight:600;letter-spacing:.03em;cursor:pointer;color:var(--muted);transition:border-color .15s,color .15s,background .15s}
+.vis-btn.active{border-color:var(--gold);color:var(--ink);background:#fdf8f2}
+.vis-btn:hover{border-color:var(--gold);color:var(--ink)}
+.vis-btn i{font-size:11px}
+.properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+.text-style-row{display:flex;gap:6px;margin-bottom:13px}
+.text-style-row .vis-btn{padding:6px 9px}
+.properties-panel select{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink)}
+.properties-panel select:focus{border-color:var(--gold)}
+
+/* ── Layers panel ── */
+.layers-list{display:flex;flex-direction:column;gap:2px}
+.layer-row{display:flex;align-items:center;gap:7px;padding:6px 6px 6px 2px;border:1px solid transparent;border-radius:4px;cursor:pointer;font-size:11.5px}
+.layer-row:hover{background:#f3ede4}
+.layer-row.active{background:#fdf8f2;border-color:var(--gold)}
+.layer-grip{color:#c2b7a9;font-size:12px;flex-shrink:0}
+.layer-swatch{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.12);flex-shrink:0}
+.layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.layer-btn{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px 4px;font-size:11px;line-height:1;flex-shrink:0}
+.layer-btn:hover{color:var(--ink)}
+.layers-divider{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.layers-divider::before,.layers-divider::after{content:'';flex:1;height:1px;background:#e4ddd6}
+
+/* ── Element bank ── */
+.element-bank{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.bank-item{border:1px solid #ddd4cc;background:#fff;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-size:10px;color:var(--muted);text-align:center}
+.bank-item:hover{border-color:var(--gold);color:var(--ink);background:#fdf8f2}
+.bank-icon{color:var(--ink);display:flex}
+.color-input{padding:2px 4px;height:34px;cursor:pointer}
+
+/* ── Notice ── */
+.notice{position:fixed;right:22px;bottom:22px;background:var(--ink);color:var(--cream);padding:12px 17px;box-shadow:0 10px 28px rgba(0,0,0,.24);z-index:50;display:flex;gap:8px;align-items:center}
+.notice i{color:var(--gold)}
+
+/* ── Responsive ── */
+@media(max-width:1050px){
+  .template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .editor-shell{grid-template-columns:48px 0px minmax(320px,1fr) 0px}
+  .editor-shell.rail-panel-open{grid-template-columns:48px 248px minmax(320px,1fr) 0px}
+  .editor-shell.props-open{grid-template-columns:48px 0px minmax(320px,1fr) 260px}
+  .editor-shell.rail-panel-open.props-open{grid-template-columns:48px 248px minmax(320px,1fr) 260px}
+}
+@media(max-width:760px){
+  .library-toolbar{display:grid}
+  .style-switch{overflow:auto}
+  .template-grid{grid-template-columns:1fr}
+  .editor-bar{grid-template-columns:auto 1fr}
+  .editor-title{display:none}
+  .editor-actions .secondary-action{display:none}
+  /* Stacked single column regardless of panel state — repeats the same class combinations as the
+     1050px block (not just the bare .editor-shell) because a more specific selector from an
+     earlier, still-matching media query (≤1050px is also true at ≤760px) otherwise wins on
+     specificity over this block's plain selector, regardless of source order. */
+  .editor-shell,
+  .editor-shell.rail-panel-open,
+  .editor-shell.props-open,
+  .editor-shell.rail-panel-open.props-open{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:"rail" "canvas" "railpanel" "props";
+    height:auto;
   }
-
-  .qrt-sidebar-left,
-  .qrt-sidebar-right {
-    bottom: 0;
-    height: 100%;
-    position: absolute;
-    top: 0;
-    transition: transform 0.22s ease;
-    width: 220px;
-    z-index: 50;
-    box-shadow: 0 0 32px rgba(0,0,0,0.18);
-  }
-  .qrt-sidebar-left {
-    left: 0;
-    transform: translateX(0);
-    border-right: 1px solid #E8DBCE;
-  }
-  .qrt-sidebar-right {
-    right: 0;
-    transform: translateX(0);
-    border-left: 1px solid #E8DBCE;
-  }
-  .qrt-sidebar-left.panel-hidden { transform: translateX(-100%); }
-  .qrt-sidebar-right.panel-hidden { transform: translateX(100%); }
-
-  .qrt-canvas-area { padding: 24px; }
-  .qrt-header-actions { gap: 5px; }
-}
-
-/* ─── Mobile (< 768px) ───────────────────────────────────────────────────── */
-@media (max-width: 767px) {
-  .qrt-header { flex-wrap: wrap; gap: 6px; }
-  .qrt-name-input { max-width: 160px; }
-  .qrt-desktop-btn { display: none; }
-  .qrt-canvas-area { padding: 16px; }
-
-  .qrt-sidebar-left,
-  .qrt-sidebar-right { width: 200px; }
-
-  .qrt-hero { padding: 24px 20px; }
-  .qrt-hero-text h2 { font-size: 1.3rem; }
-  .qrt-presets-section { padding: 24px 20px 0; }
-  .qrt-saved-section { padding: 0 20px !important; }
-  .qrt-presets-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .rail{flex-direction:row;width:100%;padding:6px;overflow-x:auto}
+  .rail-btn{width:auto;min-width:64px;flex-shrink:0;padding:7px 12px}
+  .canvas-stage{min-height:360px}
+  .properties-panel{border-left:0;border-top:1px solid #dfd7d0;max-height:60vh}
+  .properties-panel--left{border-right:0;border-top:1px solid #dfd7d0}
 }
 </style>

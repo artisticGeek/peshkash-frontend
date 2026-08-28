@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# TypeScript build output artifacts (not source)
+src/**/*.vue.js
+src/**/*.vue.js.map
+src/**/*.js.map
+tsconfig.tsbuildinfo

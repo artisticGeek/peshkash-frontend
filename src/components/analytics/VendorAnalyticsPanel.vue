@@ -37,10 +37,10 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!summary || summary.totalScans === 0" class="text-center py-5 text-muted">
+    <div v-else-if="!summary || (summary.totalScans === 0 && summary.totalActions === 0)" class="text-center py-5 text-muted">
       <i class="bi bi-qr-code-scan fs-1 d-block mb-3 opacity-25"></i>
-      <p class="mb-1 fw-medium">No scans yet</p>
-      <p class="mb-0 small">Analytics will appear after customers scan this vendor's QR code.</p>
+      <p class="mb-1 fw-medium">No activity yet</p>
+      <p class="mb-0 small">Analytics will appear after customers scan this vendor's QR code or interact with it.</p>
     </div>
 
     <!-- Data -->
