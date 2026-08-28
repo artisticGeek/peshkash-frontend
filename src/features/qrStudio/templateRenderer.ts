@@ -207,9 +207,9 @@ export function renderTemplateSvg(
     copy = textBlock(template, options, copyX, copyY, copyW, 'start');
   } else {
     const above  = qrY > height * 0.35;
-    const copyY  = above
-      ? height * 0.11
-      : Math.min(height * 0.7, qrY + qrSize + short * 0.06);
+    // Always start below the QR's own bottom edge — a fixed cap here (e.g. height*0.7) can land
+    // ABOVE where a large QR actually ends, rendering copy text on top of the QR code.
+    const copyY  = above ? height * 0.11 : (qrY + qrSize + short * 0.06);
     copy = textBlock(template, options, width * 0.09, copyY, width * 0.82, 'middle');
   }
 

@@ -795,6 +795,8 @@ function initElPos(t: QrTemplateDefinition): void {
   const horizontal = ['landscape', 'ticket', 'label'].includes(t.format);
   const qrOnLeft = qrX < width / 2;
 
+  const markBaseY = height - padding * 0.22;
+
   let cx: number, cy: number, cw: number, ch: number;
   if (horizontal) {
     cx = qrOnLeft ? Math.max(width * 0.47, qrX + qrSize + padding) : padding * 1.2;
@@ -803,13 +805,18 @@ function initElPos(t: QrTemplateDefinition): void {
     ch = height * 0.75;
   } else {
     const above = qrY > height * 0.35;
-    cy = above ? height * 0.08 : Math.min(height * 0.58, qrY + qrSize + sh * 0.04);
     cx = width * 0.08;
     cw = width * 0.84;
     ch = height * 0.35;
+    // Always start below the QR's own bottom edge — the old cap here (Math.min(height*0.58, ...))
+    // could land ABOVE where a large QR actually ends, making the copy text visually overlap the
+    // QR. ch deliberately stays a flat height*0.35 in both branches rather than being narrowed to
+    // "fit" above the merchant strip: the box has overflow:hidden, and shrinking it below the
+    // text's actual rendered height (which this function has no way to measure — font sizes,
+    // typography scale and content length all vary) silently clips whichever line runs last,
+    // trading an unscannable QR for invisible CTA text.
+    cy = above ? height * 0.08 : (qrY + qrSize + sh * 0.04);
   }
-
-  const markBaseY = height - padding * 0.22;
 
   // Brand mark: compute content size to position the SVG correctly
   const logoH = sh * 0.055; // desired content height in canvas units
