@@ -65,7 +65,125 @@
           <button class="primary-action compact" :disabled="saving" @click="saveDesign">{{ saving ? 'Saving…' : 'Save design' }}</button>
         </div>
       </header>
-      <main class="editor-shell">
+      <main class="editor-shell" :class="{ 'rail-panel-open': !!activeRailPanel, 'props-open': !!(selectedEl || selectedElementId) }">
+
+        <!-- ── Left icon rail: switch which slide-out panel is open ────────── -->
+        <nav class="rail">
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'design' }" title="Design" @click="toggleRailPanel('design')"><i class="bi bi-sliders"></i><span>Design</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'background' }" title="Background" @click="toggleRailPanel('background')"><i class="bi bi-palette2"></i><span>Background</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'typography' }" title="Typography" @click="toggleRailPanel('typography')"><i class="bi bi-fonts"></i><span>Type</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'elements' }" title="Elements" @click="toggleRailPanel('elements')"><i class="bi bi-stickies"></i><span>Elements</span></button>
+          <button v-if="layerRows.length" class="rail-btn" :class="{ active: activeRailPanel === 'layers' }" title="Layers" @click="toggleRailPanel('layers')"><i class="bi bi-layers"></i><span>Layers</span></button>
+          <!-- Always mounted (not gated by which rail panel is open) — both the Elements panel's
+               "Image" button and the properties dock's "Replace image" action trigger it. -->
+          <input ref="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" @change="onImageFileChosen">
+        </nav>
+
+        <!-- ── Left slide-out panel: content for whichever rail icon is active ── -->
+        <aside v-if="activeRailPanel" class="properties-panel properties-panel--left" @click.stop>
+
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">DESIGN</p>
+            <label>Design name<input v-model="design.name" maxlength="80"></label>
+            <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
+            <p :class="['field-note', { invalid: !destinationValid }]">
+              <i :class="destinationValid ? 'bi bi-shield-check' : 'bi bi-exclamation-circle'"></i>
+              {{ destinationValid ? 'Short HTTPS link ready to encode.' : 'Use a complete https:// URL.' }}
+            </p>
+          </section>
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">OUTPUT</p>
+            <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
+            <div class="standard-card">
+              <div><i class="bi bi-patch-check-fill"></i><b>Scan-safe standard</b></div>
+              <ul><li>Error correction H</li><li>4-module quiet zone</li><li>Rounded modules + anchors</li><li>Peshkash brand mark</li></ul>
+            </div>
+          </section>
+          <section v-if="activeRailPanel === 'design'">
+            <p class="panel-kicker">ELEMENTS</p>
+            <div class="vis-toggles">
+              <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
+                <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                Peshkash mark
+              </button>
+            </div>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'background'">
+            <p class="panel-kicker">BACKGROUND</p>
+            <div class="bg-swatch-grid">
+              <button v-for="preset in BACKGROUND_PRESETS" :key="preset.label"
+                      class="bg-swatch"
+                      :class="{ active: currentBgColor === preset.color }"
+                      :style="{ background: preset.color }"
+                      :title="preset.label"
+                      @click="applyBackgroundPreset(preset)">
+                <i v-if="currentBgColor === preset.color" class="bi bi-check2" :style="{ color: preset.ink }"></i>
+              </button>
+              <label class="bg-swatch bg-swatch--custom" title="Custom color">
+                <input type="color" :value="currentBgColor" @input="setCustomBackground(($event.target as HTMLInputElement).value)">
+                <i class="bi bi-palette2"></i>
+              </label>
+            </div>
+            <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'typography'">
+            <p class="panel-kicker">TYPOGRAPHY</p>
+            <div class="font-pairing-list">
+              <button v-for="pairing in FONT_PAIRINGS" :key="pairing.id" class="font-pairing-btn"
+                      :class="{ active: typography.pairingId === pairing.id }"
+                      @click="setFontPairing(pairing.id)">
+                <span class="font-pairing-sample" :style="{ fontFamily: pairing.displayFont }">Aa</span>
+                <span class="font-pairing-label">{{ pairing.label }}</span>
+                <i v-if="typography.pairingId === pairing.id" class="bi bi-check2"></i>
+              </button>
+            </div>
+            <div class="type-scale-row">
+              <span class="field-hint" style="margin:0">Size</span>
+              <button class="scale-btn" title="Smaller" :disabled="typography.scale <= 0.75" @click="setTypeScale(typography.scale - 0.05)"><i class="bi bi-dash"></i></button>
+              <span class="scale-value">{{ Math.round(typography.scale * 100) }}%</span>
+              <button class="scale-btn" title="Larger" :disabled="typography.scale >= 1.4" @click="setTypeScale(typography.scale + 0.05)"><i class="bi bi-plus"></i></button>
+            </div>
+            <p class="field-hint" style="margin-top:6px">Applies to eyebrow, headline, descriptor, CTA and the merchant name.</p>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'elements'">
+            <p class="panel-kicker">ELEMENT BANK</p>
+            <p class="field-hint" style="margin-bottom:10px">Text, shapes, CTA badges and images — click to drop one on the canvas, then drag, resize or edit it.</p>
+            <div class="element-bank">
+              <button v-for="preset in ELEMENT_PRESETS" :key="preset.id" class="bank-item" @click="addElement(preset.id)" :title="'Add ' + preset.label">
+                <span class="bank-icon" v-html="preset.icon"></span>
+                <span>{{ preset.label }}</span>
+              </button>
+              <button class="bank-item" @click="imageFileInput?.click()" title="Upload an image">
+                <span class="bank-icon"><i class="bi bi-image"></i></span>
+                <span>Image</span>
+              </button>
+            </div>
+          </section>
+
+          <section v-else-if="activeRailPanel === 'layers' && layerRows.length">
+            <p class="panel-kicker">LAYERS</p>
+            <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
+            <div class="layers-list">
+              <template v-for="(el, i) in layerRows" :key="el.id">
+                <div v-if="i > 0 && (el.layer ?? 'front') !== (layerRows[i-1].layer ?? 'front')" class="layers-divider">
+                  <span>behind QR &amp; text</span>
+                </div>
+                <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
+                  <i class="bi bi-grip-vertical layer-grip"></i>
+                  <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
+                  <span class="layer-name">{{ layerLabel(el) }}</span>
+                  <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
+                  <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
+                  <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
+                </div>
+              </template>
+            </div>
+          </section>
+
+        </aside>
 
         <!-- ── Interactive canvas stage ─────────────────────── -->
         <section class="canvas-stage" ref="stageRef">
@@ -248,113 +366,11 @@
           <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it, snaps to center · Double-click text to edit · Arrow keys to nudge, Shift for bigger steps</div>
         </section>
 
-        <!-- ── Properties panel ───────────────────────────── -->
-        <aside class="properties-panel" @click.stop>
-
-          <!-- Default: global design settings -->
-          <template v-if="!selectedEl && !selectedElementId">
-            <section>
-              <p class="panel-kicker">DESIGN</p>
-              <label>Design name<input v-model="design.name" maxlength="80"></label>
-              <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
-              <p :class="['field-note', { invalid: !destinationValid }]">
-                <i :class="destinationValid ? 'bi bi-shield-check' : 'bi bi-exclamation-circle'"></i>
-                {{ destinationValid ? 'Short HTTPS link ready to encode.' : 'Use a complete https:// URL.' }}
-              </p>
-            </section>
-            <section>
-              <p class="panel-kicker">BACKGROUND</p>
-              <div class="bg-swatch-grid">
-                <button v-for="preset in BACKGROUND_PRESETS" :key="preset.label"
-                        class="bg-swatch"
-                        :class="{ active: currentBgColor === preset.color }"
-                        :style="{ background: preset.color }"
-                        :title="preset.label"
-                        @click="applyBackgroundPreset(preset)">
-                  <i v-if="currentBgColor === preset.color" class="bi bi-check2" :style="{ color: preset.ink }"></i>
-                </button>
-                <label class="bg-swatch bg-swatch--custom" title="Custom color">
-                  <input type="color" :value="currentBgColor" @input="setCustomBackground(($event.target as HTMLInputElement).value)">
-                  <i class="bi bi-palette2"></i>
-                </label>
-              </div>
-              <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
-            </section>
-            <section>
-              <p class="panel-kicker">TYPOGRAPHY</p>
-              <div class="font-pairing-list">
-                <button v-for="pairing in FONT_PAIRINGS" :key="pairing.id" class="font-pairing-btn"
-                        :class="{ active: typography.pairingId === pairing.id }"
-                        @click="setFontPairing(pairing.id)">
-                  <span class="font-pairing-sample" :style="{ fontFamily: pairing.displayFont }">Aa</span>
-                  <span class="font-pairing-label">{{ pairing.label }}</span>
-                  <i v-if="typography.pairingId === pairing.id" class="bi bi-check2"></i>
-                </button>
-              </div>
-              <div class="type-scale-row">
-                <span class="field-hint" style="margin:0">Size</span>
-                <button class="scale-btn" title="Smaller" :disabled="typography.scale <= 0.75" @click="setTypeScale(typography.scale - 0.05)"><i class="bi bi-dash"></i></button>
-                <span class="scale-value">{{ Math.round(typography.scale * 100) }}%</span>
-                <button class="scale-btn" title="Larger" :disabled="typography.scale >= 1.4" @click="setTypeScale(typography.scale + 0.05)"><i class="bi bi-plus"></i></button>
-              </div>
-              <p class="field-hint" style="margin-top:6px">Applies to eyebrow, headline, descriptor, CTA and the merchant name.</p>
-            </section>
-            <section>
-              <p class="panel-kicker">OUTPUT</p>
-              <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
-              <div class="standard-card">
-                <div><i class="bi bi-patch-check-fill"></i><b>Scan-safe standard</b></div>
-                <ul><li>Error correction H</li><li>4-module quiet zone</li><li>Rounded modules + anchors</li><li>Peshkash brand mark</li></ul>
-              </div>
-            </section>
-            <section>
-              <p class="panel-kicker">ELEMENTS</p>
-              <div class="vis-toggles">
-                <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
-                  <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
-                  Peshkash mark
-                </button>
-              </div>
-            </section>
-            <section>
-              <p class="panel-kicker">ELEMENT BANK</p>
-              <p class="field-hint" style="margin-bottom:10px">Text, shapes, CTA badges and images — click to drop one on the canvas, then drag, resize or edit it.</p>
-              <div class="element-bank">
-                <button v-for="preset in ELEMENT_PRESETS" :key="preset.id" class="bank-item" @click="addElement(preset.id)" :title="'Add ' + preset.label">
-                  <span class="bank-icon" v-html="preset.icon"></span>
-                  <span>{{ preset.label }}</span>
-                </button>
-                <button class="bank-item" @click="imageFileInput?.click()" title="Upload an image">
-                  <span class="bank-icon"><i class="bi bi-image"></i></span>
-                  <span>Image</span>
-                </button>
-                <input ref="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" @change="onImageFileChosen">
-              </div>
-            </section>
-            <section v-if="layerRows.length">
-              <p class="panel-kicker">LAYERS</p>
-              <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
-              <div class="layers-list">
-                <template v-for="(el, i) in layerRows" :key="el.id">
-                  <div v-if="i > 0 && (el.layer ?? 'front') !== (layerRows[i-1].layer ?? 'front')" class="layers-divider">
-                    <span>behind QR &amp; text</span>
-                  </div>
-                  <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
-                    <i class="bi bi-grip-vertical layer-grip"></i>
-                    <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
-                    <span class="layer-name">{{ layerLabel(el) }}</span>
-                    <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
-                    <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
-                    <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
-                  </div>
-                </template>
-              </div>
-            </section>
-            <div class="zone-hint"><i class="bi bi-cursor"></i> Click any element on the canvas to select and edit it</div>
-          </template>
+        <!-- ── Properties dock: only appears once something on canvas is selected ── -->
+        <aside v-if="selectedEl || selectedElementId" class="properties-panel properties-panel--right" @click.stop>
 
           <!-- QR Code selected -->
-          <template v-else-if="selectedEl === 'qr'">
+          <template v-if="selectedEl === 'qr'">
             <div class="panel-back-row">
               <button class="back-to-props" @click="selectedEl = null"><i class="bi bi-arrow-left"></i></button>
               <p class="panel-kicker">QR SIGNATURE</p>
@@ -567,6 +583,13 @@ const replacingImageId = ref<string | null>(null);
 const canvasScale = ref(0.5);
 const designKey = ref(0);
 const selectedEl = ref<'qr' | 'copy' | 'merchant' | 'brandmark' | null>(null);
+// Left icon-rail: which slide-out (add/navigate) panel is open. Independent of selection — the
+// properties dock (right side) opens separately once something on canvas is selected.
+type RailPanel = 'design' | 'background' | 'typography' | 'elements' | 'layers';
+const activeRailPanel = ref<RailPanel | null>(null);
+function toggleRailPanel(panel: RailPanel): void {
+  activeRailPanel.value = activeRailPanel.value === panel ? null : panel;
+}
 // Which text line is currently in edit mode (contenteditable) — null means every element on the
 // canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
 const editingKey = ref<ElementKey | null>(null);
@@ -1497,6 +1520,16 @@ watch(activeTemplate, () => {
   historyIndex.value = -1;
   pushHistory();
 });
+// The rail slide-out and properties dock opening/closing resizes canvas-wrap without firing a
+// window 'resize' event — a ResizeObserver on the wrap itself catches that (and any other
+// container-driven resize) instead of hand-tracking every state change that affects its width.
+let canvasResizeObserver: ResizeObserver | undefined;
+watch(canvasWrapRef, (el) => {
+  canvasResizeObserver?.disconnect();
+  if (!el) return;
+  canvasResizeObserver = new ResizeObserver(() => updateCanvasScale());
+  canvasResizeObserver.observe(el);
+});
 onMounted(async () => {
   window.addEventListener('resize', updateCanvasScale);
   window.addEventListener('keydown', onCanvasKeydown);
@@ -1513,6 +1546,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasScale);
   window.removeEventListener('keydown', onCanvasKeydown);
+  canvasResizeObserver?.disconnect();
   onWindowUp();
 });
 </script>
@@ -1617,12 +1651,31 @@ onUnmounted(() => {
 .primary-action:disabled{opacity:.5;cursor:default}
 
 /* ── Editor shell: 2-col ── */
-.editor-shell{display:grid;grid-template-columns:minmax(480px,1fr) 296px;height:calc(100vh - 64px);overflow:hidden}
+.editor-shell{
+  display:grid;
+  grid-template-columns:56px 0px minmax(360px,1fr) 0px;
+  grid-template-areas:"rail railpanel canvas props";
+  height:calc(100vh - 64px);overflow:hidden;
+  transition:grid-template-columns .18s ease;
+}
+.editor-shell.rail-panel-open{grid-template-columns:56px 288px minmax(360px,1fr) 0px}
+.editor-shell.props-open{grid-template-columns:56px 0px minmax(360px,1fr) 296px}
+.editor-shell.rail-panel-open.props-open{grid-template-columns:56px 288px minmax(360px,1fr) 296px}
 .studio--embedded .editor-shell{height:auto;min-height:600px;overflow:visible}
 
 /* ── Canvas stage ── */
-.canvas-stage{padding:24px 28px 16px;background:#e8e2dc;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.canvas-stage{grid-area:canvas;padding:24px 28px 16px;background:#e8e2dc;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .studio--embedded .canvas-stage{height:auto;min-height:420px}
+
+/* ── Icon rail + slide-out panel ── */
+.rail{grid-area:rail;background:#f4efe9;border-right:1px solid #dfd7d0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;overflow-y:auto}
+.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:9px 2px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:8.5px;font-weight:600;letter-spacing:.01em}
+.rail-btn i{font-size:17px}
+.rail-btn:hover{background:#efe7dd;color:var(--ink)}
+.rail-btn.active{background:#fdf8f2;color:var(--gold);box-shadow:inset 0 0 0 1.5px var(--gold)}
+.properties-panel--left{grid-area:railpanel}
+.properties-panel--right{grid-area:props}
+.properties-panel--left{border-left:0;border-right:1px solid #dfd7d0}
 .stage-ruler{display:flex;justify-content:space-between;color:#776c62;font-size:10px;letter-spacing:.06em;margin-bottom:8px;flex-shrink:0}
 .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:280px}
 .canvas-root{position:relative;flex-shrink:0;box-shadow:0 18px 44px rgba(26,20,16,.22);user-select:none}
@@ -1727,7 +1780,6 @@ onUnmounted(() => {
 .layer-order-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:1px solid #d9d0c7;background:#fff;font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--muted);cursor:pointer}
 .layer-order-btn:hover{border-color:var(--gold);color:var(--ink)}
 .layer-order-btn i{font-size:13px}
-.zone-hint{margin-top:auto;padding-top:18px;font-size:10px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e4ddd6}
 
 /* ── Typography (font pairing + size scale) ── */
 .font-pairing-list{display:flex;flex-direction:column;gap:6px}
@@ -1784,7 +1836,10 @@ onUnmounted(() => {
 /* ── Responsive ── */
 @media(max-width:1050px){
   .template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .editor-shell{grid-template-columns:minmax(360px,1fr) 260px}
+  .editor-shell{grid-template-columns:48px 0px minmax(320px,1fr) 0px}
+  .editor-shell.rail-panel-open{grid-template-columns:48px 248px minmax(320px,1fr) 0px}
+  .editor-shell.props-open{grid-template-columns:48px 0px minmax(320px,1fr) 260px}
+  .editor-shell.rail-panel-open.props-open{grid-template-columns:48px 248px minmax(320px,1fr) 260px}
 }
 @media(max-width:760px){
   .library-toolbar{display:grid}
@@ -1793,8 +1848,23 @@ onUnmounted(() => {
   .editor-bar{grid-template-columns:auto 1fr}
   .editor-title{display:none}
   .editor-actions .secondary-action{display:none}
-  .editor-shell{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto}
+  /* Stacked single column regardless of panel state — repeats the same class combinations as the
+     1050px block (not just the bare .editor-shell) because a more specific selector from an
+     earlier, still-matching media query (≤1050px is also true at ≤760px) otherwise wins on
+     specificity over this block's plain selector, regardless of source order. */
+  .editor-shell,
+  .editor-shell.rail-panel-open,
+  .editor-shell.props-open,
+  .editor-shell.rail-panel-open.props-open{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:"rail" "canvas" "railpanel" "props";
+    height:auto;
+  }
+  .rail{flex-direction:row;width:100%;padding:6px;overflow-x:auto}
+  .rail-btn{width:auto;min-width:64px;flex-shrink:0;padding:7px 12px}
   .canvas-stage{min-height:360px}
-  .properties-panel{border-left:0;border-top:1px solid #dfd7d0}
+  .properties-panel{border-left:0;border-top:1px solid #dfd7d0;max-height:60vh}
+  .properties-panel--left{border-right:0;border-top:1px solid #dfd7d0}
 }
 </style>
