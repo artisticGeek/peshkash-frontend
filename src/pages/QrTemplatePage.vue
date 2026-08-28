@@ -281,6 +281,25 @@
               <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
             </section>
             <section>
+              <p class="panel-kicker">TYPOGRAPHY</p>
+              <div class="font-pairing-list">
+                <button v-for="pairing in FONT_PAIRINGS" :key="pairing.id" class="font-pairing-btn"
+                        :class="{ active: typography.pairingId === pairing.id }"
+                        @click="setFontPairing(pairing.id)">
+                  <span class="font-pairing-sample" :style="{ fontFamily: pairing.displayFont }">Aa</span>
+                  <span class="font-pairing-label">{{ pairing.label }}</span>
+                  <i v-if="typography.pairingId === pairing.id" class="bi bi-check2"></i>
+                </button>
+              </div>
+              <div class="type-scale-row">
+                <span class="field-hint" style="margin:0">Size</span>
+                <button class="scale-btn" title="Smaller" :disabled="typography.scale <= 0.75" @click="setTypeScale(typography.scale - 0.05)"><i class="bi bi-dash"></i></button>
+                <span class="scale-value">{{ Math.round(typography.scale * 100) }}%</span>
+                <button class="scale-btn" title="Larger" :disabled="typography.scale >= 1.4" @click="setTypeScale(typography.scale + 0.05)"><i class="bi bi-plus"></i></button>
+              </div>
+              <p class="field-hint" style="margin-top:6px">Applies to eyebrow, headline, descriptor, CTA and the merchant name.</p>
+            </section>
+            <section>
               <p class="panel-kicker">OUTPUT</p>
               <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
               <div class="standard-card">
@@ -507,7 +526,7 @@ import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer'
 import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
 import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement } from '../features/qrStudio/types';
 import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
-import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES } from '../features/qrStudio/elementPresets';
+import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES, FONT_PAIRINGS, fontPairingFor, DEFAULT_TYPOGRAPHY } from '../features/qrStudio/elementPresets';
 import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
 import '../features/qrStudio/qr-template-tokens.css';
 
@@ -626,6 +645,17 @@ function setCustomBackground(hex: string): void {
   design.theme = ink === '#F5F2EE' ? 'dark' : 'light';
 }
 
+// Typography: one curated font pairing + a uniform size scale, applied to every fixed text slot
+// (eyebrow/headline/descriptor/cta/merchantName) so the copy block always restyles as a set.
+const typography = computed(() => design.typography ?? DEFAULT_TYPOGRAPHY);
+const currentPairing = computed(() => fontPairingFor(typography.value.pairingId));
+function setFontPairing(pairingId: string): void {
+  design.typography = { pairingId, scale: typography.value.scale };
+}
+function setTypeScale(scale: number): void {
+  design.typography = { pairingId: typography.value.pairingId, scale: Math.min(1.4, Math.max(0.75, scale)) };
+}
+
 const innerBgStyle = computed((): Record<string, string> => {
   const t = activeTemplate.value; if (!t) return {};
   const sh = displayShort.value;
@@ -664,39 +694,40 @@ const merchantElStyle = computed((): Record<string, string> => {
   return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
 });
 
-// Typography styles (in display px, matching SVG renderer proportions)
+// Typography styles (in display px, matching SVG renderer proportions) — font + size scale come
+// from the design's typography pairing, kept in sync with renderTemplateSvg()'s textBlock().
 const eyebrowStyle = computed(() => ({
-  fontFamily: 'Urbanist, Arial, sans-serif', fontWeight: '700',
-  fontSize: `${Math.round(displayShort.value * 0.027)}px`,
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '700',
+  fontSize: `${Math.round(displayShort.value * 0.027 * typography.value.scale)}px`,
   letterSpacing: `${Math.round(displayShort.value * 0.006)}px`,
   color: inkColor.value, textTransform: 'uppercase' as const,
   marginBottom: `${Math.round(displayShort.value * 0.022)}px`,
   display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 const headlineStyle = computed(() => ({
-  fontFamily: 'Rufina, Georgia, serif', fontWeight: '400',
-  fontSize: `${Math.round(displayShort.value * 0.071)}px`,
+  fontFamily: currentPairing.value.displayFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.071 * typography.value.scale)}px`,
   lineHeight: '1.1', color: inkColor.value,
   marginBottom: `${Math.round(displayShort.value * 0.012)}px`,
   display: 'block', outline: 'none',
 }));
 const descriptorStyle = computed(() => ({
-  fontFamily: 'Urbanist, Arial, sans-serif', fontWeight: '400',
-  fontSize: `${Math.round(displayShort.value * 0.032)}px`,
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.032 * typography.value.scale)}px`,
   color: inkColor.value, opacity: '0.72',
   marginBottom: `${Math.round(displayShort.value * 0.014)}px`,
   display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 const ctaStyle = computed(() => ({
-  fontFamily: 'Urbanist, Arial, sans-serif', fontWeight: '700',
-  fontSize: `${Math.round(displayShort.value * 0.026)}px`,
+  fontFamily: currentPairing.value.bodyFont, fontWeight: '700',
+  fontSize: `${Math.round(displayShort.value * 0.026 * typography.value.scale)}px`,
   letterSpacing: `${Math.round(displayShort.value * 0.004)}px`,
   color: '#BB9057', textTransform: 'uppercase' as const,
   display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 const merchantTextStyle = computed(() => ({
-  fontFamily: 'Rufina, Georgia, serif', fontWeight: '400',
-  fontSize: `${Math.round(displayShort.value * 0.034)}px`,
+  fontFamily: currentPairing.value.displayFont, fontWeight: '400',
+  fontSize: `${Math.round(displayShort.value * 0.034 * typography.value.scale)}px`,
   color: inkColor.value, display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 
@@ -1697,6 +1728,21 @@ onUnmounted(() => {
 .layer-order-btn:hover{border-color:var(--gold);color:var(--ink)}
 .layer-order-btn i{font-size:13px}
 .zone-hint{margin-top:auto;padding-top:18px;font-size:10px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e4ddd6}
+
+/* ── Typography (font pairing + size scale) ── */
+.font-pairing-list{display:flex;flex-direction:column;gap:6px}
+.font-pairing-btn{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #d9d0c7;background:#fff;cursor:pointer;text-align:left}
+.font-pairing-btn:hover{border-color:var(--gold)}
+.font-pairing-btn.active{border-color:var(--gold);background:#fdf8f2;box-shadow:inset 3px 0 var(--gold)}
+.font-pairing-sample{font-size:17px;line-height:1;color:var(--ink);width:22px;flex-shrink:0;text-align:center}
+.font-pairing-label{flex:1;font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.font-pairing-btn.active .font-pairing-label{color:var(--ink)}
+.font-pairing-btn>i{color:var(--gold);font-size:12px}
+.type-scale-row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.scale-btn{width:22px;height:22px;display:grid;place-items:center;border:1px solid #d9d0c7;background:#fff;cursor:pointer;padding:0;color:var(--muted)}
+.scale-btn:hover:not(:disabled){border-color:var(--gold);color:var(--ink)}
+.scale-btn:disabled{opacity:.35;cursor:not-allowed}
+.scale-value{font-size:10.5px;font-weight:600;color:var(--ink);min-width:34px;text-align:center;font-variant-numeric:tabular-nums}
 
 /* ── Visibility toggles ── */
 .vis-toggles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}

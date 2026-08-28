@@ -1,6 +1,6 @@
 import { renderBrandedQrSvg, svgDataUri } from './qrRenderer';
-import { svgPolygonPoints, svgRibbonPoints, isOutlineShape } from './elementPresets';
-import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer } from './types';
+import { svgPolygonPoints, svgRibbonPoints, isOutlineShape, fontPairingFor } from './elementPresets';
+import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer, TypographySpec } from './types';
 
 export interface TemplateRenderOptions extends StudioContent {
   qrStyle: QrStyleId;
@@ -8,6 +8,7 @@ export interface TemplateRenderOptions extends StudioContent {
   visibility?: ElementVisibility;
   canvasElements?: CanvasElement[];
   background?: BackgroundSpec;
+  typography?: TypographySpec;
 }
 
 export interface RenderOverrides {
@@ -33,10 +34,12 @@ function textBlock(
   const anchor = align === 'middle' ? 'middle' : 'start';
   const tx = align === 'middle' ? x + width / 2 : x;
 
-  const eyebrowSize = Math.round(scale * 0.027);
-  const headlineSize = Math.round(scale * 0.071);
-  const descriptorSize = Math.round(scale * 0.032);
-  const ctaSize = Math.round(scale * 0.026);
+  const pairing = fontPairingFor(options.typography?.pairingId);
+  const typeScale = options.typography?.scale ?? 1;
+  const eyebrowSize = Math.round(scale * 0.027 * typeScale);
+  const headlineSize = Math.round(scale * 0.071 * typeScale);
+  const descriptorSize = Math.round(scale * 0.032 * typeScale);
+  const ctaSize = Math.round(scale * 0.026 * typeScale);
   const letterSpacingEyebrow = Math.round(scale * 0.006);
   const letterSpacingCta = Math.round(scale * 0.004);
 
@@ -51,27 +54,27 @@ function textBlock(
     const ruleX = align === 'middle' ? tx - ruleLen / 2 : tx;
     const ruleY = (y - eyebrowSize * 0.5).toFixed(1);
     parts.push(`<line x1="${ruleX.toFixed(1)}" y1="${ruleY}" x2="${(ruleX + ruleLen).toFixed(1)}" y2="${ruleY}" stroke="#BB9057" stroke-width="1.5" opacity="0.65" stroke-linecap="round"/>`);
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="Urbanist,Arial,sans-serif" font-size="${eyebrowSize}" font-weight="700" letter-spacing="${letterSpacingEyebrow}" fill="currentColor">${esc(options.eyebrow.toUpperCase())}</text>`);
+    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${eyebrowSize}" font-weight="700" letter-spacing="${letterSpacingEyebrow}" fill="currentColor">${esc(options.eyebrow.toUpperCase())}</text>`);
     y += eyebrowSize * 1.2 + scale * 0.022;
     hasAny = true;
   }
 
   if (vis.headline !== false && options.headline) {
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="Rufina,Georgia,serif" font-size="${headlineSize}" fill="currentColor">${esc(options.headline)}</text>`);
+    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.displayFont)}" font-size="${headlineSize}" fill="currentColor">${esc(options.headline)}</text>`);
     y += headlineSize * 1.1 + scale * 0.014;
     hasAny = true;
   }
 
   if (vis.descriptor !== false && options.descriptor) {
     if (hasAny) y += scale * 0.004; // a little extra gap before descriptor
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="Urbanist,Arial,sans-serif" font-size="${descriptorSize}" opacity=".7" fill="currentColor">${esc(options.descriptor)}</text>`);
+    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${descriptorSize}" opacity=".7" fill="currentColor">${esc(options.descriptor)}</text>`);
     y += descriptorSize * 1.3 + scale * 0.018;
     hasAny = true;
   }
 
   if (vis.cta !== false && options.cta) {
     if (hasAny) y += scale * 0.006;
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="Urbanist,Arial,sans-serif" font-size="${ctaSize}" font-weight="700" letter-spacing="${letterSpacingCta}" fill="#BB9057">${esc(options.cta.toUpperCase())}  →</text>`);
+    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${ctaSize}" font-weight="700" letter-spacing="${letterSpacingCta}" fill="#BB9057">${esc(options.cta.toUpperCase())}  →</text>`);
   }
 
   if (!parts.length) return '';
@@ -175,6 +178,8 @@ export function renderTemplateSvg(
   const qrY     = qrFrac.y * height;
   const dark     = options.theme === 'dark';
   const vis      = options.visibility ?? {};
+  const pairing  = fontPairingFor(options.typography?.pairingId);
+  const typeScale = options.typography?.scale ?? 1;
 
   // A custom background overrides the two-theme default; surface/inner-panel tone still follows
   // the design's theme flag (keeps the card-on-background look consistent either way).
@@ -228,7 +233,7 @@ export function renderTemplateSvg(
   const showMerchant = vis.merchantName !== false && options.merchantName;
   const merchantSvg  = showMerchant
     ? `<line x1="${separatorX1.toFixed(1)}" y1="${separatorY.toFixed(1)}" x2="${separatorX2.toFixed(1)}" y2="${separatorY.toFixed(1)}" stroke="${markColor}" stroke-width="0.5" opacity="0.35"/>` +
-      `<text x="${(padding * 0.55).toFixed(1)}" y="${markBaseY.toFixed(1)}" fill="${foreground}" font-family="Rufina,Georgia,serif" font-size="${Math.round(short * 0.034)}">${esc(options.merchantName)}</text>`
+      `<text x="${(padding * 0.55).toFixed(1)}" y="${markBaseY.toFixed(1)}" fill="${foreground}" font-family="${esc(pairing.displayFont)}" font-size="${Math.round(short * 0.034 * typeScale)}">${esc(options.merchantName)}</text>`
     : '';
 
   // Peshkash brand mark

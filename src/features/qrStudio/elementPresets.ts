@@ -1,4 +1,4 @@
-import type { BackgroundSpec, CanvasElement, ShapeKind } from './types';
+import type { BackgroundSpec, CanvasElement, ShapeKind, TypographySpec } from './types';
 
 // Normalized (0..1) point sets for non-rectangular shapes — shared by the live CSS clip-path
 // rendering and the SVG polygon export, so the two always match exactly. 'frame' and 'rect'/
@@ -195,6 +195,29 @@ export const TEXT_FONT_CHOICES: { label: string; value: string }[] = [
   { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
   { label: 'Courier (mono)', value: '"Courier New", Courier, monospace' },
 ];
+
+// ── Global typography ───────────────────────────────────────────────────────────────────────
+// Curated font pairings for the template's fixed text slots (eyebrow/headline/descriptor/cta/
+// merchantName): a display face for the headline + merchant name, a body face for everything
+// else — matching how the SVG renderer already splits them. 'classic' is the Peshkash brand
+// default (Rufina + Urbanist) and is what every design falls back to.
+export interface FontPairing {
+  id: string;
+  label: string;
+  displayFont: string;
+  bodyFont: string;
+}
+export const FONT_PAIRINGS: FontPairing[] = [
+  { id: 'classic', label: 'Rufina & Urbanist', displayFont: 'Rufina, Georgia, serif', bodyFont: 'Urbanist, Arial, sans-serif' },
+  { id: 'editorial', label: 'Georgia & Urbanist', displayFont: 'Georgia, "Times New Roman", serif', bodyFont: 'Urbanist, Arial, sans-serif' },
+  { id: 'modern-sans', label: 'All Urbanist', displayFont: 'Urbanist, Arial, sans-serif', bodyFont: 'Urbanist, Arial, sans-serif' },
+  { id: 'bold-display', label: 'Arial Black & Arial', displayFont: '"Arial Black", Arial, sans-serif', bodyFont: 'Arial, Helvetica, sans-serif' },
+  { id: 'technical', label: 'Rufina & Courier', displayFont: 'Rufina, Georgia, serif', bodyFont: '"Courier New", Courier, monospace' },
+];
+export const DEFAULT_TYPOGRAPHY: TypographySpec = { pairingId: 'classic', scale: 1 };
+export function fontPairingFor(pairingId: string | undefined): FontPairing {
+  return FONT_PAIRINGS.find((p) => p.id === pairingId) ?? FONT_PAIRINGS[0];
+}
 
 // ── Background palette ──────────────────────────────────────────────────────────────────────
 // Curated color + pre-picked, legible ink pairs for one-click backgrounds, beyond the two base

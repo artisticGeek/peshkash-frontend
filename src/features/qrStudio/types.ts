@@ -152,6 +152,14 @@ export interface BackgroundSpec {
   ink: string;
 }
 
+// Global typography choice for the template's fixed text slots (eyebrow/headline/descriptor/cta/
+// merchantName) — a curated font pairing (id into FONT_PAIRINGS) plus a uniform size multiplier,
+// so the whole copy block restyles together instead of drifting into mismatched fonts/sizes.
+export interface TypographySpec {
+  pairingId: string;
+  scale: number;
+}
+
 export interface StudioDesign extends StudioContent {
   id?: number | string;
   name: string;
@@ -165,6 +173,7 @@ export interface StudioDesign extends StudioContent {
   customTemplate?: CustomTemplateSpec;
   canvasElements?: CanvasElement[];
   background?: BackgroundSpec;
+  typography?: TypographySpec;
   updatedAt?: string;
 }
 
