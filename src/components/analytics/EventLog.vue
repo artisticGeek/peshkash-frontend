@@ -51,8 +51,10 @@
           <div v-if="row.pageName" class="el-page">{{ row.pageName }}</div>
         </div>
 
-        <!-- Right: session badge -->
-        <div class="el-session">
+        <!-- Right: session badge — the backend doesn't track a session/visitor identity yet
+             (no session_id or per-event phone column exists), so this stays hidden until it does
+             rather than showing an empty badge with a "Session: undefined" tooltip. -->
+        <div v-if="row.phone || row.sessionId" class="el-session">
           <span class="el-session-badge" :title="row.phone ? `Phone: ${row.phone}` : `Session: ${row.sessionId}`">
             <i class="bi bi-person-circle me-1" />{{ row.phone ?? row.sessionId }}
           </span>
@@ -81,11 +83,13 @@ interface EventRow {
   eventType: string;
   actionType: string | null;
   deviceType: string;
-  sessionId: string;
-  phone: string | null;
+  // Not currently populated by the backend — no session/visitor identity is tracked in the
+  // analytics_event schema (no session_id or per-event phone column).
+  sessionId?: string;
+  phone?: string | null;
   referrer: string | null;
   qrHash: string | null;
-  pageName: string | null;
+  pageName?: string | null;
 }
 
 const props = defineProps<{
