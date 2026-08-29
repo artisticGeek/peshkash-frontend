@@ -160,6 +160,20 @@ export interface TypographySpec {
   scale: number;
 }
 
+export interface ElementRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface FixedElementLayout {
+  qr: ElementRect;
+  copy: ElementRect;
+  merchant: ElementRect;
+  brandmark: ElementRect;
+}
+
 export interface StudioDesign extends StudioContent {
   id?: number | string;
   name: string;
@@ -174,6 +188,10 @@ export interface StudioDesign extends StudioContent {
   canvasElements?: CanvasElement[];
   background?: BackgroundSpec;
   typography?: TypographySpec;
+  schemaVersion?: string;
+  revision?: number;
+  layout?: FixedElementLayout;
+  variables?: Record<string, string>;
   updatedAt?: string;
 }
 

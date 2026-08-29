@@ -1,6 +1,8 @@
 import { renderBrandedQrSvg, svgDataUri } from './qrRenderer';
 import { svgPolygonPoints, svgRibbonPoints, isOutlineShape, fontPairingFor } from './elementPresets';
-import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer, TypographySpec } from './types';
+import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer, TypographySpec, ElementRect } from './types';
+import logoLight from '../../assets/logo/Peshkash-Primary-For-Light.svg?raw';
+import logoDark from '../../assets/logo/Peshkash-Primary-For-Dark.svg?raw';
 
 export interface TemplateRenderOptions extends StudioContent {
   qrStyle: QrStyleId;
@@ -13,10 +15,84 @@ export interface TemplateRenderOptions extends StudioContent {
 
 export interface RenderOverrides {
   qr?: { x: number; y: number; size: number };
+  copy?: ElementRect;
+  merchant?: ElementRect;
+  brandmark?: ElementRect;
 }
 
 function esc(value: string): string {
   return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&apos;', '"': '&quot;' })[char] ?? char);
+}
+
+const BRASS = '#BB9057';
+
+function svgBody(svg: string): string {
+  return svg.replace(/^.*?<svg[^>]*>/s, '').replace(/<\/svg>\s*$/s, '');
+}
+
+function brandLogo(x: number, y: number, width: number, dark: boolean): string {
+  return `<g transform="translate(${x} ${y}) scale(${(width / 1536).toFixed(6)})">${svgBody(dark ? logoDark : logoLight)}</g>`;
+}
+
+function wrapCopy(value: string, maxChars: number): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && next.length > maxChars) {
+      lines.push(line);
+      line = word;
+      if (lines.length === 2) break;
+    } else line = next;
+  }
+  if (lines.length < 2 && line) lines.push(line);
+  return lines.slice(0, 2);
+}
+
+function liveTextLines(value: string, x: number, y: number, width: number, size: number, fill: string, font: string, anchor: 'start' | 'middle' = 'start'): string {
+  const maxChars = Math.max(12, Math.floor(width / (size * 0.56)));
+  return wrapCopy(value, maxChars).map((line, index) =>
+    `<text x="${x}" y="${(y + index * size * 1.14).toFixed(2)}" text-anchor="${anchor}" font-family="${esc(font)}" font-size="${size}" fill="${fill}">${esc(line)}</text>`,
+  ).join('');
+}
+
+interface BrandKitLayout {
+  copy: ElementRect;
+  brandmark: ElementRect;
+  merchant: ElementRect;
+}
+
+/** Exact editable-element boxes used by the checked-in Brand Kit masters. */
+export function brandKitLayout(template: QrTemplateDefinition): BrandKitLayout {
+  const { width, height } = template.canvas;
+  const short = Math.min(width, height);
+  const qrX = template.qr.x * width;
+  const qrSize = template.qr.size * short;
+  const qrLeft = qrX < width / 2;
+  switch (template.format) {
+    case 'landscape': {
+      const x = qrLeft ? 548 : 78;
+      return { copy: { x, y: 78, w: 560, h: 395 }, merchant: { x, y: 478, w: 310, h: 32 }, brandmark: { x, y: 510, w: 300, h: 100 } };
+    }
+    case 'label': {
+      const x = qrLeft ? 500 : 72;
+      return { copy: { x, y: 84, w: 600, h: 402 }, merchant: { x, y: 476, w: 290, h: 30 }, brandmark: { x, y: 505, w: 280, h: 94 } };
+    }
+    case 'ticket':
+      return { copy: { x: 62, y: 70, w: 650, h: 318 }, merchant: { x: 62, y: 360, w: 270, h: 28 }, brandmark: { x: 62, y: 390, w: 260, h: 87 } };
+    case 'portrait':
+      return { copy: { x: 90, y: 82, w: 620, h: 805 }, merchant: { x: 250, y: 928, w: 300, h: 32 }, brandmark: { x: 250, y: 968, w: 300, h: 100 } };
+    case 'tag':
+      return { copy: { x: 60, y: 148, w: 480, h: 640 }, merchant: { x: 150, y: 820, w: 300, h: 30 }, brandmark: { x: 150, y: 855, w: 300, h: 100 } };
+    case 'square':
+      return { copy: { x: 90, y: 83, w: 620, h: 610 }, merchant: { x: 285, y: 660, w: 230, h: 24 }, brandmark: { x: 285, y: 688, w: 230, h: 77 } };
+    case 'round':
+      return { copy: { x: 140, y: 88, w: 620, h: 630 }, merchant: { x: 335, y: 682, w: 230, h: 24 }, brandmark: { x: 335, y: 710, w: 230, h: 77 } };
+    case 'insert':
+      return { copy: { x: 90, y: 82, w: 620, h: 696 }, merchant: { x: 250, y: 810, w: 300, h: 28 }, brandmark: { x: 250, y: 845, w: 300, h: 100 } };
+  }
 }
 
 // Dynamic text block — skips hidden elements and adjusts Y positions accordingly.
@@ -165,7 +241,7 @@ function renderCanvasElements(elements: CanvasElement[] | undefined, wantLayer: 
     }).join('');
 }
 
-export function renderTemplateSvg(
+function renderGenericTemplateSvg(
   template: QrTemplateDefinition,
   options: TemplateRenderOptions,
   overrides: RenderOverrides = {},
@@ -198,7 +274,10 @@ export function renderTemplateSvg(
 
   // Copy block position
   let copy = '';
-  if (horizontal) {
+  if (overrides.copy) {
+    const rect = overrides.copy;
+    copy = textBlock(template, options, rect.x, rect.y + short * 0.027 * (options.typography?.scale ?? 1), rect.w, horizontal ? 'start' : 'middle');
+  } else if (horizontal) {
     const copyX = qrOnLeft
       ? Math.max(width * 0.47, qrX + qrSize + padding * 0.9)
       : padding * 1.15;
@@ -231,14 +310,20 @@ export function renderTemplateSvg(
 
   // Merchant name and separator
   const showMerchant = vis.merchantName !== false && options.merchantName;
+  const merchantRect = overrides.merchant;
+  const merchantX = merchantRect?.x ?? padding * 0.55;
+  const merchantBaseline = merchantRect ? merchantRect.y + merchantRect.h * 0.82 : markBaseY;
   const merchantSvg  = showMerchant
     ? `<line x1="${separatorX1.toFixed(1)}" y1="${separatorY.toFixed(1)}" x2="${separatorX2.toFixed(1)}" y2="${separatorY.toFixed(1)}" stroke="${markColor}" stroke-width="0.5" opacity="0.35"/>` +
-      `<text x="${(padding * 0.55).toFixed(1)}" y="${markBaseY.toFixed(1)}" fill="${foreground}" font-family="${esc(pairing.displayFont)}" font-size="${Math.round(short * 0.034 * typeScale)}">${esc(options.merchantName)}</text>`
+      `<text x="${merchantX.toFixed(1)}" y="${merchantBaseline.toFixed(1)}" fill="${foreground}" font-family="${esc(pairing.displayFont)}" font-size="${Math.round(short * 0.034 * typeScale)}">${esc(options.merchantName)}</text>`
     : '';
 
   // Peshkash brand mark
   const showBrandmark = vis.brandmark !== false;
-  const brandmarkSvg  = showBrandmark ? peshkashLogoImage(width - padding * 0.45, markBaseY, markH, dark) : '';
+  const brandmarkRect = overrides.brandmark;
+  const brandmarkSvg  = showBrandmark
+    ? peshkashLogoImage(brandmarkRect ? brandmarkRect.x + brandmarkRect.w : width - padding * 0.45, brandmarkRect ? brandmarkRect.y + brandmarkRect.h : markBaseY, brandmarkRect?.h ?? markH, dark)
+    : '';
 
   // Paper drop shadow filter
   const shadowY    = (short * 0.01).toFixed(3);
@@ -275,4 +360,118 @@ export function renderTemplateSvg(
     renderCanvasElements(options.canvasElements, 'front') +
     `</g></svg>`
   );
+}
+
+function renderBrandKitTemplateSvg(
+  template: QrTemplateDefinition,
+  options: TemplateRenderOptions,
+  overrides: RenderOverrides,
+): string {
+  const { width, height } = template.canvas;
+  const short = Math.min(width, height);
+  const dark = options.theme === 'dark';
+  const bg = options.background?.color ?? (dark ? '#1A1410' : '#F5F2EE');
+  const fg = options.background?.ink ?? (dark ? '#F5F2EE' : '#1A1410');
+  const muted = dark ? '#C7BEB2' : '#564C40';
+  const border = dark ? '#3A302A' : '#E8DBCE';
+  const vis = options.visibility ?? {};
+  const pairing = fontPairingFor(options.typography?.pairingId);
+  const typeScale = options.typography?.scale ?? 1;
+  const base = brandKitLayout(template);
+  const copyRect = overrides.copy ?? base.copy;
+  const dx = copyRect.x - base.copy.x;
+  const dy = copyRect.y - base.copy.y;
+  const copyWidth = copyRect.w;
+  const qr = overrides.qr ?? template.qr;
+  const qrSize = qr.size * short;
+  const qrX = qr.x * width;
+  const qrY = qr.y * height;
+  const qrSvg = renderBrandedQrSvg(options.destination, options.qrStyle, 900);
+
+  const eyebrow = (x: number, y: number, anchor: 'start' | 'middle' = 'start') => vis.eyebrow === false || !options.eyebrow ? ''
+    : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${15 * typeScale}" font-weight="700" letter-spacing="${4.6 * typeScale}" fill="${BRASS}">${esc(options.eyebrow.toUpperCase())}</text>`;
+  const headline = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.headline === false || !options.headline ? ''
+    : liveTextLines(options.headline, x + dx, y + dy, copyWidth, size * typeScale, fg, pairing.displayFont, anchor);
+  const descriptor = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.descriptor === false || !options.descriptor ? ''
+    : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" fill="${muted}">${esc(options.descriptor)}</text>`;
+  const cta = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.cta === false || !options.cta ? ''
+    : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" font-weight="700" letter-spacing="${1.5 * typeScale}" fill="${fg}">${esc(options.cta.toUpperCase())}</text>`;
+
+  let structure = '';
+  let copy = '';
+  let logo = '';
+  switch (template.format) {
+    case 'landscape': {
+      const qrLeft = template.qr.x * width < width / 2;
+      const tx = qrLeft ? 548 : 78;
+      structure = `<rect width="1200" height="700" rx="28" fill="${bg}"/><rect x="24" y="24" width="1152" height="652" rx="18" fill="none" stroke="${border}" stroke-width="2"/><path d="M0 0H18V700H0Z" fill="${BRASS}"/>`;
+      copy = eyebrow(tx, 98) + headline(tx, 205, 50) + descriptor(tx, 350, 21) + `<path d="M${tx + dx} ${400 + dy}H${tx + dx + Math.min(390, copyWidth)}" stroke="${BRASS}" stroke-width="2"/>` + cta(tx, 458, 18);
+      logo = brandLogo(tx, 510, 300, dark);
+      break;
+    }
+    case 'portrait':
+      structure = `<rect width="800" height="1200" rx="32" fill="${bg}"/><rect x="28" y="28" width="744" height="1144" rx="20" fill="none" stroke="${border}" stroke-width="2"/>`;
+      copy = eyebrow(400, 105, 'middle') + headline(400, 202, 48, 'middle') + descriptor(400, 315, 18, 'middle') + cta(400, 870, 22, 'middle') + `<path d="M${275 + dx} ${930 + dy}H${525 + dx}" stroke="${BRASS}" stroke-width="2"/>`;
+      logo = brandLogo(250, 968, 300, dark);
+      break;
+    case 'tag':
+      structure = `<rect width="600" height="1080" rx="26" fill="${bg}"/><circle cx="300" cy="60" r="18" fill="${fg}"/><path d="M68 110H532" stroke="${border}" stroke-width="2"/>`;
+      copy = eyebrow(300, 170, 'middle') + headline(300, 245, 40, 'middle') + descriptor(300, 320, 16, 'middle') + cta(300, 770, 20, 'middle') + `<path d="M${190 + dx} ${826 + dy}H${410 + dx}" stroke="${BRASS}" stroke-width="2"/>`;
+      logo = brandLogo(150, 855, 300, dark);
+      break;
+    case 'square':
+      structure = `<rect width="800" height="800" rx="32" fill="${bg}"/><path d="M55 55H220M580 55H745M55 745H220M580 745H745" stroke="${BRASS}" stroke-width="3"/>`;
+      copy = eyebrow(400, 105, 'middle') + headline(400, 170, 39, 'middle') + cta(400, 635, 20, 'middle') + descriptor(400, 676, 16, 'middle');
+      logo = brandLogo(285, 688, 230, dark);
+      break;
+    case 'round':
+      structure = `<circle cx="450" cy="450" r="438" fill="${bg}"/><circle cx="450" cy="450" r="408" fill="none" stroke="${BRASS}" stroke-width="3"/>`;
+      copy = eyebrow(450, 110, 'middle') + headline(450, 175, 38, 'middle') + cta(450, 660, 19, 'middle') + descriptor(450, 700, 16, 'middle');
+      logo = brandLogo(335, 710, 230, dark);
+      break;
+    case 'insert':
+      structure = `<rect width="800" height="1000" rx="30" fill="${bg}"/><rect x="28" y="28" width="744" height="944" rx="18" fill="none" stroke="${border}" stroke-width="2"/>`;
+      copy = eyebrow(400, 105, 'middle') + headline(400, 190, 46, 'middle') + descriptor(400, 280, 18, 'middle') + cta(400, 760, 21, 'middle') + `<path d="M${280 + dx} ${820 + dy}H${520 + dx}" stroke="${BRASS}" stroke-width="2"/>`;
+      logo = brandLogo(250, 845, 300, dark);
+      break;
+    case 'ticket':
+      structure = `<rect width="1200" height="500" rx="24" fill="${bg}"/><rect x="18" y="18" width="1164" height="464" rx="15" fill="none" stroke="${border}" stroke-width="2"/><path d="M790 30V470" stroke="${BRASS}" stroke-width="2" stroke-dasharray="8 10"/>`;
+      copy = eyebrow(62, 92) + headline(62, 185, 50) + descriptor(64, 302, 20) + cta(64, 370, 18);
+      logo = brandLogo(62, 390, 260, dark);
+      break;
+    case 'label': {
+      const qrLeft = template.qr.x * width < width / 2;
+      const tx = qrLeft ? 500 : 72;
+      structure = `<rect width="1200" height="700" rx="18" fill="${bg}"/><rect x="24" y="24" width="1152" height="652" rx="10" fill="none" stroke="${border}" stroke-width="2"/>`;
+      copy = eyebrow(tx, 105) + headline(tx, 215, 48) + descriptor(tx, 350, 20) + `<path d="M${tx + dx} ${405 + dy}H${tx + dx + Math.min(390, copyWidth)}" stroke="${BRASS}" stroke-width="2"/>` + cta(tx, 468, 18);
+      logo = brandLogo(tx, 505, 280, dark);
+      break;
+    }
+  }
+
+  const brandRect = overrides.brandmark;
+  const brandIsCanonical = !brandRect || (
+    Math.abs(brandRect.x - base.brandmark.x) < 0.01
+    && Math.abs(brandRect.y - base.brandmark.y) < 0.01
+    && Math.abs(brandRect.w - base.brandmark.w) < 0.01
+    && Math.abs(brandRect.h - base.brandmark.h) < 0.01
+  );
+  if (vis.brandmark === false) logo = '';
+  else if (brandRect && !brandIsCanonical) logo = peshkashLogoImage(brandRect.x + brandRect.w, brandRect.y + brandRect.h, brandRect.h, dark);
+
+  const merchantRect = overrides.merchant ?? base.merchant;
+  const merchant = vis.merchantName === false || !options.merchantName ? ''
+    : `<text x="${merchantRect.x}" y="${merchantRect.y + merchantRect.h * 0.82}" font-family="${esc(pairing.displayFont)}" font-size="${Math.max(11, short * 0.027 * typeScale)}" fill="${fg}" opacity=".82">${esc(options.merchantName)}</text>`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(template.label)}"><g>${structure}${renderCanvasElements(options.canvasElements, 'back')}${merchant}${logo}<image href="${svgDataUri(qrSvg)}" x="${qrX.toFixed(2)}" y="${qrY.toFixed(2)}" width="${qrSize.toFixed(2)}" height="${qrSize.toFixed(2)}"/>${copy}${renderCanvasElements(options.canvasElements, 'front')}</g></svg>`;
+}
+
+export function renderTemplateSvg(
+  template: QrTemplateDefinition,
+  options: TemplateRenderOptions,
+  overrides: RenderOverrides = {},
+): string {
+  return template.id.startsWith('custom-')
+    ? renderGenericTemplateSvg(template, options, overrides)
+    : renderBrandKitTemplateSvg(template, options, overrides);
 }

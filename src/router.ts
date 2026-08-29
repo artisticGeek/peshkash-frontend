@@ -35,22 +35,22 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/dashboard/home',
     name: 'DashboardHome',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/vendors',
     name: 'DashboardVendors',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/vendors/:vendorId',
     name: 'DashboardVendorWorkspace',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/events',
     name: 'DashboardEvents',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/events/publish',
@@ -59,27 +59,27 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/dashboard/events/:eventId',
     name: 'DashboardEventWorkspace',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/events/:eventId/publish',
     name: 'DashboardEventPublishContext',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/events/:eventId/qr-sheet',
     name: 'DashboardEventQrSheet',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/items',
     name: 'DashboardItems',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/items/:itemId',
     name: 'DashboardItemAnalytics',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/menus/designer',
@@ -88,32 +88,32 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/dashboard/menus/studio',
     name: 'DashboardMenuStudio',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/menus/:menuId/studio',
     name: 'DashboardMenuStudioContext',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/menus/:menuId/preview',
     name: 'DashboardMenuPreviewContext',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/menus/preview',
     name: 'DashboardMenuPreview',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/qr',
     name: 'DashboardQr',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/qr-templates',
     name: 'DashboardQrTemplates',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   ...(import.meta.env.DEV || import.meta.env.VITE_STUDIO_PREVIEW === 'true' ? [{
     path: '/dev/qr-studio',
@@ -123,12 +123,12 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/dashboard/analytics',
     name: 'DashboardAnalytics',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/dashboard/sessions',
     name: 'DashboardSessions',
-    component: () => import('./pages/AdminDashboard.vue'),
+    component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
     path: '/admin',
@@ -160,7 +160,7 @@ function _decodeJwt(token: string): { role: string; vendorId: number | null } | 
 }
 
 // Auth guard — for /dashboard/* routes, check localStorage for a valid session.
-// The LoginModal in AdminDashboard.vue handles unauthenticated users (shows modal over blurred content).
+// The LoginModal in WorkspaceDashboard.vue handles unauthenticated users.
 // Customers (role='customer') are redirected to / — the dashboard is admin/vendor only.
 // SECURITY: role/vendorId are decoded from the JWT payload, never read from the plain stored fields.
 router.beforeEach((to) => {

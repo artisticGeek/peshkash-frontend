@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "../.studio-test-dist",
+    "rootDir": "..",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "types": ["node"],
+    "declaration": false,
+    "sourceMap": false,
+    "composite": false,
+    "tsBuildInfoFile": null
+  },
+  "include": [
+    "design-studio.test.ts",
+    "../src/features/designStudio/document/types.ts",
+    "../src/features/designStudio/document/migrations.ts",
+    "../src/features/designStudio/export/preflight.ts",
+    "../src/features/qrStudio/types.ts"
+  ]
+}

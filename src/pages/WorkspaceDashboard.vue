@@ -1925,7 +1925,7 @@ const sections = [
   { key: 'events',        label: 'Event Creator',     icon: 'bi bi-calendar-event' },
   { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
-  { key: 'qr-templates',  label: 'Print Templates',   icon: 'bi bi-layout-wtf' },
+  { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
@@ -2435,7 +2435,7 @@ const activeSubtitle = computed(() => {
     menus:          'Vendor menus — generic templates and personalized event copies.',
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
-    'qr-templates': 'Design print-ready layouts once — reuse them for every event or vendor.',
+    'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
@@ -3822,6 +3822,13 @@ watch(activeSection, (section) => {
 });
 
 onMounted(async () => {
+  // The dashboard shell remains visible behind the sign-in modal, but protected requests must not
+  // run until authentication succeeds. Besides being unnecessary, the previous eager load showed
+  // a misleading 401 error toast on the login screen.
+  if (!authStore.isLoggedIn) {
+    hydrateRouteContext();
+    return;
+  }
   // Vendor workspace lock: pin to their assigned vendorId
   if (authStore.isVendor && authStore.vendorId) {
     selectedVendorId.value = authStore.vendorId;
@@ -4428,8 +4435,7 @@ async function deleteVendorById(id: number, name: string) {
 .workspace-header {
   align-items: center;
   background: rgba(247, 242, 234, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Avoid promoting the full dashboard into a broken Chromium backdrop-compositor layer. */
   border-bottom: 1px solid rgba(216, 189, 143, 0.35);
   display: flex;
   flex-wrap: nowrap;
@@ -7573,7 +7579,7 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 
 .stack-layout { display: flex; flex-direction: column; gap: 16px; }
 
-.glass-panel { background: rgba(255, 252, 247, 0.72); backdrop-filter: blur(8px); border: 1px solid rgba(228, 215, 197, 0.6); }
+.glass-panel { background: rgba(255, 252, 247, 0.94); border: 1px solid rgba(228, 215, 197, 0.6); }
 
 .col-window { color: #6b7280; font-size: 0.82rem; white-space: nowrap; }
 

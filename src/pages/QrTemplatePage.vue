@@ -25,10 +25,19 @@
         </div>
         <div class="library-toolbar">
           <label class="search-box"><i class="bi bi-search"></i><input v-model="search" type="search" placeholder="Search artist, table menu, product tag…"></label>
+          <div class="style-switch" aria-label="Preview QR signature">
+            <button v-for="(style, id) in qrManifest.qrStyles" :key="id" :class="{ active: previewStyle === id }" @click="previewStyle = id as QrStyleId">
+              <span :class="['style-dot', `style-dot--${id}`]"></span>{{ style.label }}
+            </button>
+          </div>
         </div>
         <div class="category-list" aria-label="Template categories">
           <button :class="{ active: activeCategory === 'all' }" @click="activeCategory = 'all'">All use cases</button>
           <button v-for="(label, id) in qrManifest.categories" :key="id" :class="{ active: activeCategory === id }" @click="activeCategory = id">{{ label }}</button>
+        </div>
+        <div class="format-list" aria-label="Template formats">
+          <button :class="{ active: activeFormat === 'all' }" @click="activeFormat = 'all'">All formats</button>
+          <button v-for="format in formatOptions" :key="format" :class="{ active: activeFormat === format }" @click="activeFormat = format">{{ format }}</button>
         </div>
         <button class="create-template-cta" @click="showCreator = true">
           <span class="cta-icon"><i class="bi bi-plus-lg"></i></span>
@@ -37,10 +46,13 @@
         </button>
         <div v-if="filteredTemplates.length" class="template-grid">
           <article v-for="template in filteredTemplates" :key="template.id" class="template-card">
-            <button class="template-preview" @click="startWithTemplate(template)">
+            <div class="template-preview">
               <img :src="assetPath(template)" :alt="template.label">
-              <span class="use-template">Use template <i class="bi bi-arrow-up-right"></i></span>
-            </button>
+              <div class="template-card-actions">
+                <button @click="previewTemplate = template"><i class="bi bi-eye"></i> Preview</button>
+                <button class="use-template" @click="startWithTemplate(template)">Use template <i class="bi bi-arrow-up-right"></i></button>
+              </div>
+            </div>
             <div class="template-meta">
               <div><p>{{ template.categoryLabel }}</p><h3>{{ template.label }}</h3></div>
               <span class="format-pill">{{ template.format }}</span>
@@ -55,14 +67,17 @@
     <template v-else-if="activeTemplate">
       <header class="editor-bar">
         <button class="back-button" @click="closeEditor"><i class="bi bi-arrow-left"></i><span>Template library</span></button>
-        <div class="editor-title"><span>Editing</span><b>{{ activeTemplate.label }}</b></div>
+        <div class="editor-title">
+          <input v-model="design.name" maxlength="80" aria-label="Design name">
+          <span class="save-status" role="status"><i :class="saveStatusIcon"></i>{{ saveStatusLabel }}</span>
+        </div>
         <div class="editor-actions">
           <button class="secondary-action" :disabled="!canUndo" @click="undo" title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise"></i></button>
           <button class="secondary-action" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Shift+Z)"><i class="bi bi-arrow-clockwise"></i></button>
           <span class="editor-actions-divider"></span>
-          <button class="secondary-action" @click="downloadSvg"><i class="bi bi-filetype-svg"></i> SVG</button>
-          <button class="secondary-action" @click="downloadPng"><i class="bi bi-download"></i> PNG</button>
-          <button class="primary-action compact" :disabled="saving" @click="saveDesign">{{ saving ? 'Saving…' : 'Save design' }}</button>
+          <button class="secondary-action" @click="downloadSvg" title="Download SVG after preflight"><i class="bi bi-filetype-svg"></i> SVG</button>
+          <button class="secondary-action" @click="downloadPng" title="Download high-resolution PNG after preflight"><i class="bi bi-download"></i> PNG</button>
+          <button class="primary-action compact" :disabled="saving" @click="saveDesign()">{{ saving ? 'Saving…' : 'Save design' }}</button>
         </div>
       </header>
       <main class="editor-shell" :class="{ 'rail-panel-open': !!activeRailPanel, 'props-open': !!(selectedEl || selectedElementId) }">
@@ -70,10 +85,11 @@
         <!-- ── Left icon rail: switch which slide-out panel is open ────────── -->
         <nav class="rail">
           <button class="rail-btn" :class="{ active: activeRailPanel === 'design' }" title="Design" @click="toggleRailPanel('design')"><i class="bi bi-sliders"></i><span>Design</span></button>
-          <button class="rail-btn" :class="{ active: activeRailPanel === 'background' }" title="Background" @click="toggleRailPanel('background')"><i class="bi bi-palette2"></i><span>Background</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'qr' }" title="QR and preflight" @click="toggleRailPanel('qr')"><i class="bi bi-qr-code"></i><span>QR</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'background' }" title="Background" @click="toggleRailPanel('background')"><i class="bi bi-palette2"></i><span>Canvas</span></button>
           <button class="rail-btn" :class="{ active: activeRailPanel === 'typography' }" title="Typography" @click="toggleRailPanel('typography')"><i class="bi bi-fonts"></i><span>Type</span></button>
           <button class="rail-btn" :class="{ active: activeRailPanel === 'elements' }" title="Elements" @click="toggleRailPanel('elements')"><i class="bi bi-stickies"></i><span>Elements</span></button>
-          <button v-if="layerRows.length" class="rail-btn" :class="{ active: activeRailPanel === 'layers' }" title="Layers" @click="toggleRailPanel('layers')"><i class="bi bi-layers"></i><span>Layers</span></button>
+          <button class="rail-btn" :class="{ active: activeRailPanel === 'layers' }" title="Layers" @click="toggleRailPanel('layers')"><i class="bi bi-layers"></i><span>Layers</span></button>
           <!-- Always mounted (not gated by which rail panel is open) — both the Elements panel's
                "Image" button and the properties dock's "Replace image" action trigger it. -->
           <input ref="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" @change="onImageFileChosen">
@@ -91,6 +107,26 @@
               {{ destinationValid ? 'Short HTTPS link ready to encode.' : 'Use a complete https:// URL.' }}
             </p>
           </section>
+
+          <section v-else-if="activeRailPanel === 'qr'">
+            <p class="panel-kicker">QR &amp; PREFLIGHT</p>
+            <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
+            <div class="signature-mini-grid">
+              <button v-for="(style, id) in qrManifest.qrStyles" :key="id" :class="['signature-mini', { active: design.qrStyle === id }]" @click="design.qrStyle = id as QrStyleId">
+                <img :src="signaturePreview(id as QrStyleId)" alt="">
+                <span><b>{{ style.label }}</b><small>{{ style.medallion }}</small></span>
+              </button>
+            </div>
+            <div v-if="preflight" class="preflight-summary" :class="{ blocked: !preflight.canExport }">
+              <div class="preflight-head"><i :class="preflight.canExport ? 'bi bi-shield-check' : 'bi bi-exclamation-octagon'"></i><span><b>{{ preflight.canExport ? 'Ready to export' : 'Export blocked' }}</b><small>{{ preflight.errors.length }} errors · {{ preflight.warnings.length }} warnings</small></span></div>
+              <ul>
+                <li v-for="check in preflight.checks" :key="check.id" :class="`check--${check.level}`">
+                  <i :class="check.level === 'pass' ? 'bi bi-check-circle-fill' : check.level === 'error' ? 'bi bi-x-circle-fill' : 'bi bi-exclamation-triangle-fill'"></i>
+                  <span><b>{{ check.label }}</b><small>{{ check.detail }}</small></span>
+                </li>
+              </ul>
+            </div>
+          </section>
           <section v-if="activeRailPanel === 'design'">
             <p class="panel-kicker">OUTPUT</p>
             <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
@@ -102,6 +138,10 @@
           <section v-if="activeRailPanel === 'design'">
             <p class="panel-kicker">ELEMENTS</p>
             <div class="vis-toggles">
+              <button :class="['vis-btn', { active: vis.merchantName }]" @click="toggleVis('merchantName')">
+                <i :class="vis.merchantName ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+                Merchant name
+              </button>
               <button :class="['vis-btn', { active: vis.brandmark }]" @click="toggleVis('brandmark')">
                 <i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
                 Peshkash mark
@@ -163,8 +203,10 @@
             </div>
           </section>
 
-          <section v-else-if="activeRailPanel === 'layers' && layerRows.length">
+          <section v-else-if="activeRailPanel === 'layers'">
             <p class="panel-kicker">LAYERS</p>
+            <div v-if="!layerRows.length" class="panel-empty"><i class="bi bi-layers"></i><p>Add text, shapes or images to build a layer stack.</p></div>
+            <template v-else>
             <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
             <div class="layers-list">
               <template v-for="(el, i) in layerRows" :key="el.id">
@@ -181,6 +223,7 @@
                 </div>
               </template>
             </div>
+            </template>
           </section>
 
         </aside>
@@ -193,8 +236,14 @@
           </div>
           <div class="canvas-wrap" ref="canvasWrapRef" :class="{ 'is-dragging': isDragging }">
             <div class="canvas-root"
+                 :class="{ 'canvas-root--canonical': !design.customTemplate }"
                  :style="{ width: displayW + 'px', height: displayH + 'px' }"
                  @click.self="selectedEl = null; selectedElementId = null">
+
+              <!-- The same canonical SVG feeds this preview and both download paths. Transparent
+                   interaction boxes above it retain drag/resize/selection without a second visual
+                   implementation drifting away from the exported artwork. -->
+              <img v-if="!design.customTemplate" class="canvas-render" :src="renderedDataUri" alt="">
 
               <!-- Background layers (pointer-events:none) -->
               <div class="canvas-bg" :style="{ background: bgColor }"></div>
@@ -363,7 +412,14 @@
 
             </div><!-- /canvas-root -->
           </div><!-- /canvas-wrap -->
-          <div class="preview-caption"><span class="live-dot"></span> Drag any element to move it, snaps to center · Double-click text to edit · Arrow keys to nudge, Shift for bigger steps</div>
+          <div class="canvas-footer">
+            <div class="preview-caption"><span class="live-dot"></span> Direct editing is live · Shift + arrows for larger nudges</div>
+            <div class="zoom-controls" aria-label="Canvas zoom">
+              <button @click="setZoom(canvasScale - 0.1)" title="Zoom out"><i class="bi bi-dash-lg"></i></button>
+              <button class="zoom-value" @click="updateCanvasScale" title="Fit page">{{ Math.round(canvasScale * 100) }}%</button>
+              <button @click="setZoom(canvasScale + 0.1)" title="Zoom in"><i class="bi bi-plus-lg"></i></button>
+            </div>
+          </div>
         </section>
 
         <!-- ── Properties dock: only appears once something on canvas is selected ── -->
@@ -530,6 +586,20 @@
         </div>
       </div>
     </div>
+
+    <div v-if="previewTemplate" class="creator-overlay" @click.self="previewTemplate = null">
+      <div class="preview-modal">
+        <button class="creator-close" @click="previewTemplate = null" title="Close preview"><i class="bi bi-x-lg"></i></button>
+        <div class="preview-modal-art"><img :src="assetPath(previewTemplate)" :alt="previewTemplate.label"></div>
+        <div class="preview-modal-copy">
+          <p class="eyebrow">{{ previewTemplate.categoryLabel }} · {{ previewTemplate.format }}</p>
+          <h3>{{ previewTemplate.label }}</h3>
+          <p>{{ previewTemplate.defaultCopy.headline }}</p>
+          <div class="tag-row"><span v-for="tag in previewTemplate.tags" :key="tag">{{ tag }}</span></div>
+          <button class="primary-action" @click="startWithTemplate(previewTemplate); previewTemplate = null">Use this template <i class="bi bi-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -539,10 +609,13 @@ import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
-import { renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement } from '../features/qrStudio/types';
+import { brandKitLayout, renderTemplateSvg } from '../features/qrStudio/templateRenderer';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement, type FixedElementLayout } from '../features/qrStudio/types';
 import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
 import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES, FONT_PAIRINGS, fontPairingFor, DEFAULT_TYPOGRAPHY } from '../features/qrStudio/elementPresets';
+import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioDocument } from '../features/designStudio/document/migrations';
+import { STUDIO_SCHEMA_VERSION } from '../features/designStudio/document/types';
+import { preflightDesign } from '../features/designStudio/export/preflight';
 import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
 import '../features/qrStudio/qr-template-tokens.css';
 
@@ -560,9 +633,23 @@ const route = useRoute();
 const mode = ref<'library' | 'editor'>('library');
 const search = ref('');
 const activeCategory = ref('all');
+const activeFormat = ref<'all' | TemplateFormat>('all');
+const previewStyle = ref<QrStyleId>('obsidian-ring');
+const previewTemplate = ref<QrTemplateDefinition | null>(null);
 const activeTemplate = ref<QrTemplateDefinition | null>(null);
 const savedDesigns = ref<StudioDesign[]>([]);
 const saving = ref(false);
+const saveState = ref<'saved' | 'saving' | 'local' | 'error'>('saved');
+const lastSavedAt = ref('');
+const saveStatusLabel = computed(() => ({
+  saved: lastSavedAt.value ? `Saved ${lastSavedAt.value}` : 'All changes saved',
+  saving: 'Saving changes…',
+  local: 'Saved locally',
+  error: 'Save conflict',
+})[saveState.value]);
+const saveStatusIcon = computed(() => ({
+  saved: 'bi bi-cloud-check', saving: 'bi bi-arrow-repeat', local: 'bi bi-device-ssd', error: 'bi bi-exclamation-circle',
+})[saveState.value]);
 const deleting = ref<number | string | null>(null);
 const notice = ref('');
 // Set from ?destination query param when opened from a QR asset "Design" button
@@ -585,10 +672,17 @@ const designKey = ref(0);
 const selectedEl = ref<'qr' | 'copy' | 'merchant' | 'brandmark' | null>(null);
 // Left icon-rail: which slide-out (add/navigate) panel is open. Independent of selection — the
 // properties dock (right side) opens separately once something on canvas is selected.
-type RailPanel = 'design' | 'background' | 'typography' | 'elements' | 'layers';
+type RailPanel = 'design' | 'qr' | 'background' | 'typography' | 'elements' | 'layers';
 const activeRailPanel = ref<RailPanel | null>(null);
 function toggleRailPanel(panel: RailPanel): void {
-  activeRailPanel.value = activeRailPanel.value === panel ? null : panel;
+  const next = activeRailPanel.value === panel ? null : panel;
+  activeRailPanel.value = next;
+  // The rail is for document-level tools; the right dock is for a selected canvas element.
+  // Keeping both open crushes the artboard below a useful editing size on laptop viewports.
+  if (next) {
+    selectedEl.value = null;
+    selectedElementId.value = null;
+  }
 }
 // Which text line is currently in edit mode (contenteditable) — null means every element on the
 // canvas is plain drag-anywhere, Canva-style; double-clicking a line enters edit mode for it alone.
@@ -779,9 +873,17 @@ const renderedSvg = computed(() => {
   const t = activeTemplate.value; if (!t) return '';
   const sh = Math.min(t.canvas.width, t.canvas.height);
   const { x, y, w } = elPos.value.qr;
-  return renderTemplateSvg(t, design, { qr: { x: x / t.canvas.width, y: y / t.canvas.height, size: w / sh } });
+  return renderTemplateSvg(t, design, {
+    qr: { x: x / t.canvas.width, y: y / t.canvas.height, size: w / sh },
+    copy: { ...elPos.value.copy },
+    merchant: { ...elPos.value.merchant },
+    brandmark: { ...elPos.value.brandmark },
+  });
 });
 const renderedDataUri = computed(() => svgDataUri(renderedSvg.value));
+const preflight = computed(() => activeTemplate.value
+  ? preflightDesign(design, activeTemplate.value, elPos.value as FixedElementLayout)
+  : null);
 
 // ── Canvas init ───────────────────────────────────────────────────────────────
 function initElPos(t: QrTemplateDefinition): void {
@@ -804,18 +906,22 @@ function initElPos(t: QrTemplateDefinition): void {
     cw = qrOnLeft ? width - cx - padding : qrX - cx - padding;
     ch = height * 0.75;
   } else {
-    const above = qrY > height * 0.35;
+    const qrBottom = qrY + qrSize;
+    const footerTop = height - sh * 0.12;
+    const spaceAbove = qrY - padding;
+    const spaceBelow = footerTop - qrBottom;
+    const minimumCopyHeight = sh * 0.2;
+    const above = spaceAbove >= minimumCopyHeight || spaceAbove >= spaceBelow;
     cx = width * 0.08;
     cw = width * 0.84;
-    ch = height * 0.35;
-    // Always start below the QR's own bottom edge — the old cap here (Math.min(height*0.58, ...))
-    // could land ABOVE where a large QR actually ends, making the copy text visually overlap the
-    // QR. ch deliberately stays a flat height*0.35 in both branches rather than being narrowed to
-    // "fit" above the merchant strip: the box has overflow:hidden, and shrinking it below the
-    // text's actual rendered height (which this function has no way to measure — font sizes,
-    // typography scale and content length all vary) silently clips whichever line runs last,
-    // trading an unscannable QR for invisible CTA text.
-    cy = above ? height * 0.08 : (qrY + qrSize + sh * 0.04);
+    cy = above ? padding : (qrBottom + sh * 0.03);
+    const availableHeight = above
+      ? qrY - cy - sh * 0.01
+      : footerTop - cy;
+    // The selection box must stay inside the artboard. Earlier it always used 35% of page height,
+    // which pushed copy controls beyond square, tag, insert, and portrait canvases.
+    ch = Math.max(sh * 0.14, availableHeight);
+    ch = Math.min(ch, height - cy);
   }
 
   // Brand mark: compute content size to position the SVG correctly
@@ -829,13 +935,36 @@ function initElPos(t: QrTemplateDefinition): void {
   const by = markBaseY - logoH;
 
   const qrRect = { x: qrX, y: qrY, w: qrSize, h: qrSize };
+  if (!design.customTemplate) {
+    const canonical = brandKitLayout(t);
+    cx = canonical.copy.x; cy = canonical.copy.y; cw = canonical.copy.w; ch = canonical.copy.h;
+  }
   elPos.value = {
     qr: { ...qrRect },
     copy: { x: cx, y: cy, w: cw, h: ch },
     merchant: { x: padding, y: markBaseY - sh * 0.05, w: width * 0.46, h: sh * 0.06 },
     brandmark: { x: bx, y: by, w: logoContentW, h: logoH },
   };
+  if (!design.customTemplate) {
+    const canonical = brandKitLayout(t);
+    elPos.value.merchant = { ...canonical.merchant };
+    elPos.value.brandmark = { ...canonical.brandmark };
+  }
   elPosDefault.value = { qr: { ...qrRect } };
+  const isCanonicalLayout = design.variables?.layoutEngine === 'brandkit-v2';
+  if (layoutFitsCanvas(design.layout, width, height) && (design.customTemplate || isCanonicalLayout)) {
+    elPos.value = JSON.parse(JSON.stringify(design.layout));
+  } else if (design.layout) {
+    // Older drafts could accidentally carry the previous template's coordinate system. Reset the
+    // whole fixed layout instead of preserving a mixture of incompatible positions and sizes.
+    design.layout = JSON.parse(JSON.stringify(elPos.value));
+  }
+  if (!design.customTemplate) {
+    if (!isCanonicalLayout && design.visibility?.merchantName === undefined) {
+      design.visibility = { ...(design.visibility ?? {}), merchantName: false };
+    }
+    design.variables = { ...(design.variables ?? {}), layoutEngine: 'brandkit-v2' };
+  }
 }
 
 function updateCanvasScale(): void {
@@ -847,6 +976,10 @@ function updateCanvasScale(): void {
   const scaleW = usableW / t.canvas.width;
   const scaleH = usableH / t.canvas.height;
   canvasScale.value = Math.max(0.08, Math.min(scaleW, scaleH, 1));
+}
+
+function setZoom(next: number): void {
+  canvasScale.value = Math.max(0.08, Math.min(1.6, Math.round(next * 10) / 10));
 }
 
 function resetQrPos(): void {
@@ -868,6 +1001,7 @@ function safeSetPointerCapture(el: Element | null, pointerId: number): void {
 }
 function startQrDrag(e: PointerEvent): void {
   if (resizeState.value) return;
+  activeRailPanel.value = null;
   selectedEl.value = 'qr';
   selectedElementId.value = null;
   dragState.value = { id: 'qr', startCX: e.clientX, startCY: e.clientY, origX: elPos.value.qr.x, origY: elPos.value.qr.y };
@@ -880,6 +1014,7 @@ function startQrResize(e: PointerEvent): void {
   startDragListeners();
 }
 function startElDrag(id: 'copy' | 'merchant' | 'brandmark', e: PointerEvent): void {
+  activeRailPanel.value = null;
   selectedEl.value = id;
   selectedElementId.value = null;
   const { x, y } = elPos.value[id];
@@ -917,6 +1052,7 @@ function addElement(presetId: string): void {
   const el = preset.build(t.canvas.width, t.canvas.height);
   if (!design.canvasElements) design.canvasElements = [];
   design.canvasElements.push(el);
+  activeRailPanel.value = null;
   selectedEl.value = null;
   selectedElementId.value = el.id;
 }
@@ -971,6 +1107,7 @@ async function onImageFileChosen(e: Event): Promise<void> {
     };
     if (!design.canvasElements) design.canvasElements = [];
     design.canvasElements.push(el);
+    activeRailPanel.value = null;
     selectedEl.value = null;
     selectedElementId.value = el.id;
   } catch {
@@ -985,6 +1122,7 @@ function deleteElement(id: string): void {
   if (editingElementId.value === id) editingElementId.value = null;
 }
 function selectElement(id: string): void {
+  activeRailPanel.value = null;
   selectedElementId.value = id;
   selectedEl.value = null;
 }
@@ -1282,11 +1420,19 @@ function onCanvasKeydown(e: KeyboardEvent): void {
 
 // ── Design state (must be before watches) ────────────────────────────────────
 const blankDesign = (): StudioDesign => ({
+  id: undefined,
   name: '', libraryTemplateId: '', manifestVersion: qrManifest.version,
+  schemaVersion: STUDIO_SCHEMA_VERSION, revision: 1,
   qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70,
   merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app',
   visibility: {},
   canvasElements: [],
+  customTemplate: undefined,
+  background: undefined,
+  typography: undefined,
+  layout: undefined,
+  variables: undefined,
+  updatedAt: undefined,
 });
 const design = reactive<StudioDesign>(blankDesign());
 
@@ -1344,7 +1490,10 @@ function flushHistoryPush(): void {
   pushHistory();
 }
 watch(design, scheduleHistoryPush, { deep: true });
-watch(elPos, scheduleHistoryPush, { deep: true });
+watch(elPos, () => {
+  design.layout = JSON.parse(JSON.stringify(elPos.value));
+  scheduleHistoryPush();
+}, { deep: true });
 
 // Helper: true = visible (default), false = hidden
 const vis = computed(() => ({
@@ -1375,13 +1524,15 @@ const filteredTemplates = computed(() => {
   const query = search.value.trim().toLowerCase();
   return qrManifest.templates.filter((t) => {
     if (activeCategory.value !== 'all' && t.category !== activeCategory.value) return false;
-    return !query || [t.label, t.categoryLabel, t.merchantType, ...t.tags].join(' ').toLowerCase().includes(query);
+    if (activeFormat.value !== 'all' && t.format !== activeFormat.value) return false;
+    return !query || [t.label, t.categoryLabel, t.merchantType, t.format, ...t.tags].join(' ').toLowerCase().includes(query);
   });
 });
+const formatOptions = computed(() => [...new Set(qrManifest.templates.map((template) => template.format))]);
 const destinationValid = computed(() => { try { return new URL(design.destination).protocol === 'https:'; } catch { return false; } });
 
 function templateById(id: string): QrTemplateDefinition | undefined { return qrManifest.templates.find((t) => t.id === id); }
-function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles['obsidian-ring'].folder}/${template.file}`; }
+function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles[previewStyle.value].folder}/${template.file}`; }
 function signaturePreview(id: QrStyleId): string { return svgDataUri(renderBrandedQrSvg('https://peshkash.app/scan', id, 480)); }
 
 // Resolves a design's template definition — from the fixed library, or reconstructed from a
@@ -1463,42 +1614,83 @@ function syncHeight(): void {
 function fromApi(row: Record<string, unknown>): StudioDesign & { vendorId?: number } {
   const settings = (row.settings || {}) as Partial<StudioDesign>;
   const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object' ? row.elements[0] as Partial<StudioDesign> : {};
-  return { ...blankDesign(), ...elements, ...settings, id: row.id as number,
+  const document = readStudioDocument(row.document);
+  const documentDesign = document ? designFromDocument(document) : {};
+  return { ...blankDesign(), ...elements, ...settings, ...documentDesign, id: row.id as number,
     vendorId: row.vendorId ? Number(row.vendorId) : undefined,
     name: String(row.name || settings.name || 'Untitled design'),
     libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0].id),
     manifestVersion: String(row.manifestVersion || settings.manifestVersion || qrManifest.version),
+    schemaVersion: String(row.schemaVersion || settings.schemaVersion || STUDIO_SCHEMA_VERSION),
+    revision: Number(row.revision || document?.revision || settings.revision || 1),
     qrStyle: (row.qrStyle || settings.qrStyle || 'obsidian-ring') as QrStyleId,
     theme: (row.theme || settings.theme || 'light') as StudioDesign['theme'], widthMm: Number(row.widthMm || settings.widthMm || 120),
     heightMm: Number(row.heightMm || settings.heightMm || 70), updatedAt: String(row.updatedAt || '') };
 }
-async function loadDesigns(): Promise<void> {
-  try {
-    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
-    const all = data.map(fromApi);
-    savedDesigns.value = props.vendorId ? all.filter((d) => d.vendorId === props.vendorId) : all;
-  } catch { savedDesigns.value = []; }
+
+const LOCAL_DESIGNS_KEY = 'peshkash_qr_studio_designs_v3';
+function localDesigns(): StudioDesign[] {
+  try { return JSON.parse(localStorage.getItem(LOCAL_DESIGNS_KEY) || '[]') as StudioDesign[]; }
+  catch { return []; }
 }
-async function saveDesign(): Promise<void> {
-  if (!destinationValid.value || !activeTemplate.value) return;
+function persistLocal(next: StudioDesign): StudioDesign {
+  const local = { ...JSON.parse(JSON.stringify(next)), id: typeof next.id === 'string' ? next.id : `local-${Date.now().toString(36)}`, updatedAt: new Date().toISOString() } as StudioDesign;
+  const all = localDesigns().filter((item) => item.id !== local.id);
+  localStorage.setItem(LOCAL_DESIGNS_KEY, JSON.stringify([local, ...all].slice(0, 30)));
+  return local;
+}
+function removeLocal(id: string | number | undefined): void {
+  if (typeof id !== 'string') return;
+  localStorage.setItem(LOCAL_DESIGNS_KEY, JSON.stringify(localDesigns().filter((item) => item.id !== id)));
+}
+async function loadDesigns(): Promise<void> {
+  let remote: StudioDesign[] = [];
+  try {
+    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/designs`);
+    const all = data.map(fromApi);
+    remote = props.vendorId ? all.filter((d) => d.vendorId === props.vendorId || !d.vendorId) : all;
+  } catch { /* local drafts remain available in standalone/offline mode */ }
+  savedDesigns.value = [...remote, ...localDesigns()].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+let autosavePaused = false;
+async function saveDesign(quiet = false): Promise<void> {
+  if (!activeTemplate.value) return;
   saving.value = true;
+  saveState.value = 'saving';
+  design.layout = JSON.parse(JSON.stringify(elPos.value));
+  const document = createStudioDocument(design, design.layout!);
   const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
     vendorId: props.vendorId,
     elements: [{ ...design }], libraryTemplateId: activeTemplate.value.id, manifestVersion: qrManifest.version,
-    qrStyle: design.qrStyle, theme: design.theme, settings: { ...design } };
+    schemaVersion: STUDIO_SCHEMA_VERSION, revision: design.revision,
+    qrStyle: design.qrStyle, theme: design.theme, settings: { ...design }, document };
   try {
     const isRemote = typeof design.id === 'number';
-    const { data } = await axios.request<Record<string, unknown>>({ url: `${API_BASE_URL}/admin/qr-templates${isRemote ? `/${design.id}` : ''}`, method: isRemote ? 'PUT' : 'POST', data: payload });
-    Object.assign(design, fromApi(data)); notice.value = 'Design saved to your Peshkash workspace.';
-  } catch {
-    notice.value = 'Couldn\'t save — check your connection and try again.';
+    const oldLocalId = design.id;
+    const { data } = await axios.request<Record<string, unknown>>({ url: `${API_BASE_URL}/admin/designs${isRemote ? `/${design.id}` : ''}`, method: isRemote ? 'PUT' : 'POST', data: payload });
+    autosavePaused = true;
+    Object.assign(design, fromApi(data));
+    removeLocal(oldLocalId);
+    saveState.value = 'saved';
+    lastSavedAt.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!quiet) notice.value = 'Design saved to your Peshkash workspace.';
+    await nextTick();
+    autosavePaused = false;
+  } catch (error: any) {
+    const local = persistLocal(design);
+    if (typeof design.id !== 'number') design.id = local.id;
+    saveState.value = error?.response?.status === 409 ? 'error' : 'local';
+    if (!quiet) notice.value = error?.response?.status === 409
+      ? 'This design changed in another tab. Your local draft is safe; reload before saving again.'
+      : 'Saved locally. It will remain available while the workspace connection is unavailable.';
   }
-  finally { saving.value = false; await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); }
+  finally { saving.value = false; if (!quiet) { await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); } }
 }
 async function deleteDesign(id: number | string): Promise<void> {
   deleting.value = id;
   try {
-    await axios.delete(`${API_BASE_URL}/admin/qr-templates/${id}`);
+    if (typeof id === 'string') removeLocal(id);
+    else await axios.delete(`${API_BASE_URL}/admin/designs/${id}`);
     await loadDesigns();
     notice.value = 'Design deleted.';
     window.setTimeout(() => { notice.value = ''; }, 3000);
@@ -1507,15 +1699,39 @@ async function deleteDesign(id: number | string): Promise<void> {
 }
 function safeFilename(ext: string): string { return `${(design.name || 'peshkash-qr').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.${ext}`; }
 function triggerDownload(href: string, name: string): void { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
-function downloadSvg(): void { const blob = new Blob([renderedSvg.value], { type: 'image/svg+xml;charset=utf-8' }); const url = URL.createObjectURL(blob); triggerDownload(url, safeFilename('svg')); URL.revokeObjectURL(url); }
+function ensureExportReady(): boolean {
+  if (preflight.value?.canExport) return true;
+  activeRailPanel.value = 'qr';
+  notice.value = 'Export is blocked until the QR preflight errors are resolved.';
+  window.setTimeout(() => { notice.value = ''; }, 4000);
+  return false;
+}
+function downloadSvg(): void {
+  if (!ensureExportReady()) return;
+  const blob = new Blob([renderedSvg.value], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob); triggerDownload(url, safeFilename('svg')); URL.revokeObjectURL(url);
+}
 async function downloadPng(): Promise<void> {
-  if (!activeTemplate.value) return;
+  if (!activeTemplate.value || !ensureExportReady()) return;
   const img = new Image(); const loaded = new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; });
   img.src = renderedDataUri.value; await loaded;
   const scale = Math.max(2, 3000 / activeTemplate.value.canvas.width); const canvas = document.createElement('canvas');
   canvas.width = Math.round(activeTemplate.value.canvas.width * scale); canvas.height = Math.round(activeTemplate.value.canvas.height * scale);
   canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height); triggerDownload(canvas.toDataURL('image/png'), safeFilename('png'));
 }
+
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutosave(): void {
+  if (autosavePaused || mode.value !== 'editor') return;
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  saveState.value = 'saving';
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    void saveDesign(true);
+  }, 1400);
+}
+watch(design, scheduleAutosave, { deep: true });
+watch(elPos, scheduleAutosave, { deep: true });
 
 watch(activeTemplate, () => {
   if (!activeTemplate.value) return;
@@ -1554,6 +1770,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasScale);
   window.removeEventListener('keydown', onCanvasKeydown);
   canvasResizeObserver?.disconnect();
+  if (autosaveTimer) clearTimeout(autosaveTimer);
   onWindowUp();
 });
 </script>
@@ -1591,16 +1808,17 @@ onUnmounted(() => {
 .library-toolbar{display:flex;justify-content:space-between;gap:18px;margin-bottom:18px}
 .search-box{height:44px;min-width:min(400px,100%);display:flex;align-items:center;gap:10px;border-bottom:1px solid #c8bdb2}
 .search-box input{border:0;background:transparent;outline:0;flex:1;color:var(--ink)}
+.style-switch{display:flex;padding:3px;background:#e8e1da;align-self:center}.style-switch button{border:0;background:transparent;padding:8px 11px;display:flex;gap:7px;align-items:center;font-size:11px;cursor:pointer}.style-switch button.active{background:#fff;box-shadow:0 2px 9px rgba(26,20,16,.08)}.style-dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:2px solid}.style-dot--obsidian-ring{background:var(--ink);border-color:var(--gold)}.style-dot--porcelain-cameo{background:var(--cream);border-color:#c5af9d}
 .category-list{display:flex;gap:6px;overflow:auto;padding-bottom:14px;margin-bottom:20px}
 .category-list button{white-space:nowrap;border:1px solid #d4cbc2;background:transparent;padding:7px 11px;font-size:11px;letter-spacing:.04em;cursor:pointer}
 .category-list button.active{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+.format-list{display:flex;gap:5px;overflow:auto;margin:-10px 0 20px;padding-bottom:4px}.format-list button{border:0;background:transparent;color:var(--muted);padding:5px 8px;font-size:10px;text-transform:capitalize;cursor:pointer;border-bottom:1px solid transparent}.format-list button.active{color:var(--ink);border-color:var(--gold)}
 .template-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px 20px}
 .template-card{min-width:0}
 .template-preview{width:100%;aspect-ratio:1.32;border:1px solid #ded6cf;background:#e9e3dd;padding:20px;display:grid;place-items:center;overflow:hidden;position:relative;cursor:pointer}
 .template-preview img{width:100%;height:100%;object-fit:contain;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
 .template-preview:hover img{transform:scale(1.035)}
-.use-template{position:absolute;right:11px;bottom:11px;background:var(--ink);color:var(--cream);padding:8px 10px;font-size:11px;opacity:0;transform:translateY(4px);transition:.2s}
-.template-preview:hover .use-template{opacity:1;transform:none}
+.template-card-actions{position:absolute;right:11px;bottom:11px;display:flex;gap:6px;opacity:0;transform:translateY(4px);transition:.2s}.template-card-actions button{border:1px solid var(--ink);background:#fff;color:var(--ink);padding:8px 10px;font-size:10px;cursor:pointer}.template-card-actions .use-template{position:static;background:var(--ink);color:var(--cream);opacity:1;transform:none}.template-preview:hover .template-card-actions,.template-preview:focus-within .template-card-actions{opacity:1;transform:none}
 .template-meta{display:flex;align-items:start;justify-content:space-between;margin-top:12px;gap:10px}
 .template-meta p{margin:0 0 3px;color:var(--gold);font-size:10px;text-transform:uppercase;letter-spacing:.12em}
 .template-meta h3{font:400 19px Rufina,serif;margin:0}
@@ -1641,14 +1859,17 @@ onUnmounted(() => {
 .format-option b{font-size:12px}
 .format-option small{font-size:10px;color:var(--muted);line-height:1.4}
 .creator-actions{display:flex;justify-content:flex-end;gap:10px}
+.preview-modal{width:min(920px,calc(100vw - 40px));max-height:calc(100vh - 40px);background:#f8f4ef;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(260px,.75fr);position:relative;overflow:auto}.preview-modal>.creator-close{position:absolute;right:14px;top:14px;z-index:2;background:#fff}.preview-modal-art{background:#e6dfd8;padding:44px;display:grid;place-items:center;min-height:420px}.preview-modal-art img{width:100%;height:100%;max-height:68vh;object-fit:contain}.preview-modal-copy{padding:64px 34px 34px;display:flex;flex-direction:column;align-items:flex-start}.preview-modal-copy h3{font:400 34px/1.15 Rufina,serif;margin:0 0 12px}.preview-modal-copy>p:not(.eyebrow){color:var(--muted);line-height:1.55}.preview-modal-copy .tag-row{margin:8px 0 26px}.preview-modal-copy .primary-action{margin-top:auto}
 
 /* ── Editor bar ── */
 .editor-bar{height:64px;background:var(--ink);color:var(--cream);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 22px;position:sticky;top:0;z-index:20}
 .back-button,.secondary-action{border:0;background:transparent;color:inherit;cursor:pointer}
 .back-button{justify-self:start;display:flex;align-items:center;gap:8px;font-size:13px}
-.editor-title{text-align:center;display:grid}
-.editor-title span{font-size:9px;color:var(--gold);letter-spacing:.16em;text-transform:uppercase}
-.editor-title b{font:400 15px Rufina,serif}
+.editor-title{text-align:center;display:grid;justify-items:center;gap:2px;min-width:220px}
+.editor-title input{width:min(320px,28vw);border:0;border-bottom:1px solid transparent;background:transparent;color:var(--cream);font:400 14px Rufina,serif;text-align:center;padding:2px 8px;outline:0}
+.editor-title input:hover,.editor-title input:focus{border-color:rgba(189,148,90,.55)}
+.editor-title .save-status{font:600 9px Urbanist,sans-serif;color:#b7aaa0;letter-spacing:.04em;text-transform:none;display:flex;align-items:center;gap:5px}
+.save-status i{color:var(--gold)}
 .editor-actions{justify-self:end;display:flex;gap:7px;align-items:center}
 .secondary-action{padding:9px;font-size:13px}
 .secondary-action:disabled{opacity:.35;cursor:default}
@@ -1660,14 +1881,14 @@ onUnmounted(() => {
 /* ── Editor shell: 2-col ── */
 .editor-shell{
   display:grid;
-  grid-template-columns:56px 0px minmax(360px,1fr) 0px;
+  grid-template-columns:76px 0px minmax(360px,1fr) 0px;
   grid-template-areas:"rail railpanel canvas props";
   height:calc(100vh - 64px);overflow:hidden;
   transition:grid-template-columns .18s ease;
 }
-.editor-shell.rail-panel-open{grid-template-columns:56px 288px minmax(360px,1fr) 0px}
-.editor-shell.props-open{grid-template-columns:56px 0px minmax(360px,1fr) 296px}
-.editor-shell.rail-panel-open.props-open{grid-template-columns:56px 288px minmax(360px,1fr) 296px}
+.editor-shell.rail-panel-open{grid-template-columns:76px 300px minmax(360px,1fr) 0px}
+.editor-shell.props-open{grid-template-columns:76px 0px minmax(360px,1fr) 296px}
+.editor-shell.rail-panel-open.props-open{grid-template-columns:76px 300px minmax(360px,1fr) 296px}
 .studio--embedded .editor-shell{height:auto;min-height:600px;overflow:visible}
 
 /* ── Canvas stage ── */
@@ -1679,7 +1900,7 @@ onUnmounted(() => {
 /* <button> defaults to white-space:nowrap in the browser's UA stylesheet — without overriding it
    here, a label longer than the rail's width (e.g. "Background") gets silently clipped instead of
    wrapping to a second line. */
-.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 1px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:8px;font-weight:600;letter-spacing:.01em}
+.rail-btn{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:9px 3px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:6px;font-size:9px;font-weight:600;letter-spacing:.01em}
 .rail-btn i{font-size:17px}
 /* align-items:center above sizes the label to its unwrapped content by default (cross-axis
    auto-width), so white-space:normal alone has nothing to wrap against — constrain it to the
@@ -1693,9 +1914,30 @@ onUnmounted(() => {
 .stage-ruler{display:flex;justify-content:space-between;color:#776c62;font-size:10px;letter-spacing:.06em;margin-bottom:8px;flex-shrink:0}
 .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:280px}
 .canvas-root{position:relative;flex-shrink:0;box-shadow:0 18px 44px rgba(26,20,16,.22);user-select:none}
+.canvas-render{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;z-index:0}
+/* Approved library templates are rendered once, by the export renderer itself. The DOM boxes
+   remain as transparent hit targets, so selection/drag/resize cannot introduce preview drift. */
+.canvas-root--canonical .canvas-bg,.canvas-root--canonical .canvas-inner,.canvas-root--canonical .canvas-corners{display:none}
+.canvas-root--canonical .el--qr>img,
+.canvas-root--canonical .el--copy>.t-line,
+.canvas-root--canonical .el--merchant>.t-line,
+.canvas-root--canonical .el--brandmark>img{opacity:0!important}
+.canvas-root--canonical :deep(.el--dyn>.dyn-image),
+.canvas-root--canonical :deep(.el--dyn>.dyn-text),
+.canvas-root--canonical :deep(.el--dyn>.dyn-shape){opacity:0!important}
+.canvas-root--canonical .canvas-el{z-index:1}
+.canvas-root--canonical .snap-guide{z-index:6}
+.canvas-root--canonical .is-editing-text>.t-line[contenteditable="true"],
+.canvas-root--canonical :deep(.dyn-text[contenteditable="true"]),
+.canvas-root--canonical :deep(.dyn-cta-text[contenteditable="true"]){opacity:1!important;background:rgba(245,242,238,.94);color:#1a1410!important}
 .canvas-bg{position:absolute;inset:0;pointer-events:none}
 .canvas-corners{position:absolute;inset:0;pointer-events:none}
-.preview-caption{display:flex;justify-content:center;gap:7px;color:#776c62;font-size:10px;letter-spacing:.04em;margin-top:10px;flex-shrink:0}
+.canvas-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:10px;flex-shrink:0}
+.preview-caption{display:flex;justify-content:center;gap:7px;color:#776c62;font-size:10px;letter-spacing:.04em}
+.zoom-controls{display:flex;align-items:center;border:1px solid #d0c6bc;background:#f5f0ea;height:30px}
+.zoom-controls button{height:100%;min-width:30px;border:0;background:transparent;color:#665b51;cursor:pointer}
+.zoom-controls button:hover{background:#e9e0d8;color:var(--ink)}
+.zoom-controls .zoom-value{min-width:52px;border-left:1px solid #d0c6bc;border-right:1px solid #d0c6bc;font-size:10px}
 .live-dot{width:6px;height:6px;border-radius:50%;background:#5c8a68;margin:auto 0}
 
 /* ── Canvas elements ── */
@@ -1766,6 +2008,16 @@ onUnmounted(() => {
 .field-note{font-size:10px;color:#53725a;display:flex;gap:6px;line-height:1.4}
 .field-note.invalid{color:#a44c41}
 .field-hint{font-size:10px;color:var(--muted);line-height:1.55;margin-bottom:12px}
+.signature-mini-grid{display:grid;gap:8px;margin:12px 0}
+.signature-mini{display:grid;grid-template-columns:46px 1fr;gap:10px;align-items:center;text-align:left;border:1px solid #d9d0c7;background:#fff;padding:8px;cursor:pointer}
+.signature-mini.active{border-color:var(--gold);box-shadow:inset 3px 0 var(--gold)}
+.signature-mini img{width:46px;height:46px}.signature-mini span{display:grid;gap:2px}.signature-mini b{font-size:11px}.signature-mini small{font-size:9px;line-height:1.35;color:var(--muted)}
+.preflight-summary{margin-top:16px;border:1px solid #cad8cc;background:#f2f7f2}.preflight-summary.blocked{border-color:#dfc1bc;background:#fbf2f0}
+.preflight-head{display:flex;gap:9px;align-items:center;padding:11px;border-bottom:1px solid rgba(86,76,64,.12)}
+.preflight-head>i{font-size:18px;color:#53725a}.preflight-summary.blocked .preflight-head>i{color:#a44c41}.preflight-head span{display:grid;gap:2px}.preflight-head b{font-size:11px}.preflight-head small{font-size:9px;color:var(--muted)}
+.preflight-summary ul{list-style:none;margin:0;padding:5px 10px}.preflight-summary li{display:grid;grid-template-columns:14px 1fr;gap:8px;padding:7px 0}.preflight-summary li>i{font-size:11px;margin-top:2px}.preflight-summary li span{display:grid;gap:1px}.preflight-summary li b{font-size:10px}.preflight-summary li small{font-size:9px;color:var(--muted);line-height:1.35}
+.check--pass>i{color:#53725a}.check--warning>i{color:#a87632}.check--error>i{color:#a44c41}
+.panel-empty{border:1px dashed #d3c8be;padding:22px 14px;text-align:center;color:var(--muted)}.panel-empty i{font-size:24px;color:var(--gold)}.panel-empty p{font-size:10px;line-height:1.5;margin:8px 0 0}
 .canvas-edit-hint{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;line-height:1.5;background:#f0ebe4;padding:10px;border-left:2px solid var(--gold)}
 .bg-swatch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .bg-swatch{position:relative;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid;place-items:center;padding:0}
@@ -1850,14 +2102,15 @@ onUnmounted(() => {
 /* ── Responsive ── */
 @media(max-width:1050px){
   .template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .editor-shell{grid-template-columns:48px 0px minmax(320px,1fr) 0px}
-  .editor-shell.rail-panel-open{grid-template-columns:48px 248px minmax(320px,1fr) 0px}
-  .editor-shell.props-open{grid-template-columns:48px 0px minmax(320px,1fr) 260px}
-  .editor-shell.rail-panel-open.props-open{grid-template-columns:48px 248px minmax(320px,1fr) 260px}
+  .editor-shell{grid-template-columns:64px 0px minmax(320px,1fr) 0px}
+  .editor-shell.rail-panel-open{grid-template-columns:64px 260px minmax(320px,1fr) 0px}
+  .editor-shell.props-open{grid-template-columns:64px 0px minmax(320px,1fr) 260px}
+  .editor-shell.rail-panel-open.props-open{grid-template-columns:64px 260px minmax(320px,1fr) 260px}
 }
 @media(max-width:760px){
   .library-toolbar{display:grid}
   .style-switch{overflow:auto}
+  .preview-modal{grid-template-columns:1fr}.preview-modal-art{min-height:260px;padding:28px}.preview-modal-copy{padding:28px}
   .template-grid{grid-template-columns:1fr}
   .editor-bar{grid-template-columns:auto 1fr}
   .editor-title{display:none}
@@ -1878,6 +2131,7 @@ onUnmounted(() => {
   .rail{flex-direction:row;width:100%;padding:6px;overflow-x:auto}
   .rail-btn{width:auto;min-width:64px;flex-shrink:0;padding:7px 12px}
   .canvas-stage{min-height:360px}
+  .canvas-footer{justify-content:flex-end}.preview-caption{display:none}
   .properties-panel{border-left:0;border-top:1px solid #dfd7d0;max-height:60vh}
   .properties-panel--left{border-right:0;border-top:1px solid #dfd7d0}
 }

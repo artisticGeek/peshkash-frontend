@@ -12,10 +12,10 @@ class PeshkashLoader extends HTMLElement {
   }
 
   render() {
-    const size = Math.max(20, Number(this.getAttribute("size")) || 180);
+    const size = Math.max(48, Number(this.getAttribute("size")) || 180);
     const theme = this.getAttribute("theme") === "light" ? "light" : "dark";
     const label = this.getAttribute("label") || "Loading Peshkash";
-    const background = theme === "light" ? "#F5F2EE" : "#1A1410";
+    const scanColor = theme === "light" ? "#6F5B4D" : "#E8DBCE";
 
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
@@ -26,8 +26,7 @@ class PeshkashLoader extends HTMLElement {
           place-items: center;
           width: ${size}px;
           height: ${size}px;
-          background: ${background};
-          border-radius: 12%;
+          background: transparent;
           overflow: hidden;
         }
         svg { width: 82%; height: 82%; overflow: visible; }
@@ -38,7 +37,7 @@ class PeshkashLoader extends HTMLElement {
         .three { fill:#8C7667; transform-origin:0% 0%; animation-name:three; }
         .crease { fill:none; stroke:#6F5B4D; stroke-width:1.1; opacity:0; animation:crease 5.6s ease-in-out infinite; }
         .frame { fill:none; stroke:#C79C62; stroke-width:4; stroke-linecap:square; stroke-linejoin:miter; stroke-dasharray:84; animation:frame 5.6s cubic-bezier(.4,0,.2,1) infinite; }
-        .scan { stroke:#E8DBCE; stroke-width:2.8; stroke-linecap:round; opacity:0; filter:url(#scanGlow); animation:scan 5.6s cubic-bezier(.4,0,.2,1) infinite; }
+        .scan { stroke:${scanColor}; stroke-width:2.8; stroke-linecap:round; opacity:0; filter:url(#scanGlow); animation:scan 5.6s cubic-bezier(.4,0,.2,1) infinite; }
         .paper { filter:url(#paperShadow); }
         @keyframes stem { 0%,4%{transform:scaleY(.16);opacity:.72} 19%,78%{transform:scaleY(1);opacity:1} 94%,100%{transform:scaleY(.16);opacity:.72} }
         @keyframes one { 0%,10%{transform:translateX(-5px) scaleX(.035) skewY(18deg);opacity:.22} 29%,77%{transform:none;opacity:1} 92%,100%{transform:translateX(-5px) scaleX(.035) skewY(18deg);opacity:.22} }

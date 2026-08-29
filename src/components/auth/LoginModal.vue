@@ -214,8 +214,8 @@ watch(
   inset: 0;
   z-index: 1080;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* A full-viewport backdrop-filter intermittently renders as an opaque blank frame in Chromium
+     (especially during route-level lazy loading). The solid scrim is both clearer and reliable. */
   display: flex;
   align-items: center;
   justify-content: center;
