@@ -1,5 +1,5 @@
 <template>
-  <div class="studio" :class="{ 'studio--embedded': embedded }">
+  <div class="studio" :class="{ 'studio--embedded': embedded, 'studio--editor': mode === 'editor' }">
     <template v-if="mode === 'library'">
       <section v-if="savedDesigns.length" class="saved-section">
         <div class="section-heading">
@@ -104,7 +104,7 @@
             <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
             <p :class="['field-note', { invalid: !destinationValid }]">
               <i :class="destinationValid ? 'bi bi-shield-check' : 'bi bi-exclamation-circle'"></i>
-              {{ destinationValid ? 'Short HTTPS link ready to encode.' : 'Use a complete https:// URL.' }}
+              {{ destinationValid ? 'Production Peshkash link ready to encode.' : 'Use a live Peshkash HTTPS link, not a placeholder.' }}
             </p>
           </section>
 
@@ -117,6 +117,13 @@
                 <span><b>{{ style.label }}</b><small>{{ style.medallion }}</small></span>
               </button>
             </div>
+            <div class="qr-color-controls">
+              <label>Modules<input v-model="qrColors.foreground" type="color" class="color-input"></label>
+              <label>Quiet zone<input v-model="qrColors.background" type="color" class="color-input" :disabled="qrColors.transparent"></label>
+              <label>Accent<input v-model="qrColors.accent" type="color" class="color-input"></label>
+            </div>
+            <label class="toggle-row"><input v-model="qrColors.transparent" type="checkbox"><span>Transparent QR background</span></label>
+            <button class="reset-btn" @click="resetQrColors"><i class="bi bi-arrow-counterclockwise"></i> Reset QR colors</button>
             <div v-if="preflight" class="preflight-summary" :class="{ blocked: !preflight.canExport }">
               <div class="preflight-head"><i :class="preflight.canExport ? 'bi bi-shield-check' : 'bi bi-exclamation-octagon'"></i><span><b>{{ preflight.canExport ? 'Ready to export' : 'Export blocked' }}</b><small>{{ preflight.errors.length }} errors · {{ preflight.warnings.length }} warnings</small></span></div>
               <ul>
@@ -129,7 +136,10 @@
           </section>
           <section v-if="activeRailPanel === 'design'">
             <p class="panel-kicker">OUTPUT</p>
-            <label>Print width (mm)<input v-model.number="design.widthMm" type="number" min="24" max="1000" step="1" @change="syncHeight"></label>
+            <div class="dimension-row">
+              <label>Print width<input v-model.number="displayWidth" type="number" :min="displayMinWidth" :max="displayMaxWidth" :step="displayUnitStep" @change="syncHeight"></label>
+              <label>Unit<select v-model="design.displayUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option><option value="px">px</option><option value="pt">pt</option></select></label>
+            </div>
             <div class="standard-card">
               <div><i class="bi bi-patch-check-fill"></i><b>Scan-safe standard</b></div>
               <ul><li>Error correction H</li><li>4-module quiet zone</li><li>Rounded modules + anchors</li><li>Peshkash brand mark</li></ul>
@@ -166,6 +176,12 @@
               </label>
             </div>
             <p class="field-hint" style="margin:8px 0 0">Text and QR frame auto-adjust for legibility on any background.</p>
+            <div class="panel-rule"></div>
+            <p class="panel-kicker">RULERS &amp; GRID</p>
+            <label class="toggle-row"><input v-model="grid.rulers" type="checkbox"><span>Show rulers</span></label>
+            <label class="toggle-row"><input v-model="grid.visible" type="checkbox"><span>Show grid</span></label>
+            <label class="toggle-row"><input v-model="grid.snap" type="checkbox"><span>Snap objects to grid</span></label>
+            <label>Grid spacing (mm)<input v-model.number="grid.sizeMm" type="number" min="1" max="50" step="1"></label>
           </section>
 
           <section v-else-if="activeRailPanel === 'typography'">
@@ -205,25 +221,55 @@
 
           <section v-else-if="activeRailPanel === 'layers'">
             <p class="panel-kicker">LAYERS</p>
-            <div v-if="!layerRows.length" class="panel-empty"><i class="bi bi-layers"></i><p>Add text, shapes or images to build a layer stack.</p></div>
-            <template v-else>
-            <p class="field-hint" style="margin-bottom:10px">Front to back. Elements above the divider sit over the QR and text; below it, behind.</p>
+            <p class="field-hint" style="margin-bottom:10px">Front to back. Hide or lock any added layer; protected template layers stay scan-safe.</p>
             <div class="layers-list">
-              <template v-for="(el, i) in layerRows" :key="el.id">
-                <div v-if="i > 0 && (el.layer ?? 'front') !== (layerRows[i-1].layer ?? 'front')" class="layers-divider">
-                  <span>behind QR &amp; text</span>
-                </div>
+              <template v-for="el in frontLayerRows" :key="el.id">
                 <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
                   <i class="bi bi-grip-vertical layer-grip"></i>
                   <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
                   <span class="layer-name">{{ layerLabel(el) }}</span>
+                  <button class="layer-btn" :title="el.visible === false ? 'Show layer' : 'Hide layer'" @click.stop="toggleElementVisibility(el.id)"><i :class="el.visible === false ? 'bi bi-eye-slash' : 'bi bi-eye'"></i></button>
+                  <button class="layer-btn" :class="{ active: el.locked }" :title="el.locked ? 'Unlock layer' : 'Lock layer'" @click.stop="toggleElementLock(el.id)"><i :class="el.locked ? 'bi bi-lock-fill' : 'bi bi-unlock'"></i></button>
+                  <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
+                  <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
+                  <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
+                </div>
+              </template>
+              <div class="layers-divider"><span>protected template layers</span></div>
+              <div class="layer-row" :class="{ active: selectedEl === 'brandmark' }" @click="selectFixedLayer('brandmark')">
+                <i class="bi bi-vector-pen layer-grip"></i><span class="layer-core-icon"><i class="bi bi-gem"></i></span><span class="layer-name">Peshkash mark</span>
+                <button class="layer-btn" :title="vis.brandmark ? 'Hide mark' : 'Show mark'" @click.stop="toggleVis('brandmark')"><i :class="vis.brandmark ? 'bi bi-eye' : 'bi bi-eye-slash'"></i></button>
+                <i class="bi bi-lock-fill layer-protected" title="Protected layer"></i>
+              </div>
+              <div class="layer-row" :class="{ active: selectedEl === 'merchant' }" @click="selectFixedLayer('merchant')">
+                <i class="bi bi-vector-pen layer-grip"></i><span class="layer-core-icon"><i class="bi bi-shop"></i></span><span class="layer-name">Brand name</span>
+                <button class="layer-btn" :title="vis.merchantName ? 'Hide name' : 'Show name'" @click.stop="toggleVis('merchantName')"><i :class="vis.merchantName ? 'bi bi-eye' : 'bi bi-eye-slash'"></i></button>
+                <i class="bi bi-lock-fill layer-protected" title="Protected layer"></i>
+              </div>
+              <div class="layer-row" :class="{ active: selectedEl === 'copy' }" @click="selectFixedLayer('copy')">
+                <i class="bi bi-vector-pen layer-grip"></i><span class="layer-core-icon"><i class="bi bi-text-paragraph"></i></span><span class="layer-name">Copy block</span>
+                <button class="layer-btn" :title="copyVisible ? 'Hide copy' : 'Show copy'" @click.stop="toggleCopyVisibility"><i :class="copyVisible ? 'bi bi-eye' : 'bi bi-eye-slash'"></i></button>
+                <i class="bi bi-lock-fill layer-protected" title="Protected layer"></i>
+              </div>
+              <div class="layer-row" :class="{ active: selectedEl === 'qr' }" @click="selectFixedLayer('qr')">
+                <i class="bi bi-vector-pen layer-grip"></i><span class="layer-core-icon"><i class="bi bi-qr-code"></i></span><span class="layer-name">QR code</span>
+                <i class="bi bi-shield-check layer-scan-safe" title="Required for scanning"></i>
+                <i class="bi bi-lock-fill layer-protected" title="Protected layer"></i>
+              </div>
+              <div v-if="backLayerRows.length" class="layers-divider"><span>behind QR &amp; text</span></div>
+              <template v-for="el in backLayerRows" :key="el.id">
+                <div class="layer-row" :class="{ active: selectedElementId === el.id }" @click="selectElement(el.id)">
+                  <i class="bi bi-grip-vertical layer-grip"></i>
+                  <span class="layer-swatch" :style="layerSwatchStyle(el)"></span>
+                  <span class="layer-name">{{ layerLabel(el) }}</span>
+                  <button class="layer-btn" :title="el.visible === false ? 'Show layer' : 'Hide layer'" @click.stop="toggleElementVisibility(el.id)"><i :class="el.visible === false ? 'bi bi-eye-slash' : 'bi bi-eye'"></i></button>
+                  <button class="layer-btn" :class="{ active: el.locked }" :title="el.locked ? 'Unlock layer' : 'Lock layer'" @click.stop="toggleElementLock(el.id)"><i :class="el.locked ? 'bi bi-lock-fill' : 'bi bi-unlock'"></i></button>
                   <button class="layer-btn" title="Move forward" @click.stop="moveElement(el.id, 'up')"><i class="bi bi-chevron-up"></i></button>
                   <button class="layer-btn" title="Move backward" @click.stop="moveElement(el.id, 'down')"><i class="bi bi-chevron-down"></i></button>
                   <button class="layer-btn" title="Delete" @click.stop="deleteElement(el.id)"><i class="bi bi-trash"></i></button>
                 </div>
               </template>
             </div>
-            </template>
           </section>
 
         </aside>
@@ -232,10 +278,13 @@
         <section class="canvas-stage" ref="stageRef">
           <div class="stage-ruler">
             <span>{{ activeTemplate.ratio }}</span>
-            <span>{{ Math.round(design.widthMm) }} × {{ Math.round(design.heightMm) }} mm</span>
+            <span>{{ formattedDimensions }}</span>
           </div>
           <div class="canvas-wrap" ref="canvasWrapRef" :class="{ 'is-dragging': isDragging }">
-            <div class="canvas-root"
+            <div class="artboard-frame" :class="{ 'with-rulers': design.grid?.rulers }">
+              <div v-if="design.grid?.rulers" class="canvas-ruler canvas-ruler--x" :style="rulerXStyle"></div>
+              <div v-if="design.grid?.rulers" class="canvas-ruler canvas-ruler--y" :style="rulerYStyle"></div>
+              <div class="canvas-root"
                  :class="{ 'canvas-root--canonical': !design.customTemplate }"
                  :style="{ width: displayW + 'px', height: displayH + 'px' }"
                  @click.self="selectedEl = null; selectedElementId = null">
@@ -243,11 +292,12 @@
               <!-- The same canonical SVG feeds this preview and both download paths. Transparent
                    interaction boxes above it retain drag/resize/selection without a second visual
                    implementation drifting away from the exported artwork. -->
-              <img v-if="!design.customTemplate" class="canvas-render" :src="renderedDataUri" alt="">
+              <img v-if="!design.customTemplate" class="canvas-render" :src="previewDataUri" alt="">
 
               <!-- Background layers (pointer-events:none) -->
               <div class="canvas-bg" :style="{ background: bgColor }"></div>
               <div class="canvas-inner" :style="innerBgStyle"></div>
+              <div v-if="design.grid?.visible" class="canvas-grid" :style="gridStyle"></div>
 
               <!-- Scan corners SVG (pointer-events:none) -->
               <svg class="canvas-corners"
@@ -261,6 +311,8 @@
 
               <!-- Element bank: backdrop shapes (behind QR/copy/merchant/brandmark) -->
               <CanvasElementView v-for="el in backCanvasElements" :key="el.id"
+                   class="canvas-el--back-hit"
+                   :class="{ 'canvas-el--back-dragging': dragState?.id === el.id || resizeState?.id === el.id }"
                    :el="el" :scale="canvasScale"
                    :selected="selectedElementId === el.id"
                    :editing="editingElementId === el.id"
@@ -410,7 +462,8 @@
               <div v-if="snapGuides.centerX" class="snap-guide snap-guide--v" :style="{ left: (displayW / 2) + 'px' }"></div>
               <div v-if="snapGuides.centerY" class="snap-guide snap-guide--h" :style="{ top: (displayH / 2) + 'px' }"></div>
 
-            </div><!-- /canvas-root -->
+              </div><!-- /canvas-root -->
+            </div><!-- /artboard-frame -->
           </div><!-- /canvas-wrap -->
           <div class="canvas-footer">
             <div class="preview-caption"><span class="live-dot"></span> Direct editing is live · Shift + arrows for larger nudges</div>
@@ -509,6 +562,10 @@
               <p class="panel-kicker">{{ { shape: 'SHAPE', cta: 'CTA BADGE', text: 'TEXT', image: 'IMAGE' }[selectedElement.kind] }}</p>
             </div>
             <p class="canvas-edit-hint"><i class="bi bi-pencil"></i> Drag to move (snaps to center), corner handle to resize<span v-if="selectedElement.kind === 'cta' || selectedElement.kind === 'text'">, double-click the text to edit it</span>.</p>
+            <div class="vis-toggles">
+              <button class="vis-btn active" @click="toggleElementVisibility(selectedElementId)" title="Hide this layer"><i class="bi bi-eye"></i> Visible</button>
+              <button class="vis-btn" :class="{ active: selectedElement.locked }" @click="toggleElementLock(selectedElementId)"><i :class="selectedElement.locked ? 'bi bi-lock-fill' : 'bi bi-unlock'"></i> {{ selectedElement.locked ? 'Locked' : 'Unlocked' }}</button>
+            </div>
             <section>
               <p class="panel-kicker" style="margin-bottom:10px">LAYER ORDER</p>
               <div class="layer-order-grid">
@@ -580,6 +637,16 @@
             <small>{{ preset.description }}</small>
           </button>
         </div>
+        <p class="creator-sub creator-sub--spaced">Choose a layered starting point</p>
+        <div class="starter-grid">
+          <button v-for="starter in LAYERED_STARTERS" :key="starter.id"
+                  :class="['starter-option', { active: creatorStarter === starter.id }]"
+                  @click="creatorStarter = starter.id">
+            <i :class="starter.icon"></i>
+            <span><b>{{ starter.label }}</b><small>{{ starter.description }}</small></span>
+            <i class="bi bi-check-circle-fill starter-check"></i>
+          </button>
+        </div>
         <div class="creator-actions">
           <button class="secondary-action" @click="showCreator = false">Cancel</button>
           <button class="primary-action" @click="startCustomTemplate">Create template <i class="bi bi-arrow-right"></i></button>
@@ -608,10 +675,10 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, type 
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
+import { DEFAULT_QR_COLORS, renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 import { brandKitLayout, renderTemplateSvg } from '../features/qrStudio/templateRenderer';
-import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement, type FixedElementLayout } from '../features/qrStudio/types';
-import { FORMAT_PRESETS, buildCustomTemplateSpec, synthesizeCustomTemplate } from '../features/qrStudio/customTemplate';
+import { qrManifest, type QrStyleId, type QrTemplateDefinition, type StudioDesign, type ElementKey, type TemplateFormat, type CustomTemplateSpec, type CanvasElement, type ImageElement, type TextElement, type FixedElementLayout, type StudioUnit } from '../features/qrStudio/types';
+import { FORMAT_PRESETS, LAYERED_STARTERS, buildCustomTemplateSpec, buildLayeredStarter, synthesizeCustomTemplate, type LayeredStarterId } from '../features/qrStudio/customTemplate';
 import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT_CHOICES, FONT_PAIRINGS, fontPairingFor, DEFAULT_TYPOGRAPHY } from '../features/qrStudio/elementPresets';
 import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioDocument } from '../features/designStudio/document/migrations';
 import { STUDIO_SCHEMA_VERSION } from '../features/designStudio/document/types';
@@ -639,16 +706,17 @@ const previewTemplate = ref<QrTemplateDefinition | null>(null);
 const activeTemplate = ref<QrTemplateDefinition | null>(null);
 const savedDesigns = ref<StudioDesign[]>([]);
 const saving = ref(false);
-const saveState = ref<'saved' | 'saving' | 'local' | 'error'>('saved');
+const saveState = ref<'saved' | 'saving' | 'local' | 'unsaved' | 'error'>('saved');
 const lastSavedAt = ref('');
 const saveStatusLabel = computed(() => ({
   saved: lastSavedAt.value ? `Saved ${lastSavedAt.value}` : 'All changes saved',
   saving: 'Saving changes…',
   local: 'Saved locally',
+  unsaved: 'Unsaved draft',
   error: 'Save conflict',
 })[saveState.value]);
 const saveStatusIcon = computed(() => ({
-  saved: 'bi bi-cloud-check', saving: 'bi bi-arrow-repeat', local: 'bi bi-device-ssd', error: 'bi bi-exclamation-circle',
+  saved: 'bi bi-cloud-check', saving: 'bi bi-arrow-repeat', local: 'bi bi-device-ssd', unsaved: 'bi bi-pencil', error: 'bi bi-exclamation-circle',
 })[saveState.value]);
 const deleting = ref<number | string | null>(null);
 const notice = ref('');
@@ -659,6 +727,7 @@ const destinationHint = ref('');
 const showCreator = ref(false);
 const creatorFormat = ref<TemplateFormat>('landscape');
 const creatorName = ref('');
+const creatorStarter = ref<LayeredStarterId>('blank');
 
 // ── Canvas state ──────────────────────────────────────────────────────────────
 const stageRef = ref<HTMLElement>();
@@ -695,8 +764,8 @@ function findCanvasEl(id: string): CanvasElement | undefined {
   return design.canvasElements?.find((el) => el.id === id);
 }
 const selectedElement = computed(() => selectedElementId.value ? findCanvasEl(selectedElementId.value) : undefined);
-const backCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'back'));
-const frontCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => (el.layer ?? 'front') === 'front'));
+const backCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => el.visible !== false && (el.layer ?? 'front') === 'back'));
+const frontCanvasElements = computed(() => (design.canvasElements ?? []).filter((el) => el.visible !== false && (el.layer ?? 'front') === 'front'));
 const selectedElementOpacity = computed<number>({
   get: () => selectedElement.value?.opacity ?? 1,
   set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
@@ -743,6 +812,35 @@ const canvasH = computed(() => activeTemplate.value?.canvas.height ?? 600);
 const displayW = computed(() => Math.round(canvasW.value * canvasScale.value));
 const displayH = computed(() => Math.round(canvasH.value * canvasScale.value));
 const displayShort = computed(() => Math.min(displayW.value, displayH.value));
+
+const MM_PER_UNIT: Record<StudioUnit, number> = { mm: 1, cm: 10, in: 25.4, px: 25.4 / 96, pt: 25.4 / 72 };
+const UNIT_PRECISION: Record<StudioUnit, number> = { mm: 1, cm: 2, in: 2, px: 0, pt: 1 };
+const unitFactor = computed(() => MM_PER_UNIT[design.displayUnit ?? 'mm']);
+const displayWidth = computed<number>({
+  get: () => Number((design.widthMm / unitFactor.value).toFixed(UNIT_PRECISION[design.displayUnit ?? 'mm'])),
+  set: (value) => { design.widthMm = Number(value) * unitFactor.value; },
+});
+const displayMinWidth = computed(() => Number((24 / unitFactor.value).toFixed(UNIT_PRECISION[design.displayUnit ?? 'mm'])));
+const displayMaxWidth = computed(() => Number((1000 / unitFactor.value).toFixed(UNIT_PRECISION[design.displayUnit ?? 'mm'])));
+const displayUnitStep = computed(() => ({ mm: 1, cm: 0.1, in: 0.05, px: 1, pt: 1 })[design.displayUnit ?? 'mm']);
+const formattedDimensions = computed(() => {
+  const unit = design.displayUnit ?? 'mm';
+  const precision = UNIT_PRECISION[unit];
+  return `${(design.widthMm / MM_PER_UNIT[unit]).toFixed(precision)} × ${(design.heightMm / MM_PER_UNIT[unit]).toFixed(precision)} ${unit}`;
+});
+const grid = computed(() => design.grid ?? (design.grid = { rulers: false, visible: false, snap: false, sizeMm: 5 }));
+const qrColors = computed(() => design.qrColors ?? (design.qrColors = { ...DEFAULT_QR_COLORS }));
+function resetQrColors(): void { design.qrColors = { ...DEFAULT_QR_COLORS }; }
+const gridDisplayStep = computed(() => {
+  const mmPerCanvasUnit = design.widthMm / canvasW.value;
+  return Math.max(4, (grid.value.sizeMm / mmPerCanvasUnit) * canvasScale.value);
+});
+const gridStyle = computed(() => ({
+  backgroundImage: 'linear-gradient(rgba(189,148,90,.22) 1px, transparent 1px), linear-gradient(90deg, rgba(189,148,90,.22) 1px, transparent 1px)',
+  backgroundSize: `${gridDisplayStep.value}px ${gridDisplayStep.value}px`,
+}));
+const rulerXStyle = computed(() => ({ backgroundSize: `${gridDisplayStep.value}px 100%` }));
+const rulerYStyle = computed(() => ({ backgroundSize: `100% ${gridDisplayStep.value}px` }));
 
 const dark = computed(() => design.theme === 'dark');
 // A custom background (palette pick or hand-picked color) overrides the two-theme default; the
@@ -866,7 +964,7 @@ const bmImgStyle = computed((): Record<string, string> => {
 });
 
 // QR data URI for canvas display
-const qrDataUri = computed(() => svgDataUri(renderBrandedQrSvg(design.destination || 'https://peshkash.app', design.qrStyle, 600)));
+const qrDataUri = computed(() => svgDataUri(renderBrandedQrSvg(design.destination || 'https://peshkash.app', design.qrStyle, 600, qrColors.value)));
 
 // Rendered SVG for export (uses current elPos)
 const renderedSvg = computed(() => {
@@ -881,6 +979,35 @@ const renderedSvg = computed(() => {
   });
 });
 const renderedDataUri = computed(() => svgDataUri(renderedSvg.value));
+// Curated templates use their canonical SVG for fixed artwork, but freeform elements stay as live
+// DOM/SVG nodes above it. This avoids regenerating and decoding a full data URI on every pointer
+// move—the source of uploaded images blinking or disappearing during drag.
+const previewSvg = computed(() => {
+  const t = activeTemplate.value; if (!t || design.customTemplate) return '';
+  const sh = Math.min(t.canvas.width, t.canvas.height);
+  const { x, y, w } = elPos.value.qr;
+  return renderTemplateSvg(t, {
+    merchantName: design.merchantName,
+    eyebrow: design.eyebrow,
+    headline: design.headline,
+    descriptor: design.descriptor,
+    cta: design.cta,
+    destination: design.destination,
+    qrStyle: design.qrStyle,
+    qrColors: qrColors.value,
+    theme: design.theme,
+    visibility: design.visibility,
+    background: design.background,
+    typography: design.typography,
+    canvasElements: backCanvasElements.value.filter((el) => el.id !== dragState.value?.id && el.id !== resizeState.value?.id),
+  }, {
+    qr: { x: x / t.canvas.width, y: y / t.canvas.height, size: w / sh },
+    copy: { ...elPos.value.copy },
+    merchant: { ...elPos.value.merchant },
+    brandmark: { ...elPos.value.brandmark },
+  });
+});
+const previewDataUri = computed(() => svgDataUri(previewSvg.value));
 const preflight = computed(() => activeTemplate.value
   ? preflightDesign(design, activeTemplate.value, elPos.value as FixedElementLayout)
   : null);
@@ -1060,8 +1187,11 @@ function addElement(presetId: string): void {
 // it as an inline data: URI — there's no asset-upload backend, and the design is persisted whole
 // as JSON, so keeping the payload small matters.
 const IMAGE_MAX_EDGE = 900;
+const IMAGE_MAX_BYTES = 12 * 1024 * 1024;
 function downscaleImage(file: File): Promise<{ dataUrl: string; w: number; h: number }> {
   return new Promise((resolve, reject) => {
+    if (file.size > IMAGE_MAX_BYTES) { reject(new Error('Image exceeds 12 MB')); return; }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { reject(new Error('Unsupported image type')); return; }
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
     reader.onload = () => {
@@ -1073,7 +1203,9 @@ function downscaleImage(file: File): Promise<{ dataUrl: string; w: number; h: nu
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.85), w, h });
+        // Preserve alpha for PNG/WebP logos and cut-outs. Photographs remain compact JPEGs.
+        const outputType = file.type === 'image/png' || file.type === 'image/webp' ? file.type : 'image/jpeg';
+        resolve({ dataUrl: canvas.toDataURL(outputType, outputType === 'image/jpeg' ? 0.88 : undefined), w, h });
       };
       img.src = reader.result as string;
     };
@@ -1110,8 +1242,10 @@ async function onImageFileChosen(e: Event): Promise<void> {
     activeRailPanel.value = null;
     selectedEl.value = null;
     selectedElementId.value = el.id;
-  } catch {
-    notice.value = "Couldn't read that image — try a different file.";
+  } catch (error) {
+    notice.value = error instanceof Error && error.message.includes('12 MB')
+      ? 'That image is larger than 12 MB. Choose a smaller file.'
+      : "Couldn't read that image — use a PNG, JPEG or WebP file.";
     window.setTimeout(() => { notice.value = ''; }, 3000);
   }
 }
@@ -1144,6 +1278,23 @@ const layerRows = computed(() => {
   const back = all.filter((el) => (el.layer ?? 'front') === 'back').slice().reverse();
   return [...front, ...back];
 });
+const frontLayerRows = computed(() => layerRows.value.filter((el) => (el.layer ?? 'front') === 'front'));
+const backLayerRows = computed(() => layerRows.value.filter((el) => (el.layer ?? 'front') === 'back'));
+function toggleElementVisibility(id: string): void {
+  const el = findCanvasEl(id);
+  if (!el) return;
+  el.visible = el.visible === false;
+  if (el.visible === false && selectedElementId.value === id) selectedElementId.value = null;
+}
+function toggleElementLock(id: string): void {
+  const el = findCanvasEl(id);
+  if (el) el.locked = !el.locked;
+}
+function selectFixedLayer(key: 'qr' | 'copy' | 'merchant' | 'brandmark'): void {
+  activeRailPanel.value = 'layers';
+  selectedEl.value = key;
+  selectedElementId.value = null;
+}
 function layerLabel(el: CanvasElement): string {
   if (el.name) return el.name;
   if (el.kind === 'cta') return `${el.style === 'tag' ? 'Tag' : el.style === 'ribbon' ? 'Ribbon' : 'Button'}: ${el.text || 'CTA'}`;
@@ -1199,7 +1350,7 @@ function sendToBack(id: string): void {
 }
 function startCanvasElDrag(id: string, e: PointerEvent): void {
   const el = findCanvasEl(id);
-  if (!el) return;
+  if (!el || el.locked || el.visible === false) return;
   selectElement(id);
   dragState.value = { id, startCX: e.clientX, startCY: e.clientY, origX: el.x, origY: el.y };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
@@ -1207,7 +1358,7 @@ function startCanvasElDrag(id: string, e: PointerEvent): void {
 }
 function startCanvasElResize(id: string, e: PointerEvent): void {
   const el = findCanvasEl(id);
-  if (!el) return;
+  if (!el || el.locked || el.visible === false) return;
   resizeState.value = { id, axis: 'free', startCX: e.clientX, startCY: e.clientY, origW: el.w, origH: el.h };
   safeSetPointerCapture(e.currentTarget as Element, e.pointerId);
   startDragListeners();
@@ -1304,6 +1455,11 @@ function applyMove(e: PointerEvent): void {
       const snapY = Math.abs(ny + el.h / 2 - canvasCY) < tol;
       if (snapX) nx = canvasCX - el.w / 2;
       if (snapY) ny = canvasCY - el.h / 2;
+      if (grid.value.snap && grid.value.sizeMm > 0) {
+        const canvasStep = grid.value.sizeMm / (design.widthMm / t.canvas.width);
+        if (!snapX) nx = Math.max(0, Math.min(maxX, Math.round(nx / canvasStep) * canvasStep));
+        if (!snapY) ny = Math.max(0, Math.min(maxY, Math.round(ny / canvasStep) * canvasStep));
+      }
       snapGuides.value = { centerX: snapX, centerY: snapY };
 
       el.x = nx;
@@ -1424,6 +1580,8 @@ const blankDesign = (): StudioDesign => ({
   name: '', libraryTemplateId: '', manifestVersion: qrManifest.version,
   schemaVersion: STUDIO_SCHEMA_VERSION, revision: 1,
   qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70,
+  displayUnit: 'mm', grid: { rulers: false, visible: false, snap: false, sizeMm: 5 },
+  qrColors: { ...DEFAULT_QR_COLORS },
   merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app',
   visibility: {},
   canvasElements: [],
@@ -1444,13 +1602,26 @@ interface HistorySnapshot { design: StudioDesign; elPos: typeof elPos.value }
 const HISTORY_LIMIT = 60;
 const historyStack = ref<string[]>([]);
 const historyIndex = ref(-1);
+const historyAssetBySource = new Map<string, string>();
+const historyAssetByKey = new Map<string, string>();
+let historyAssetSequence = 0;
 let restoringHistory = false;
 const canUndo = computed(() => historyIndex.value > 0);
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1);
 function pushHistory(): void {
   if (restoringHistory || mode.value !== 'editor') return;
-  const snap: HistorySnapshot = { design: JSON.parse(JSON.stringify(design)), elPos: JSON.parse(JSON.stringify(elPos.value)) };
-  const serialized = JSON.stringify(snap);
+  // Keep large uploaded images once in an in-memory asset table. History entries then carry a
+  // tiny reference instead of repeating multi-megabyte base64 payloads up to 60 times.
+  const serialized = JSON.stringify({ design, elPos: elPos.value } satisfies HistorySnapshot, (_key, value) => {
+    if (typeof value !== 'string' || !value.startsWith('data:image/')) return value;
+    let assetKey = historyAssetBySource.get(value);
+    if (!assetKey) {
+      assetKey = `history-asset://${++historyAssetSequence}`;
+      historyAssetBySource.set(value, assetKey);
+      historyAssetByKey.set(assetKey, value);
+    }
+    return assetKey;
+  });
   // Skip no-op pushes (nothing actually changed since the last snapshot).
   if (historyStack.value[historyIndex.value] === serialized) return;
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1);
@@ -1461,7 +1632,11 @@ function pushHistory(): void {
 function restoreHistoryAt(index: number): void {
   const raw = historyStack.value[index];
   if (raw === undefined) return;
-  const snap: HistorySnapshot = JSON.parse(raw);
+  const snap: HistorySnapshot = JSON.parse(raw, (_key, value) => (
+    typeof value === 'string' && value.startsWith('history-asset://')
+      ? historyAssetByKey.get(value) ?? ''
+      : value
+  ));
   restoringHistory = true;
   Object.assign(design, blankDesign(), snap.design);
   elPos.value = snap.elPos;
@@ -1504,6 +1679,7 @@ const vis = computed(() => ({
   merchantName: design.visibility?.merchantName !== false,
   brandmark:    design.visibility?.brandmark    !== false,
 }));
+const copyVisible = computed(() => vis.value.eyebrow || vis.value.headline || vis.value.descriptor || vis.value.cta);
 
 function toggleVis(key: ElementKey): void {
   if (!design.visibility) design.visibility = {};
@@ -1529,7 +1705,7 @@ const filteredTemplates = computed(() => {
   });
 });
 const formatOptions = computed(() => [...new Set(qrManifest.templates.map((template) => template.format))]);
-const destinationValid = computed(() => { try { return new URL(design.destination).protocol === 'https:'; } catch { return false; } });
+const destinationValid = computed(() => !preflight.value?.errors.some((check) => ['destination', 'host', 'mapping'].includes(check.id)));
 
 function templateById(id: string): QrTemplateDefinition | undefined { return qrManifest.templates.find((t) => t.id === id); }
 function assetPath(template: QrTemplateDefinition): string { return `/brand/qr-templates/${qrManifest.qrStyles[previewStyle.value].folder}/${template.file}`; }
@@ -1552,9 +1728,13 @@ function templateLabelFor(saved: StudioDesign): string {
 }
 
 function applyDesign(next: StudioDesign): void {
+  autosavePaused = true;
+  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
   Object.assign(design, blankDesign(), next);
   activeTemplate.value = resolveTemplate(design);
   mode.value = 'editor';
+  saveState.value = typeof design.id === 'number' ? 'saved' : typeof design.id === 'string' ? 'local' : 'unsaved';
+  void nextTick(() => nextTick(() => { autosavePaused = false; }));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function startWithTemplate(template: QrTemplateDefinition): void {
@@ -1590,6 +1770,7 @@ function startCustomTemplate(): void {
     widthMm: preset.defaultMm.w,
     heightMm: preset.defaultMm.h,
     merchantName: props.vendorName || '',
+    canvasElements: buildLayeredStarter(creatorStarter.value, spec.canvas),
     ...template.defaultCopy,
     destination: destinationHint.value || template.sampleDestination,
   });
@@ -1597,6 +1778,7 @@ function startCustomTemplate(): void {
   nextTick(updateCanvasScale);
   showCreator.value = false;
   creatorName.value = '';
+  creatorStarter.value = 'blank';
 }
 function editSaved(saved: StudioDesign): void {
   designKey.value++;
@@ -1605,7 +1787,20 @@ function editSaved(saved: StudioDesign): void {
   if (activeTemplate.value) initElPos(activeTemplate.value);
   nextTick(updateCanvasScale);
 }
-function closeEditor(): void { mode.value = 'library'; activeTemplate.value = null; selectedEl.value = null; }
+function toggleCopyVisibility(): void {
+  if (!design.visibility) design.visibility = {};
+  const next = !copyVisible.value;
+  design.visibility.eyebrow = next;
+  design.visibility.headline = next;
+  design.visibility.descriptor = next;
+  design.visibility.cta = next;
+}
+function closeEditor(): void {
+  if (design.id == null && saveState.value === 'unsaved' && !window.confirm('Discard this unsaved draft?')) return;
+  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+  mode.value = 'library'; activeTemplate.value = null; selectedEl.value = null;
+  void loadDesigns();
+}
 function syncHeight(): void {
   if (!activeTemplate.value) return;
   design.widthMm = Math.max(24, Math.min(1000, Number(design.widthMm) || 120));
@@ -1652,18 +1847,35 @@ async function loadDesigns(): Promise<void> {
   } catch { /* local drafts remain available in standalone/offline mode */ }
   savedDesigns.value = [...remote, ...localDesigns()].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
+function upsertSavedDesign(next: StudioDesign): void {
+  savedDesigns.value = [
+    JSON.parse(JSON.stringify(next)) as StudioDesign,
+    ...savedDesigns.value.filter((item) => String(item.id) !== String(next.id)),
+  ].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
 let autosavePaused = false;
+let saveInFlight = false;
+let saveQueued = false;
 async function saveDesign(quiet = false): Promise<void> {
   if (!activeTemplate.value) return;
+  if (saveInFlight) { saveQueued = true; return; }
+  saveInFlight = true;
   saving.value = true;
   saveState.value = 'saving';
   design.layout = JSON.parse(JSON.stringify(elPos.value));
   const document = createStudioDocument(design, design.layout!);
+  const settings = {
+    name: design.name, merchantName: design.merchantName, eyebrow: design.eyebrow, headline: design.headline,
+    descriptor: design.descriptor, cta: design.cta, destination: design.destination,
+    displayUnit: design.displayUnit, grid: design.grid, qrColors: design.qrColors,
+    background: design.background, typography: design.typography, visibility: design.visibility,
+    customTemplate: design.customTemplate, variables: design.variables,
+  };
   const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
     vendorId: props.vendorId,
-    elements: [{ ...design }], libraryTemplateId: activeTemplate.value.id, manifestVersion: qrManifest.version,
+    elements: [], libraryTemplateId: activeTemplate.value.id, manifestVersion: qrManifest.version,
     schemaVersion: STUDIO_SCHEMA_VERSION, revision: design.revision,
-    qrStyle: design.qrStyle, theme: design.theme, settings: { ...design }, document };
+    qrStyle: design.qrStyle, theme: design.theme, settings, document };
   try {
     const isRemote = typeof design.id === 'number';
     const oldLocalId = design.id;
@@ -1671,6 +1883,7 @@ async function saveDesign(quiet = false): Promise<void> {
     autosavePaused = true;
     Object.assign(design, fromApi(data));
     removeLocal(oldLocalId);
+    upsertSavedDesign(design);
     saveState.value = 'saved';
     lastSavedAt.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     if (!quiet) notice.value = 'Design saved to your Peshkash workspace.';
@@ -1679,12 +1892,18 @@ async function saveDesign(quiet = false): Promise<void> {
   } catch (error: any) {
     const local = persistLocal(design);
     if (typeof design.id !== 'number') design.id = local.id;
+    upsertSavedDesign(local);
     saveState.value = error?.response?.status === 409 ? 'error' : 'local';
     if (!quiet) notice.value = error?.response?.status === 409
       ? 'This design changed in another tab. Your local draft is safe; reload before saving again.'
       : 'Saved locally. It will remain available while the workspace connection is unavailable.';
   }
-  finally { saving.value = false; if (!quiet) { await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); } }
+  finally {
+    saving.value = false;
+    saveInFlight = false;
+    if (!quiet) { await loadDesigns(); window.setTimeout(() => { notice.value = ''; }, 4000); }
+  }
+  if (saveQueued) { saveQueued = false; await saveDesign(true); }
 }
 async function deleteDesign(id: number | string): Promise<void> {
   deleting.value = id;
@@ -1724,6 +1943,7 @@ let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 function scheduleAutosave(): void {
   if (autosavePaused || mode.value !== 'editor') return;
   if (autosaveTimer) clearTimeout(autosaveTimer);
+  if (design.id == null) { saveState.value = 'unsaved'; return; }
   saveState.value = 'saving';
   autosaveTimer = setTimeout(() => {
     autosaveTimer = null;
@@ -1741,6 +1961,9 @@ watch(activeTemplate, () => {
   // over undo entries from whatever was open before.
   historyStack.value = [];
   historyIndex.value = -1;
+  historyAssetBySource.clear();
+  historyAssetByKey.clear();
+  historyAssetSequence = 0;
   pushHistory();
 });
 // The rail slide-out and properties dock opening/closing resizes canvas-wrap without firing a
@@ -1779,7 +2002,7 @@ onUnmounted(() => {
 @import url('https://fonts.googleapis.com/css2?family=Rufina:wght@400;700&family=Urbanist:wght@400;500;600;700&display=swap');
 
 /* ── Base ── */
-.studio{--ink:#1a1410;--cream:#f5f2ee;--gold:#bd945a;--muted:#6d6256;background:var(--cream);color:var(--ink);font-family:Urbanist,Arial,sans-serif}
+.studio{--ink:#1a1410;--cream:#f5f2ee;--gold:#bd945a;--muted:#6d6256;--editor-bar-h:64px;background:var(--cream);color:var(--ink);font-family:Urbanist,Arial,sans-serif}
 .studio *{box-sizing:border-box}
 .studio button,.studio input,.studio textarea{font:inherit}
 .studio button{color:inherit}
@@ -1850,6 +2073,13 @@ onUnmounted(() => {
 .creator-name-field input{border:1px solid #d9d0c7;background:#fff;padding:10px 12px;outline:0;color:var(--ink);font-size:14px}
 .creator-name-field input:focus{border-color:var(--gold)}
 .creator-sub{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 12px}
+.creator-sub--spaced{margin-top:22px}
+.starter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px}
+.starter-option{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:9px;border:1px solid #d9d0c7;background:#fff;padding:11px;text-align:left;cursor:pointer}
+.starter-option:hover,.starter-option.active{border-color:var(--gold);background:#fdf8f2}
+.starter-option>i:first-child{color:var(--gold);font-size:16px}
+.starter-option span{display:grid;gap:2px;min-width:0}.starter-option b{font-size:11px}.starter-option small{font-size:9px;line-height:1.3;color:var(--muted)}
+.starter-check{color:var(--gold);opacity:0}.starter-option.active .starter-check{opacity:1}
 .format-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:26px}
 .format-option{border:1.5px solid #ddd4cc;background:#fff;padding:14px 12px;cursor:pointer;text-align:left;display:grid;gap:8px;justify-items:start}
 .format-option:hover{border-color:var(--gold)}
@@ -1863,6 +2093,11 @@ onUnmounted(() => {
 
 /* ── Editor bar ── */
 .editor-bar{height:64px;background:var(--ink);color:var(--cream);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 22px;position:sticky;top:0;z-index:20}
+.studio--embedded .editor-bar{height:58px;background:#f7f2ea;color:var(--ink);border-bottom:1px solid #dfd4c7;padding:0 18px;top:0}
+.studio--embedded .editor-title input{color:var(--ink)}
+.studio--embedded .editor-title .save-status{color:#786b5f}
+.studio--embedded .editor-actions-divider{background:#d8cdbf}
+.studio--embedded .secondary-action{border:1px solid transparent}.studio--embedded .secondary-action:hover{border-color:#d9c7ae;background:#fff}
 .back-button,.secondary-action{border:0;background:transparent;color:inherit;cursor:pointer}
 .back-button{justify-self:start;display:flex;align-items:center;gap:8px;font-size:13px}
 .editor-title{text-align:center;display:grid;justify-items:center;gap:2px;min-width:220px}
@@ -1883,17 +2118,19 @@ onUnmounted(() => {
   display:grid;
   grid-template-columns:76px 0px minmax(360px,1fr) 0px;
   grid-template-areas:"rail railpanel canvas props";
-  height:calc(100vh - 64px);overflow:hidden;
+  height:calc(100vh - var(--editor-bar-h));overflow:hidden;
   transition:grid-template-columns .18s ease;
 }
 .editor-shell.rail-panel-open{grid-template-columns:76px 300px minmax(360px,1fr) 0px}
 .editor-shell.props-open{grid-template-columns:76px 0px minmax(360px,1fr) 296px}
 .editor-shell.rail-panel-open.props-open{grid-template-columns:76px 300px minmax(360px,1fr) 296px}
-.studio--embedded .editor-shell{height:auto;min-height:600px;overflow:visible}
+.studio--embedded.studio--editor{height:100%;min-height:0;--editor-bar-h:58px;overflow:hidden}
+.studio--embedded:not(.studio--editor){height:100%;overflow-y:auto}
+.studio--embedded .editor-shell{height:calc(100% - var(--editor-bar-h));min-height:0;overflow:hidden}
 
 /* ── Canvas stage ── */
 .canvas-stage{grid-area:canvas;padding:24px 28px 16px;background:#e8e2dc;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.studio--embedded .canvas-stage{height:auto;min-height:420px}
+.studio--embedded .canvas-stage{height:auto;min-height:0}
 
 /* ── Icon rail + slide-out panel ── */
 .rail{grid-area:rail;background:#f4efe9;border-right:1px solid #dfd7d0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 4px;overflow-y:auto}
@@ -1913,8 +2150,14 @@ onUnmounted(() => {
 .properties-panel--left{border-left:0;border-right:1px solid #dfd7d0}
 .stage-ruler{display:flex;justify-content:space-between;color:#776c62;font-size:10px;letter-spacing:.06em;margin-bottom:8px;flex-shrink:0}
 .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:280px}
+.artboard-frame{position:relative;flex-shrink:0}
+.artboard-frame.with-rulers{padding:18px 0 0 18px}
+.canvas-ruler{position:absolute;background-color:#f7f2eb;pointer-events:none;z-index:8;opacity:.9}
+.canvas-ruler--x{left:18px;right:0;top:0;height:17px;border-bottom:1px solid #cbbba8;background-image:repeating-linear-gradient(90deg,#8c7667 0 1px,transparent 1px 100%)}
+.canvas-ruler--y{top:18px;bottom:0;left:0;width:17px;border-right:1px solid #cbbba8;background-image:repeating-linear-gradient(0deg,#8c7667 0 1px,transparent 1px 100%)}
 .canvas-root{position:relative;flex-shrink:0;box-shadow:0 18px 44px rgba(26,20,16,.22);user-select:none}
 .canvas-render{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;z-index:0}
+.canvas-grid{position:absolute;inset:0;pointer-events:none;z-index:5}
 /* Approved library templates are rendered once, by the export renderer itself. The DOM boxes
    remain as transparent hit targets, so selection/drag/resize cannot introduce preview drift. */
 .canvas-root--canonical .canvas-bg,.canvas-root--canonical .canvas-inner,.canvas-root--canonical .canvas-corners{display:none}
@@ -1922,9 +2165,12 @@ onUnmounted(() => {
 .canvas-root--canonical .el--copy>.t-line,
 .canvas-root--canonical .el--merchant>.t-line,
 .canvas-root--canonical .el--brandmark>img{opacity:0!important}
-.canvas-root--canonical :deep(.el--dyn>.dyn-image),
-.canvas-root--canonical :deep(.el--dyn>.dyn-text),
-.canvas-root--canonical :deep(.el--dyn>.dyn-shape){opacity:0!important}
+.canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-image),
+.canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-text),
+.canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-shape){opacity:0!important}
+.canvas-root--canonical :deep(.canvas-el--back-hit.canvas-el--back-dragging>.dyn-image),
+.canvas-root--canonical :deep(.canvas-el--back-hit.canvas-el--back-dragging>.dyn-text),
+.canvas-root--canonical :deep(.canvas-el--back-hit.canvas-el--back-dragging>.dyn-shape){opacity:1!important}
 .canvas-root--canonical .canvas-el{z-index:1}
 .canvas-root--canonical .snap-guide{z-index:6}
 .canvas-root--canonical .is-editing-text>.t-line[contenteditable="true"],
@@ -1996,7 +2242,7 @@ onUnmounted(() => {
 .el-delete-btn:hover{background:#a44c41;color:#fff}
 
 /* ── Properties panel ── */
-.properties-panel{background:#fbf9f6;padding:22px 20px;overflow-y:auto;border-left:1px solid #dfd7d0;display:flex;flex-direction:column;gap:0}
+.properties-panel{background:#fbf9f6;padding:22px 20px;overflow-y:auto;overflow-x:hidden;border-left:1px solid #dfd7d0;display:flex;flex-direction:column;gap:0}
 .properties-panel section+section{border-top:1px solid #e4ddd6;margin-top:22px;padding-top:20px}
 .panel-kicker{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 14px}
 .panel-back-row{display:flex;align-items:center;gap:4px;margin-bottom:14px}
@@ -2004,6 +2250,10 @@ onUnmounted(() => {
 .back-to-props{border:0;background:transparent;color:var(--gold);cursor:pointer;padding:0 6px 0 0;font-size:13px;line-height:1}
 .properties-panel label{display:grid;gap:5px;font-size:11px;color:var(--muted);margin-bottom:13px}
 .properties-panel input,.properties-panel textarea{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink);resize:vertical}
+.dimension-row{display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:8px}.dimension-row label{margin-bottom:0}
+.qr-color-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.qr-color-controls label{font-size:9px;margin:0;text-align:center}
+.toggle-row{display:flex!important;grid-template-columns:none!important;align-items:center;gap:9px;margin:9px 0!important}.toggle-row input{width:16px!important;height:16px;accent-color:var(--gold)}
+.panel-rule{height:1px;background:#e4ddd6;margin:20px 0}
 .properties-panel input:focus,.properties-panel textarea:focus{border-color:var(--gold)}
 .field-note{font-size:10px;color:#53725a;display:flex;gap:6px;line-height:1.4}
 .field-note.invalid{color:#a44c41}
@@ -2019,8 +2269,8 @@ onUnmounted(() => {
 .check--pass>i{color:#53725a}.check--warning>i{color:#a87632}.check--error>i{color:#a44c41}
 .panel-empty{border:1px dashed #d3c8be;padding:22px 14px;text-align:center;color:var(--muted)}.panel-empty i{font-size:24px;color:var(--gold)}.panel-empty p{font-size:10px;line-height:1.5;margin:8px 0 0}
 .canvas-edit-hint{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:7px;margin-bottom:14px;line-height:1.5;background:#f0ebe4;padding:10px;border-left:2px solid var(--gold)}
-.bg-swatch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.bg-swatch{position:relative;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid;place-items:center;padding:0}
+.bg-swatch-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.bg-swatch{position:relative;width:100%;aspect-ratio:1;border:1.5px solid #ddd4cc;border-radius:6px;cursor:pointer;display:grid!important;place-items:center;padding:0!important;margin:0!important;gap:0!important}
 .bg-swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px rgba(189,148,90,.25)}
 .bg-swatch i{font-size:13px}
 .bg-swatch--custom{background:conic-gradient(from 0deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);color:#fff;position:relative;overflow:hidden}
@@ -2083,7 +2333,10 @@ onUnmounted(() => {
 .layer-swatch{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.12);flex-shrink:0}
 .layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .layer-btn{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px 4px;font-size:11px;line-height:1;flex-shrink:0}
-.layer-btn:hover{color:var(--ink)}
+.layer-btn:hover,.layer-btn.active{color:var(--ink)}
+.layer-core-icon{width:16px;height:16px;display:grid;place-items:center;color:var(--gold);font-size:11px;flex-shrink:0}
+.layer-protected{color:#b8afa5;font-size:9px;padding:0 4px;flex-shrink:0}
+.layer-scan-safe{color:#3d7050;font-size:11px;padding:0 4px;flex-shrink:0}
 .layers-divider{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .layers-divider::before,.layers-divider::after{content:'';flex:1;height:1px;background:#e4ddd6}
 
@@ -2112,9 +2365,12 @@ onUnmounted(() => {
   .style-switch{overflow:auto}
   .preview-modal{grid-template-columns:1fr}.preview-modal-art{min-height:260px;padding:28px}.preview-modal-copy{padding:28px}
   .template-grid{grid-template-columns:1fr}
-  .editor-bar{grid-template-columns:auto 1fr}
-  .editor-title{display:none}
-  .editor-actions .secondary-action{display:none}
+  .studio{--editor-bar-h:104px}
+  .studio--embedded.studio--editor{--editor-bar-h:104px}
+  .editor-bar,.studio--embedded .editor-bar{height:var(--editor-bar-h);grid-template-columns:auto minmax(0,1fr);grid-template-rows:48px 48px;padding:4px 10px}
+  .editor-title{justify-items:end;min-width:0}.editor-title input{width:min(58vw,280px);text-align:right}.editor-title .save-status{display:none}
+  .editor-actions{grid-column:1/-1;justify-self:stretch;overflow-x:auto;padding-bottom:3px}.editor-actions .secondary-action{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .editor-actions .primary-action{margin-left:auto;white-space:nowrap}
   /* Stacked single column regardless of panel state — repeats the same class combinations as the
      1050px block (not just the bare .editor-shell) because a more specific selector from an
      earlier, still-matching media query (≤1050px is also true at ≤760px) otherwise wins on
@@ -2126,7 +2382,8 @@ onUnmounted(() => {
     grid-template-columns:1fr;
     grid-template-rows:auto auto auto auto;
     grid-template-areas:"rail" "canvas" "railpanel" "props";
-    height:auto;
+    height:calc(100% - var(--editor-bar-h));
+    overflow-y:auto;
   }
   .rail{flex-direction:row;width:100%;padding:6px;overflow-x:auto}
   .rail-btn{width:auto;min-width:64px;flex-shrink:0;padding:7px 12px}
@@ -2134,5 +2391,6 @@ onUnmounted(() => {
   .canvas-footer{justify-content:flex-end}.preview-caption{display:none}
   .properties-panel{border-left:0;border-top:1px solid #dfd7d0;max-height:60vh}
   .properties-panel--left{border-right:0;border-top:1px solid #dfd7d0}
+  .starter-grid{grid-template-columns:1fr}
 }
 </style>

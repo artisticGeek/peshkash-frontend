@@ -11,8 +11,8 @@
 </template>
 
 <script setup lang="ts">
-import QRCode from 'qrcode';
-import { computed, ref, watchEffect } from 'vue';
+import { computed } from 'vue';
+import { renderBrandedQrSvg, svgDataUri } from '../../features/qrStudio/qrRenderer';
 
 const props = defineProps<{
   label: string;
@@ -20,14 +20,10 @@ const props = defineProps<{
   path: string;
 }>();
 
-const qrDataUrl = ref('');
 const absoluteUrl = computed(() => `${window.location.origin}${props.path.startsWith('/') ? props.path : `/${props.path}`}`);
-
-watchEffect(async () => {
-  qrDataUrl.value = props.path
-    ? await QRCode.toDataURL(absoluteUrl.value, { margin: 1, width: 96 })
-    : '';
-});
+const qrDataUrl = computed(() => props.path
+  ? svgDataUri(renderBrandedQrSvg(absoluteUrl.value, 'porcelain-cameo', 384))
+  : '');
 </script>
 
 <style scoped>

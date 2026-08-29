@@ -1,4 +1,4 @@
-import QRCode from 'qrcode';
+import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 
 export const BASE_SCALE = 3.78;
 export const EXPORT_DPI = 300;
@@ -151,16 +151,18 @@ export async function renderTemplateToCanvas(
       });
 
     } else if (el.type === 'qr') {
-      const qCanvas = document.createElement('canvas');
-      await QRCode.toCanvas(qCanvas, qrValue || 'https://peshkash.app', {
-        width: ew,
-        margin: el.margin ?? 1,
-        color: {
-          dark:  el.fgColor || '#000000',
-          light: el.bgColor === 'transparent' ? '#ffffff' : (el.bgColor || '#ffffff'),
+      const qrImage = new Image();
+      qrImage.src = svgDataUri(renderBrandedQrSvg(
+        qrValue || 'https://peshkash.app',
+        'porcelain-cameo',
+        Math.max(384, Math.round(ew)),
+        {
+          foreground: el.fgColor || '#000000',
+          background: el.bgColor === 'transparent' ? '#ffffff' : (el.bgColor || '#ffffff'),
+          transparent: el.bgColor === 'transparent',
         },
-        errorCorrectionLevel: 'H', // required to safely overlay logo
-      });
+      ));
+      await qrImage.decode();
 
       const br = (el.borderRadius || 0) * EXPORT_SCALE;
       if (br > 0) {
@@ -169,12 +171,8 @@ export async function renderTemplateToCanvas(
         ctx.roundRect(ex, ey, ew, eh, br);
         ctx.clip();
       }
-      ctx.drawImage(qCanvas, ex, ey, ew, eh);
+      ctx.drawImage(qrImage, ex, ey, ew, eh);
       if (br > 0) ctx.restore();
-
-      // Non-editable Peshkash mark centred on the QR
-      ctx.globalAlpha = 1;
-      drawPeshkashMark(ctx, ex + ew / 2, ey + eh / 2, ew * 0.22);
     }
 
     ctx.restore();

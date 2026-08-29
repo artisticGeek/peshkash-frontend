@@ -44,6 +44,14 @@ test('preflight blocks unowned hosts, undersized QR fields, and clipping', () =>
   assert.deepEqual(report.errors.map((check) => check.id), ['host', 'physical-size', 'bounds']);
 });
 
+test('preflight blocks placeholder mappings and unsafe QR color contrast', () => {
+  const placeholder = { ...design, destination: 'https://pksh.in/your-link' };
+  assert.equal(preflightDesign(placeholder, template, layout).errors.some((check) => check.id === 'mapping'), true);
+
+  const lowContrast = { ...design, qrColors: { foreground: '#777777', background: '#888888', accent: '#BB9057', transparent: false } };
+  assert.equal(preflightDesign(lowContrast, template, layout).errors.some((check) => check.id === 'contrast'), true);
+});
+
 test('the versioned document round-trips copy, layout, variables, and revision', () => {
   const document = createStudioDocument(design, layout);
   assert.equal(document.schemaVersion, STUDIO_SCHEMA_VERSION);
@@ -60,6 +68,9 @@ test('the versioned document round-trips copy, layout, variables, and revision',
     theme: design.theme,
     widthMm: design.widthMm,
     heightMm: design.heightMm,
+    displayUnit: 'mm',
+    grid: undefined,
+    qrColors: undefined,
     background: undefined,
     typography: undefined,
     visibility: undefined,

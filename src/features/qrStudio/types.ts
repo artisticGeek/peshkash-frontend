@@ -2,6 +2,7 @@ import rawManifest from './qr-template-manifest.json';
 
 export type QrStyleId = 'obsidian-ring' | 'porcelain-cameo';
 export type StudioTheme = 'light' | 'dark';
+export type StudioUnit = 'mm' | 'cm' | 'in' | 'px' | 'pt';
 export type TemplateFormat = 'landscape' | 'portrait' | 'tag' | 'square' | 'round' | 'insert' | 'ticket' | 'label';
 
 export interface QrStyleDefinition {
@@ -106,6 +107,8 @@ export interface CanvasElementBase {
   h: number;
   opacity?: number;
   layer?: ElementLayer;
+  visible?: boolean;
+  locked?: boolean;
   name?: string; // optional user label shown in the Layers panel
 }
 
@@ -152,6 +155,23 @@ export interface BackgroundSpec {
   ink: string;
 }
 
+// QR colors are part of the saved design rather than a renderer-only option so every surface
+// (Studio, QR Bank, Print Studio and exports) can produce the same code. `transparent` removes
+// only the quiet-zone/background field; the protected centre isolation ring remains scan-safe.
+export interface QrColorSpec {
+  foreground: string;
+  background: string;
+  accent: string;
+  transparent: boolean;
+}
+
+export interface GridSpec {
+  rulers: boolean;
+  visible: boolean;
+  snap: boolean;
+  sizeMm: number;
+}
+
 // Global typography choice for the template's fixed text slots (eyebrow/headline/descriptor/cta/
 // merchantName) — a curated font pairing (id into FONT_PAIRINGS) plus a uniform size multiplier,
 // so the whole copy block restyles together instead of drifting into mismatched fonts/sizes.
@@ -183,6 +203,9 @@ export interface StudioDesign extends StudioContent {
   theme: StudioTheme;
   widthMm: number;
   heightMm: number;
+  displayUnit?: StudioUnit;
+  grid?: GridSpec;
+  qrColors?: QrColorSpec;
   visibility?: ElementVisibility;
   customTemplate?: CustomTemplateSpec;
   canvasElements?: CanvasElement[];

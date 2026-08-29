@@ -1829,13 +1829,14 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import QRCode from 'qrcode';
 import { drawPeshkashMark } from '../utils/qrRenderer';
+import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 
 /** Renders a framed, branded QR card (beige bg, border, P mark, right-aligned attribution). */
 async function makeQrDataUrl(url: string, size = 180): Promise<string> {
-  const qCanvas = document.createElement('canvas');
-  await QRCode.toCanvas(qCanvas, url, { margin: 1, width: size, errorCorrectionLevel: 'H' });
+  const brandedQr = new Image();
+  brandedQr.src = svgDataUri(renderBrandedQrSvg(url, 'porcelain-cameo', Math.max(384, size * 2)));
+  await brandedQr.decode();
 
   const pad      = Math.round(size * 0.10);
   const footerH  = Math.round(size * 0.14);
@@ -1857,10 +1858,7 @@ async function makeQrDataUrl(url: string, size = 180): Promise<string> {
   ctx.strokeRect(pad - 1.5, pad - 1.5, size + 3, size + 3);
 
   // QR code
-  ctx.drawImage(qCanvas, pad, pad, size, size);
-
-  // P mark centred on QR
-  drawPeshkashMark(ctx, pad + size / 2, pad + size / 2, size * 0.22);
+  ctx.drawImage(brandedQr, pad, pad, size, size);
 
   // Footer: right-aligned "powered by [P] peshkash" — no separator
   const fY       = pad + size + footerH * 0.54;
@@ -3757,7 +3755,7 @@ async function saveQr() {
       : await axios.post<QrMapping>(adminUrl('/qr-mappings'), payload);
     qrPreview.shortQrUrl = data.shortQrUrl;
     qrPreview.finalPublicUrl = data.finalPublicUrl;
-    qrCodeDataUrl.value = await QRCode.toDataURL(data.shortQrUrl, { margin: 1, width: 180 });
+    qrCodeDataUrl.value = await makeQrDataUrl(data.shortQrUrl, 180);
     qrLocalMeta.value[data.id] = { paid: qrForm.paid, templateLabel: qrForm.templateLabel, selectedTemplateId: qrForm.selectedTemplateId };
     await loadAll();
     selectedQrMapping.value = data;
@@ -4648,7 +4646,8 @@ async function deleteVendorById(id: number, name: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
+  padding-top: 0 !important;
 }
 
 .ps-workspace {

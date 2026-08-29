@@ -5,6 +5,9 @@ import type {
   StudioTheme,
   TypographySpec,
   QrStyleId,
+  QrColorSpec,
+  GridSpec,
+  StudioUnit,
   CanvasElement,
   ElementVisibility,
   CustomTemplateSpec,
@@ -26,8 +29,11 @@ export interface StudioPageDocument {
   width: number;
   height: number;
   unit: 'mm';
+  displayUnit?: StudioUnit;
+  grid?: GridSpec;
   theme: StudioTheme;
   qrStyle: QrStyleId;
+  qrColors?: QrColorSpec;
   background?: BackgroundSpec;
   typography?: TypographySpec;
   visibility?: ElementVisibility;

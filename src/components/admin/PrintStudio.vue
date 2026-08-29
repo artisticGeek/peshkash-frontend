@@ -6,6 +6,8 @@ import { EXPORT_SCALE } from '../../utils/qrRenderer';
 import { renderTemplateSvg } from '../../features/qrStudio/templateRenderer';
 import { svgDataUri } from '../../features/qrStudio/qrRenderer';
 import { qrManifest, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
+import { synthesizeCustomTemplate } from '../../features/qrStudio/customTemplate';
+import { designFromDocument, readStudioDocument } from '../../features/designStudio/document/migrations';
 import { API_BASE_URL } from '../../config';
 
 interface QrTarget {
@@ -101,10 +103,13 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
   const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object'
     ? row.elements[0] as Partial<StudioDesign>
     : {};
+  const document = readStudioDocument(row.document);
+  const documentDesign = document ? designFromDocument(document) : {};
   return {
     ...blankDesign(),
     ...elements,
     ...settings,
+    ...documentDesign,
     id: row.id as number,
     name: String(row.name || settings.name || 'Untitled design'),
     libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0]?.id),
@@ -119,7 +124,7 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
 
 async function loadTemplates(): Promise<void> {
   try {
-    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/qr-templates`);
+    const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/designs`);
     templates.value = data.map(fromApi);
     if (templates.value.length > 0 && selectedTemplateId.value === null) {
       selectedTemplateId.value = templates.value[0].id ?? null;
@@ -131,10 +136,17 @@ async function loadTemplates(): Promise<void> {
 // destinationOverride replaces design.destination so the QR encodes the
 // target's actual shortQrUrl, not the URL the designer typed when saving.
 async function renderToPng(design: StudioDesign, destinationOverride: string): Promise<string> {
-  const def = qrManifest.templates.find(t => t.id === design.libraryTemplateId);
+  const def = qrManifest.templates.find(t => t.id === design.libraryTemplateId)
+    ?? (design.customTemplate ? synthesizeCustomTemplate(design.customTemplate, { id: design.libraryTemplateId, label: design.name }) : undefined);
   if (!def) return '';
 
-  const svg = renderTemplateSvg(def, { ...design, destination: destinationOverride });
+  const layout = design.layout;
+  const short = Math.min(def.canvas.width, def.canvas.height);
+  const overrides = layout ? {
+    qr: { x: layout.qr.x / def.canvas.width, y: layout.qr.y / def.canvas.height, size: layout.qr.w / short },
+    copy: { ...layout.copy }, merchant: { ...layout.merchant }, brandmark: { ...layout.brandmark },
+  } : {};
+  const svg = renderTemplateSvg(def, { ...design, destination: destinationOverride }, overrides);
   const uri = svgDataUri(svg);
 
   const img = new Image();

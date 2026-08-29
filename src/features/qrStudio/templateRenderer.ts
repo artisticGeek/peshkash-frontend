@@ -1,6 +1,6 @@
 import { renderBrandedQrSvg, svgDataUri } from './qrRenderer';
 import { svgPolygonPoints, svgRibbonPoints, isOutlineShape, fontPairingFor } from './elementPresets';
-import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer, TypographySpec, ElementRect } from './types';
+import type { QrTemplateDefinition, StudioContent, StudioTheme, QrStyleId, ElementVisibility, CanvasElement, BackgroundSpec, ElementLayer, TypographySpec, ElementRect, QrColorSpec } from './types';
 import logoLight from '../../assets/logo/Peshkash-Primary-For-Light.svg?raw';
 import logoDark from '../../assets/logo/Peshkash-Primary-For-Dark.svg?raw';
 
@@ -11,6 +11,7 @@ export interface TemplateRenderOptions extends StudioContent {
   canvasElements?: CanvasElement[];
   background?: BackgroundSpec;
   typography?: TypographySpec;
+  qrColors?: QrColorSpec;
 }
 
 export interface RenderOverrides {
@@ -188,7 +189,7 @@ function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark:
 function renderCanvasElements(elements: CanvasElement[] | undefined, wantLayer: ElementLayer): string {
   if (!elements || !elements.length) return '';
   return elements
-    .filter((el) => (el.layer ?? 'front') === wantLayer)
+    .filter((el) => el.visible !== false && (el.layer ?? 'front') === wantLayer)
     .map((el) => {
       const opacity = el.opacity ?? 1;
       if (el.kind === 'image') {
@@ -264,7 +265,7 @@ function renderGenericTemplateSvg(
   const surface    = dark ? '#231B16' : '#FFFFFF';
   const markColor  = '#BB9057';
 
-  const qrSvg      = renderBrandedQrSvg(options.destination, options.qrStyle, 900);
+  const qrSvg      = renderBrandedQrSvg(options.destination, options.qrStyle, 900, options.qrColors);
   const horizontal = ['landscape', 'ticket', 'label'].includes(template.format);
   const qrOnLeft   = qrX < width / 2;
   const padding    = short * 0.09;
@@ -386,7 +387,7 @@ function renderBrandKitTemplateSvg(
   const qrSize = qr.size * short;
   const qrX = qr.x * width;
   const qrY = qr.y * height;
-  const qrSvg = renderBrandedQrSvg(options.destination, options.qrStyle, 900);
+  const qrSvg = renderBrandedQrSvg(options.destination, options.qrStyle, 900, options.qrColors);
 
   const eyebrow = (x: number, y: number, anchor: 'start' | 'middle' = 'start') => vis.eyebrow === false || !options.eyebrow ? ''
     : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${15 * typeScale}" font-weight="700" letter-spacing="${4.6 * typeScale}" fill="${BRASS}">${esc(options.eyebrow.toUpperCase())}</text>`;
