@@ -672,6 +672,11 @@
             <label>Slug<input v-model.trim="menuForm.name" class="form-control" placeholder="maharaja-menu" /></label>
             <label class="check"><input v-model="menuForm.isActive" type="checkbox" /> Active</label>
             <label class="wide">Description<textarea v-model.trim="menuForm.description" rows="2" class="form-control"></textarea></label>
+            <label class="wide">Item-page story heading
+              <select v-model="menuForm.itemStoryHeading" class="form-select">
+                <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading">{{ heading }}</option>
+              </select>
+            </label>
           </div>
           <div class="actions">
             <button class="btn btn-primary" type="submit" :disabled="!selectedVendor || loading">Save Menu</button>
@@ -814,11 +819,22 @@
                 <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
                 <button class="icon-button outlined small" :disabled="!selectedMenuIdForItems" title="Link to event" @click="showLinkEventModal = true"><i class="bi bi-link-45deg"></i></button>
               </div>
-              <!-- Inline rename form -->
-              <div v-if="showMenuRenameInline" class="ribbon-rename-row">
-                <input v-model.trim="menuRenameValue" class="form-control" placeholder="New display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
-                <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i></button>
-                <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+              <!-- Compact menu settings form -->
+              <div v-if="showMenuRenameInline" class="ribbon-menu-settings">
+                <label>
+                  <span>Menu name</span>
+                  <input v-model.trim="menuRenameValue" class="form-control" placeholder="Menu display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
+                </label>
+                <label>
+                  <span>Item story heading</span>
+                  <select v-model="menuStoryHeadingValue" class="form-select">
+                    <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading">{{ heading }}</option>
+                  </select>
+                </label>
+                <div class="ribbon-menu-settings-actions">
+                  <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i> Save settings</button>
+                  <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
+                </div>
               </div>
               <!-- Linked event indicator -->
               <div v-if="selectedMenuIdForItems && linkedEventsForMenu(selectedMenuIdForItems)" class="linked-event-hint">
@@ -1703,7 +1719,7 @@
           >
             <i class="bi bi-folder2-open"></i>
             <span>Category</span>
-            <small>Groups items (e.g. Starters, Mains)</small>
+            <small>Collections, rooms, courses, or sections</small>
           </button>
           <button
             type="button"
@@ -1712,7 +1728,7 @@
           >
             <i class="bi bi-card-text"></i>
             <span>Item</span>
-            <small>A dish, drink, or add-on</small>
+            <small>A product, service, artwork, dish, or experience</small>
           </button>
         </div>
 
@@ -1723,7 +1739,7 @@
             <input
               v-model.trim="itemDraft.displayName"
               class="form-control"
-              :placeholder="itemDraft.type === 'category' ? 'e.g. Starters, Beverages' : 'e.g. Paneer Butter Masala'"
+              :placeholder="itemNamePlaceholder"
               autofocus
               @keydown.enter.prevent="saveItemFromDrawer"
             />
@@ -1752,8 +1768,8 @@
               </label>
             </div>
             <label>
-              Ingredients / details
-              <textarea v-model.trim="itemDraft.ingredients" class="form-control" rows="2" placeholder="Comma-separated ingredients or key details"></textarea>
+              {{ itemDetailsField.label }}
+              <textarea v-model.trim="itemDraft.ingredients" class="form-control" rows="2" :placeholder="itemDetailsField.placeholder"></textarea>
             </label>
             <label>
               Image
@@ -1776,12 +1792,12 @@
               </div>
             </label>
             <label>
-              Tag <small class="muted">(type freely, or tap a suggestion)</small>
+              Label / badge <small class="muted">(optional)</small>
               <div class="tag-combobox">
                 <input
                   v-model.trim="itemDraft.enumType"
                   class="form-control"
-                  placeholder="e.g. veg, spicy, sale, new…"
+                  placeholder="e.g. new, limited, bestseller, handmade…"
                 />
                 <button v-if="itemDraft.enumType" type="button" class="tag-clear-btn" title="Clear tag" @click="itemDraft.enumType = ''">
                   <i class="bi bi-x"></i>
@@ -1799,7 +1815,7 @@
               </div>
               <p v-else class="tag-no-hints">No tags used by this vendor yet — type any label above.</p>
             </label>
-            <div class="item-field-pair">
+            <div v-if="isFoodItemDraft" class="item-field-pair">
               <label>
                 Dietary
                 <select v-model="itemDraft.isVeg" class="form-select">
@@ -1819,10 +1835,10 @@
               </label>
             </div>
             <label>
-              Search tags <small class="muted">(comma-separated)</small>
-              <input v-model.trim="itemDraft.tagsText" class="form-control" placeholder="popular, seasonal, bestseller" />
+              Discovery tags <small class="muted">(comma-separated)</small>
+              <input v-model.trim="itemDraft.tagsText" class="form-control" :placeholder="itemTagsPlaceholder" />
             </label>
-            <label>
+            <label v-if="isFoodItemDraft">
               Allergens <small class="muted">(comma-separated)</small>
               <input v-model.trim="itemDraft.allergensText" class="form-control" placeholder="nuts, dairy, gluten" />
             </label>
@@ -1947,12 +1963,22 @@ const authStore = useAuthStore();
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
-type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
+type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
 type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
 type UnmappedQrTarget = { key: string; label: string; context: string; type: 'menu' | 'item'; eventId: number; menuId: number; itemId?: number; path: string };
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
+
+const ITEM_STORY_HEADINGS = [
+  'The backstory',
+  'A closer look',
+  'Worth knowing',
+  'Behind the piece',
+  'What makes it special',
+  'Know more',
+  'The finer details',
+] as const;
 
 const sections = [
   { key: 'home',          label: 'Dashboard',        icon: 'bi bi-grid-1x2' },
@@ -2103,6 +2129,7 @@ const uploadingDesignerImage = ref(false);
 const itemDraft = reactive<any>({ displayName: '', name: '', type: 'item', enumType: '', description: '', ingredients: '', image: '', price: '', tagsText: '', allergensText: '', isVeg: null, spiceLevel: 0, isActive: true, parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
+const menuStoryHeadingValue = ref<string>('The backstory');
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
@@ -2304,7 +2331,7 @@ const itemRows = ref<DraftItem[]>([]);
 
 const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
-const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', isActive: true });
+const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
@@ -2365,6 +2392,33 @@ const miscMenuItems = computed(() => miscMenu.value ? items.value.filter((item) 
 const importMenuItems = computed(() => items.value.filter((item) => item.menuId === importForm.menuId));
 const itemTypeOptions = computed(() => Array.from(new Set(vendorItems.value.map((item) => item.type || 'item'))).sort());
 const vendorEnumTypes = computed(() => [...new Set(vendorItems.value.map(i => i.enumType).filter(Boolean))].sort() as string[]);
+const isFoodItemDraft = computed(() => itemDraft.type === 'dish');
+const itemNamePlaceholder = computed(() => {
+  if (itemDraft.type === 'category') return 'e.g. Living room, Featured artists, Signature services';
+  const examples: Record<string, string> = {
+    dish: 'e.g. Truffle risotto',
+    product: 'e.g. Aurelia lounge chair',
+    service: 'e.g. Private styling consultation',
+    art: 'e.g. Monsoon Study No. 4',
+    modifier: 'e.g. Premium finish',
+    addon: 'e.g. Gift wrapping',
+  };
+  return examples[itemDraft.type] || 'e.g. Signature piece or experience';
+});
+const itemDetailsField = computed(() => {
+  const fields: Record<string, { label: string; placeholder: string }> = {
+    dish: { label: 'Ingredients / preparation', placeholder: 'Key ingredients, preparation, or serving notes' },
+    product: { label: 'Materials / specifications', placeholder: 'Materials, dimensions, finish, care, or construction' },
+    service: { label: 'What is included', placeholder: 'Scope, duration, requirements, or what the customer receives' },
+    art: { label: 'Medium / provenance', placeholder: 'Medium, dimensions, year, edition, or provenance' },
+    modifier: { label: 'Option details', placeholder: 'What changes, compatibility, or additional terms' },
+    addon: { label: 'Add-on details', placeholder: 'What is included and any relevant conditions' },
+  };
+  return fields[itemDraft.type] || { label: 'Features / details', placeholder: 'Materials, dimensions, specifications, or useful context' };
+});
+const itemTagsPlaceholder = computed(() => isFoodItemDraft.value
+  ? 'seasonal, signature, chef-special'
+  : 'new, limited, handcrafted, premium');
 const inventoryRows = computed(() => itemRows.value.filter((row) => {
   const query = itemSearch.value.toLowerCase();
   const matchesSearch = !query || [row.displayName, row.name, row.type, row.enumType].some((value) => value?.toLowerCase().includes(query));
@@ -3078,11 +3132,11 @@ async function saveEvent() {
 }
 
 function resetMenu() {
-  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', isActive: true });
+  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
 }
 
 function editMenu(menu: MenuRow) {
-  Object.assign(menuForm, menu);
+  Object.assign(menuForm, { ...menu, itemStoryHeading: menu.itemStoryHeading || 'The backstory' });
 }
 
 async function saveMenu() {
@@ -3104,6 +3158,7 @@ async function saveMenu() {
 function openMenuRename() {
   if (!selectedMenuForItems.value) return;
   menuRenameValue.value = selectedMenuForItems.value.displayName;
+  menuStoryHeadingValue.value = selectedMenuForItems.value.itemStoryHeading || 'The backstory';
   showMenuRenameInline.value = true;
 }
 
@@ -3111,7 +3166,12 @@ async function saveMenuRename() {
   if (!selectedMenuForItems.value || !menuRenameValue.value.trim()) return;
   try {
     const menu = selectedMenuForItems.value;
-    await axios.put(adminUrl(`/menus/${menu.id}`), { ...menu, displayName: menuRenameValue.value.trim(), vendorId: selectedVendorId.value });
+    await axios.put(adminUrl(`/menus/${menu.id}`), {
+      ...menu,
+      displayName: menuRenameValue.value.trim(),
+      itemStoryHeading: menuStoryHeadingValue.value,
+      vendorId: selectedVendorId.value,
+    });
     showMenuRenameInline.value = false;
     await loadAll();
     setNotice('Menu renamed');
@@ -3379,9 +3439,9 @@ function saveItemFromDrawer() {
       image: itemDraft.type === 'category' ? '' : itemDraft.image,
       price: itemDraft.type === 'category' ? '' : itemDraft.price,
       tags: itemDraft.type === 'category' ? [] : splitList(itemDraft.tagsText),
-      allergens: itemDraft.type === 'category' ? [] : splitList(itemDraft.allergensText),
-      isVeg: itemDraft.type === 'category' ? null : itemDraft.isVeg,
-      spiceLevel: itemDraft.type === 'category' ? null : Number(itemDraft.spiceLevel || 0),
+      allergens: isFoodItemDraft.value ? splitList(itemDraft.allergensText) : [],
+      isVeg: isFoodItemDraft.value ? itemDraft.isVeg : null,
+      spiceLevel: isFoodItemDraft.value ? Number(itemDraft.spiceLevel || 0) : null,
       parentId,
       isActive: Boolean(itemDraft.isActive),
     };
@@ -6279,6 +6339,18 @@ td a {
   padding: 6px 8px;
 }
 
+.ribbon-menu-settings {
+  background: #f8f3ec;
+  border: 1px solid #e0d5c3;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.9fr) auto;
+  padding: 10px;
+}
+.ribbon-menu-settings label { color: #6b5a48; font-size: 0.7rem; gap: 4px; }
+.ribbon-menu-settings-actions { align-items: flex-end; display: flex; gap: 5px; }
+
 .pill-accent {
   background: #fef3e0;
   color: #8b5527;
@@ -8049,6 +8121,8 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 }
 /* QR view mode stacks on truly narrow screens only */
 @media (max-width: 620px) {
+  .ribbon-menu-settings { grid-template-columns: 1fr; }
+  .ribbon-menu-settings-actions { align-items: center; }
   .qr-view-body { grid-template-columns: 1fr; overflow-y: auto; }
   .qr-view-visual-pane { border-right: none; border-bottom: 1px solid #e6dfd4; }
   .qr-view-chart-wrap { height: 140px; }
