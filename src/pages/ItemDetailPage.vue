@@ -379,7 +379,7 @@ onMounted(loadItem)
 .pk-item-header h1 {
   color: #19140f;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.8rem, 7vw, 5.8rem);
+  font-size: clamp(2.55rem, 6vw, 5rem);
   font-weight: 500;
   letter-spacing: -0.045em;
   line-height: 0.96;
@@ -487,7 +487,7 @@ onMounted(loadItem)
 @media (max-width: 640px) {
   .pk-item-page { padding-left: 1rem; padding-right: 1rem; }
   .pk-item-header { padding-bottom: 2rem; padding-top: 3.5rem; }
-  .pk-item-header h1 { font-size: clamp(2.85rem, 14vw, 4.5rem); }
+  .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
   .pk-item-media .ratio { --bs-aspect-ratio: 78%; }
   .pk-story { margin-top: 3.5rem; padding-inline: 0.35rem; }
   .pk-story-copy { line-height: 1.7; }
