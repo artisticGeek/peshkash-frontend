@@ -1,5 +1,5 @@
 <template>
-  <PublicNav />
+  <PublicNav v-if="!error" />
   <div
     v-if="showFeedback"
     class="position-fixed top-0 start-50 translate-middle-x mt-3"
@@ -8,11 +8,18 @@
     <div class="alert alert-warning shadow" role="alert">{{ feedback }}</div>
   </div>
 
-  <div class="container py-3">
+  <PublicErrorState
+    v-if="error"
+    title="This item is not available right now"
+    message="The link may have changed, or the item may be temporarily unavailable. Please try again."
+    :reference="`${eventName}/${menuName}/${itemName}`"
+    @retry="loadItem"
+  />
+
+  <div v-else class="container py-3">
     <div v-if="isLoading" class="pk-page-loader">
       <peshkash-loader size="110" theme="light" label="Loading item" />
     </div>
-    <div v-else-if="error" class="text-danger">{{ error }}</div>
     <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
       <button v-if="canGoBack" class="pk-back-btn" @click="router.back()" aria-label="Go back">
         <i class="bi bi-chevron-left"></i> Back
@@ -122,6 +129,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PublicNav from '../components/PublicNav.vue';
+import PublicErrorState from '../components/PublicErrorState.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
@@ -168,8 +176,9 @@ const analytics = useAnalytics()
 const userReaction = ref<'like' | 'dislike' | null>(null)
 const isBookmarked = ref(false)
 
-function reactionKey() { return `pk-reaction-${itemName}` }
-function bookmarkKey() { return `pk-bookmark-${itemName}` }
+function engagementKey() { return `${eventName}:${menuName}:${itemName}` }
+function reactionKey() { return `pk-reaction-${engagementKey()}` }
+function bookmarkKey() { return `pk-bookmark-${engagementKey()}` }
 
 function loadEngagement() {
   try {
@@ -209,18 +218,40 @@ function toggleBookmark() {
   })
 }
 
-function shareItem() {
+async function shareItem() {
   analytics.track('share_click', {
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   });
-  navigator.share?.({ title: itemData.value?.name, url: window.location.href });
+  const shareData = { title: itemData.value?.displayName || itemData.value?.name, url: window.location.href }
+
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData)
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('Unable to share item:', err)
+    }
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    feedback.value = 'Link copied'
+    showFeedback.value = true
+    window.setTimeout(() => { showFeedback.value = false }, 2200)
+  } catch (err) {
+    console.error('Unable to copy item link:', err)
+  }
 }
 
-onMounted(async () => {
+async function loadItem() {
+  isLoading.value = true
+  error.value = null
+  itemData.value = null
   loadEngagement()
+
   try {
     const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}/item/${itemName}`)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -244,9 +275,13 @@ onMounted(async () => {
       itemId: data?.numericId,
     })
   } catch (err: any) {
-    error.value = err.message
+    error.value = 'unavailable'
+    console.error('Error loading item:', err)
   } finally {
     isLoading.value = false
+
+    if (error.value) return
+
     await nextTick()
     const els = document.querySelectorAll<HTMLElement>('.pk-reveal');
     const io = new IntersectionObserver((entries) => {
@@ -264,7 +299,9 @@ onMounted(async () => {
     }, { threshold: 0.2 });
     els.forEach((el) => io.observe(el));
   }
-})
+}
+
+onMounted(loadItem)
 </script>
 
 <style scoped>

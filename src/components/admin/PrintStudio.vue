@@ -3,11 +3,12 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import axios from 'axios';
 import { EXPORT_SCALE } from '../../utils/qrRenderer';
-import { renderTemplateSvg } from '../../features/qrStudio/templateRenderer';
+import { brandKitLayout, renderTemplateSvg } from '../../features/qrStudio/templateRenderer';
 import { svgDataUri } from '../../features/qrStudio/qrRenderer';
-import { qrManifest, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
+import { qrManifest, type FixedElementLayout, type QrTemplateDefinition, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
 import { synthesizeCustomTemplate } from '../../features/qrStudio/customTemplate';
 import { designFromDocument, readStudioDocument } from '../../features/designStudio/document/migrations';
+import { preflightDesign } from '../../features/designStudio/export/preflight';
 import { API_BASE_URL } from '../../config';
 
 interface QrTarget {
@@ -66,15 +67,56 @@ const editTemplateRoute = computed(() =>
     : '/dashboard/qr-templates'
 );
 
-function qrValueForTarget(target: QrTarget): string {
-  const mapping = props.qrMappings.find(m => m.url === target.path || m.url === target.path + '/');
-  return mapping?.shortQrUrl || (window.location.origin + target.path);
+function mappingForTarget(target: QrTarget): QrMapping | null {
+  return props.qrMappings.find(m => m.url === target.path || m.url === target.path + '/') ?? null;
+}
+
+function qrValueForTarget(target: QrTarget): string | null {
+  return mappingForTarget(target)?.shortQrUrl ?? null;
 }
 
 function qrHashForTarget(target: QrTarget): string | null {
-  const mapping = props.qrMappings.find(m => m.url === target.path || m.url === target.path + '/');
-  return mapping?.qrHash ?? null;
+  return mappingForTarget(target)?.qrHash ?? null;
 }
+
+const unmappedTargets = computed(() => props.targets.filter(target => !mappingForTarget(target)));
+
+function templateDefinition(design: StudioDesign): QrTemplateDefinition | undefined {
+  return qrManifest.templates.find(t => t.id === design.libraryTemplateId)
+    ?? (design.customTemplate ? synthesizeCustomTemplate(design.customTemplate, { id: design.libraryTemplateId, label: design.name }) : undefined);
+}
+
+function layoutFor(design: StudioDesign, template: QrTemplateDefinition): FixedElementLayout {
+  if (design.layout) return design.layout;
+  const kit = brandKitLayout(template);
+  const short = Math.min(template.canvas.width, template.canvas.height);
+  const qrSize = template.qr.size * short;
+  return {
+    qr: { x: template.qr.x * template.canvas.width, y: template.qr.y * template.canvas.height, w: qrSize, h: qrSize },
+    ...kit,
+  };
+}
+
+const printPreflight = computed(() => {
+  const design = selectedTemplate.value;
+  const firstMapping = props.targets.map(mappingForTarget).find((mapping): mapping is QrMapping => Boolean(mapping));
+  if (!design || !firstMapping) return null;
+  const definition = templateDefinition(design);
+  if (!definition) return null;
+  // Local development still validates the production short-link shape; the rendered
+  // preview keeps the local URL so scan testing remains useful.
+  const destination = import.meta.env.DEV
+    ? `https://peshkash.app/${firstMapping.qrHash}`
+    : firstMapping.shortQrUrl;
+  return preflightDesign({ ...design, destination }, definition, layoutFor(design, definition));
+});
+
+const canExport = computed(() => Boolean(
+  selectedTemplate.value
+  && props.targets.length
+  && unmappedTargets.value.length === 0
+  && printPreflight.value?.canExport
+));
 
 function safeFilename(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -136,8 +178,7 @@ async function loadTemplates(): Promise<void> {
 // destinationOverride replaces design.destination so the QR encodes the
 // target's actual shortQrUrl, not the URL the designer typed when saving.
 async function renderToPng(design: StudioDesign, destinationOverride: string): Promise<string> {
-  const def = qrManifest.templates.find(t => t.id === design.libraryTemplateId)
-    ?? (design.customTemplate ? synthesizeCustomTemplate(design.customTemplate, { id: design.libraryTemplateId, label: design.name }) : undefined);
+  const def = templateDefinition(design);
   if (!def) return '';
 
   const layout = design.layout;
@@ -172,20 +213,24 @@ async function generatePreviews(): Promise<void> {
   previews.value = {};
   const result: Record<string, string> = {};
   for (const target of props.targets) {
-    result[target.key] = await renderToPng(selectedTemplate.value, qrValueForTarget(target));
+    const destination = qrValueForTarget(target);
+    if (!destination) continue;
+    result[target.key] = await renderToPng(selectedTemplate.value, destination);
   }
   previews.value = result;
   isGenerating.value = false;
 }
 
 async function downloadAll(): Promise<void> {
-  if (!selectedTemplate.value || !props.targets.length) return;
+  if (!selectedTemplate.value || !canExport.value) return;
   isDownloading.value = true;
   downloadProgress.value = 0;
   downloadTotal.value = props.targets.length;
   for (let i = 0; i < props.targets.length; i++) {
     const target = props.targets[i];
-    const png = await renderToPng(selectedTemplate.value, qrValueForTarget(target));
+    const destination = qrValueForTarget(target);
+    if (!destination) continue;
+    const png = await renderToPng(selectedTemplate.value, destination);
     const link = document.createElement('a');
     link.download = `${safeFilename(target.label)}.png`;
     link.href = png;
@@ -255,7 +300,7 @@ onMounted(() => { loadTemplates(); });
 
         <button
           class="btn btn-primary btn-sm"
-          :disabled="!selectedTemplate || targets.length === 0 || isDownloading || isGenerating"
+          :disabled="!canExport || isDownloading || isGenerating"
           @click="downloadAll"
         >
           <template v-if="isDownloading">
@@ -278,6 +323,24 @@ onMounted(() => { loadTemplates(); });
       Each PNG will be <strong>{{ selectedTemplate.widthMm }} × {{ selectedTemplate.heightMm }} mm</strong>
       at 300 DPI — <strong>{{ exportPixelSize.w }} × {{ exportPixelSize.h }} px</strong>
     </p>
+
+    <div v-if="unmappedTargets.length" class="ps-production-blocker" role="alert">
+      <i class="bi bi-shield-exclamation"></i>
+      <div>
+        <strong>Permanent QR mapping required</strong>
+        <p>{{ unmappedTargets.length }} target{{ unmappedTargets.length === 1 ? '' : 's' }} would otherwise become a non-remappable direct link. Create the assets in QR Bank before printing.</p>
+      </div>
+      <RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr">Open QR Bank</RouterLink>
+    </div>
+
+    <div v-else-if="printPreflight && !printPreflight.canExport" class="ps-production-blocker" role="alert">
+      <i class="bi bi-shield-x"></i>
+      <div>
+        <strong>Print preflight blocked</strong>
+        <p>{{ printPreflight.errors.map(error => error.detail).join(' ') }}</p>
+      </div>
+      <RouterLink class="btn btn-outline-secondary btn-sm" :to="editTemplateRoute">Fix template</RouterLink>
+    </div>
 
     <!-- No targets -->
     <div v-if="targets.length === 0" class="ps-empty ps-empty--inline">
@@ -312,7 +375,7 @@ onMounted(() => { loadTemplates(); });
           <strong class="ps-card-label">{{ target.label }}</strong>
           <span class="ps-card-sub">{{ target.context }} · {{ target.type }}</span>
           <code v-if="qrHashForTarget(target)" class="ps-card-hash">{{ qrHashForTarget(target) }}</code>
-          <span v-else class="ps-card-direct" title="No QR Bank entry — encodes the full path URL">direct link</span>
+          <span v-else class="ps-card-direct" title="Create a permanent QR Bank mapping before printing">mapping required</span>
         </div>
 
         <!-- Download -->
@@ -350,6 +413,22 @@ onMounted(() => { loadTemplates(); });
   flex-direction: column;
   gap: 16px;
 }
+
+.ps-production-blocker {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #d7a45d;
+  border-left-width: 4px;
+  color: #5f4322;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.ps-production-blocker > i { font-size: 1.35rem; }
+.ps-production-blocker strong { display: block; font-size: 0.86rem; }
+.ps-production-blocker p { font-size: 0.78rem; margin: 2px 0 0; }
 
 /* Topbar */
 .ps-topbar {

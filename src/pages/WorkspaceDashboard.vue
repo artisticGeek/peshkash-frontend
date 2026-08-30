@@ -396,15 +396,15 @@
               <!-- RIGHT PANE: static QR -->
               <div class="modal-pane qr-pane">
                 <h4>Contact Card QR</h4>
-                <p class="hint">Saving the vendor with the contact card enabled automatically activates this mapping. Only use "Apply hash change" if you've edited the hash after printing physical QR codes.</p>
+                <p class="hint">Saving the vendor with the contact card enabled activates this mapping. Once created, the permanent hash is locked; changing vendor details only updates its destination.</p>
                 <div class="preview-box">
                   <div><span>Destination</span><code>{{ vendorQrDraft.url || 'Save a vendor to generate destination' }}</code></div>
                   <label>
                     QR Hash
-                    <input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" @input="renderVendorQr" />
-                    <span v-if="qrHashChanged" class="input-hint warn">
-                      <i class="bi bi-exclamation-triangle-fill"></i>
-                      Changed from <code>{{ savedQrHash }}</code>
+                    <input v-model.trim="vendorQrDraft.qrHash" class="form-control" placeholder="radisson-gurgaon-card" :readonly="Boolean(savedQrHash)" @input="renderVendorQr" />
+                    <span v-if="savedQrHash" class="input-hint">
+                      <i class="bi bi-lock-fill"></i>
+                      Permanent after activation
                     </span>
                   </label>
                   <div v-if="vendorQrCodeDataUrl && vendorForm.hasContactPage" class="qr-preview-card">
@@ -418,25 +418,6 @@
                   </div>
                   <p v-else class="muted">Add the contact card product to preview and activate the vendor QR.</p>
 
-                  <!-- QR hash change confirmation -->
-                  <div v-if="qrHashConfirmPending" class="qr-hash-warn">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                    <p>Existing printed QR codes pointing to <strong>{{ savedQrHash }}</strong> will stop working. Only change this if you're replacing the physical QR.</p>
-                    <div class="qr-hash-warn-actions">
-                      <button type="button" class="btn btn-danger btn-sm" @click="confirmAndActivateQr">Yes, update QR</button>
-                      <button type="button" class="btn btn-outline-secondary btn-sm" @click="qrHashConfirmPending = false">Cancel</button>
-                    </div>
-                  </div>
-
-                  <button
-                    v-if="showActivateQr && !qrHashConfirmPending"
-                    class="btn btn-outline-secondary btn-sm"
-                    type="button"
-                    @click="handleActivateQr"
-                  >
-                    <i class="bi bi-arrow-repeat"></i>
-                    Apply hash change
-                  </button>
                 </div>
               </div>
             </div>
@@ -1114,6 +1095,9 @@
               <button :class="{ active: qrTypeFilter === 'all' }" @click="qrTypeFilter = 'all'">All</button>
               <button :class="{ active: qrTypeFilter === 'dynamic' }" @click="qrTypeFilter = 'dynamic'">Event</button>
               <button :class="{ active: qrTypeFilter === 'contact' }" @click="qrTypeFilter = 'contact'">Contact</button>
+              <button :class="{ active: qrTypeFilter === 'menu' }" @click="qrTypeFilter = 'menu'">Menu</button>
+              <button :class="{ active: qrTypeFilter === 'item' }" @click="qrTypeFilter = 'item'">Item</button>
+              <button :class="{ active: qrTypeFilter === 'custom' }" @click="qrTypeFilter = 'custom'">Custom</button>
             </div>
             <select v-model="qrSortBy" class="form-select form-select-sm qr-sort-select">
               <option value="scans">Most scans</option>
@@ -2119,7 +2103,6 @@ function removeSocial(idx: number) { vendorSocials.value.splice(idx, 1); }
 
 // QR hash change detection
 const savedQrHash          = ref('');
-const qrHashConfirmPending = ref(false);
 const vendorBusinessDays = ref('');
 const vendorBusinessHours = ref('');
 
@@ -2372,12 +2355,6 @@ const vendorQrIsActive = computed(() => Boolean(
   && vendorQrDraft.qrHash
   && qrMappings.value.some((mapping) => mapping.qrHash === vendorQrDraft.qrHash && mapping.url === vendorQrDraft.url && mapping.isActive)
 ));
-const qrHashChanged = computed(() =>
-  Boolean(vendorForm.id && savedQrHash.value && vendorQrDraft.qrHash && vendorQrDraft.qrHash !== savedQrHash.value)
-);
-const showActivateQr = computed(() =>
-  Boolean(vendorForm.id && vendorForm.hasContactPage && vendorQrDraft.qrHash && !vendorQrIsActive.value && qrHashChanged.value)
-);
 const publishProducts = computed(() => [
   {
     key: 'contactCard',
@@ -2820,7 +2797,6 @@ function resetVendor() {
   vendorMapUrl.value = '';
   vendorSocials.value        = [];
   savedQrHash.value          = '';
-  qrHashConfirmPending.value = false;
   locationSearchQuery.value  = '';
   locationDisplay.value      = '';
   locationSuggestions.value  = [];
@@ -2847,9 +2823,9 @@ function editVendor(vendor: Vendor) {
   showVendorEditor.value = true;
   activeSection.value = 'vendors';
   // Track the hash that's already active so we can detect changes
-  const existingMapping = qrMappings.value.find(m => m.url === `/vendor/${vendor.name}` && m.isActive);
-  savedQrHash.value = existingMapping?.qrHash ?? `${vendor.name}-card`;
-  qrHashConfirmPending.value = false;
+  const existingMapping = qrMappings.value.find(m => m.vendorId === vendor.id && m.url?.startsWith('/vendor/') && m.isActive)
+    ?? qrMappings.value.find(m => m.url === `/vendor/${vendor.name}` && m.isActive);
+  savedQrHash.value = existingMapping?.qrHash ?? '';
   syncVendorQrDraft();
 }
 
@@ -2916,7 +2892,9 @@ async function syncVendorQrDraft() {
     return;
   }
   vendorQrDraft.url = `/vendor/${vendorForm.name}`;
-  if (!vendorQrDraft.qrHash || vendorQrDraft.qrHash.endsWith('-card')) {
+  if (savedQrHash.value) {
+    vendorQrDraft.qrHash = savedQrHash.value;
+  } else if (!vendorQrDraft.qrHash) {
     vendorQrDraft.qrHash = `${vendorForm.name}-card`;
   }
   await renderVendorQr();
@@ -2970,31 +2948,20 @@ async function saveVendorQr() {
   }
 }
 
-function handleActivateQr() {
-  if (qrHashChanged.value) {
-    qrHashConfirmPending.value = true;
-  } else {
-    saveVendorQr();
-  }
-}
-
-async function confirmAndActivateQr() {
-  qrHashConfirmPending.value = false;
-  await saveVendorQr();
-}
-
 async function saveVendorQrMapping() {
   if (!vendorForm.id) throw new Error('Save the vendor before activating the QR');
   if (!vendorForm.hasContactPage) throw new Error('Add the contact card product before activating this QR');
   await syncVendorQrDraft();
   requireSlug(vendorQrDraft.qrHash, 'QR hash');
-  const payload = { qrHash: vendorQrDraft.qrHash, url: vendorQrDraft.url, isActive: true };
-  const existing = qrMappings.value.find((m) => m.qrHash === vendorQrDraft.qrHash);
+  const existing = qrMappings.value.find((m) => m.qrHash === (savedQrHash.value || vendorQrDraft.qrHash))
+    ?? qrMappings.value.find((m) => m.vendorId === vendorForm.id && m.url?.startsWith('/vendor/'));
+  const permanentHash = existing?.qrHash || vendorQrDraft.qrHash;
+  const payload = { qrHash: permanentHash, url: vendorQrDraft.url, isActive: true, vendorId: vendorForm.id };
   existing
     ? await axios.put(adminUrl(`/qr-mappings/${existing.id}`), payload)
     : await axios.post(adminUrl('/qr-mappings'), payload);
-  savedQrHash.value = vendorQrDraft.qrHash;
-  qrHashConfirmPending.value = false;
+  savedQrHash.value = permanentHash;
+  vendorQrDraft.qrHash = permanentHash;
 }
 
 function resetEvent() {
@@ -3744,9 +3711,10 @@ async function saveQr() {
       vendorId: selectedVendorId.value || null,
       type: isEventType ? 'event' : 'static',
     };
-    if (isEventType) {
+    if (isEventType || qrTargetType.value === 'menu' || qrTargetType.value === 'item') {
       payload.eventId = qrForm.eventId || null;
-    } else {
+    }
+    if (!isEventType) {
       payload.url = qrForm.url;
     }
     const existingId = selectedQrMapping.value?.id;
@@ -3945,10 +3913,7 @@ const qrTypeFilter = ref('all');
 const qrSortBy = ref<'scans' | 'hash' | 'status'>('scans');
 
 const filteredQrMappings = computed(() => {
-  let list = vendorQrMappings.value.filter((m) => {
-    const t = qrTypeBadge(m).css;
-    return t === 'dynamic' || t === 'contact';
-  });
+  let list = [...vendorQrMappings.value];
   if (qrSearch.value) {
     const q = qrSearch.value.toLowerCase();
     list = list.filter((m) => m.qrHash.toLowerCase().includes(q) || qrTargetLabel(m).toLowerCase().includes(q));

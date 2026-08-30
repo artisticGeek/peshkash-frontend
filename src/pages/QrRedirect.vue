@@ -3,7 +3,12 @@
     <div v-if="loading" class="pk-page-loader pk-page-loader--fullscreen">
       <peshkash-loader size="120" theme="dark" label="Resolving QR" />
     </div>
-    <p v-if="error" class="qr-redirect-error">{{ errorMessage }}</p>
+    <PublicErrorState
+      v-if="error"
+      title="This QR is not available right now"
+      :reference="currentHash"
+      @retry="resolveQr(currentHash)"
+    />
   </div>
 </template>
 
@@ -12,17 +17,18 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { API_BASE_URL } from '../config';
 import { gtagEvent } from '../utils/ga';
+import PublicErrorState from '../components/PublicErrorState.vue';
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(true);
 const error = ref(false);
-const errorMessage = ref('');
+const currentHash = ref('');
 
 async function resolveQr(qrHash: string) {
   loading.value = true;
   error.value = false;
-  errorMessage.value = '';
+  currentHash.value = qrHash;
 
   try {
     // Add timestamp to bust any HTTP/CDN caching so every scan reaches the server
@@ -40,17 +46,17 @@ async function resolveQr(qrHash: string) {
         gtagEvent('qr_scan', { qr_hash: qrHash });
         router.push(redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`);
       } else {
-        errorMessage.value = 'API response missing redirectionUrl.';
+        console.error('[QR] Redirect response did not include a destination.');
         error.value = true;
         loading.value = false;
       }
     } else {
-      errorMessage.value = `API responded with status: ${apiResponse.status}`;
+      console.error(`[QR] Redirect lookup failed with status ${apiResponse.status}.`);
       error.value = true;
       loading.value = false;
     }
   } catch (err: any) {
-    errorMessage.value = `Error fetching redirect URL: ${err.message}`;
+    console.error('[QR] Redirect lookup failed.', err);
     error.value = true;
     loading.value = false;
   }
@@ -59,7 +65,7 @@ async function resolveQr(qrHash: string) {
 onMounted(() => {
   const qrHash = route.params.qrHash as string;
   if (!qrHash) {
-    errorMessage.value = 'QR hash not found in route.';
+    currentHash.value = '';
     error.value = true;
     loading.value = false;
     return;
