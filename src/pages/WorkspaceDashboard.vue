@@ -442,6 +442,74 @@
               <label>Active To<input v-model="eventForm.endTime" type="datetime-local" class="form-control" /></label>
               <label class="wide">Description<textarea v-model.trim="eventForm.eventDescription" rows="2" class="form-control"></textarea></label>
             </div>
+            <section class="event-experience-editor">
+              <div class="experience-heading">
+                <div>
+                  <p class="eyebrow">Public event page</p>
+                  <h4>Registration & reminder experience</h4>
+                  <p class="hint">A standalone, QR-ready page. It does not require a menu.</p>
+                </div>
+                <label class="switch-label">
+                  <input v-model="eventForm.experienceConfig.enabled" type="checkbox" />
+                  <span>Enable page</span>
+                </label>
+              </div>
+              <p v-if="eventForm.experienceConfig.enabled" class="experience-save-note"><i class="bi bi-info-circle"></i> These settings are saved only when you choose <strong>{{ eventForm.id ? 'Update Event' : 'Create Event' }}</strong>.</p>
+              <template v-if="eventForm.experienceConfig.enabled">
+                <div class="form-grid">
+                  <label>Eyebrow<input v-model.trim="eventForm.experienceConfig.eyebrow" class="form-control" placeholder="Live in New Delhi · 30 August" /></label>
+                  <label>Hero image URL<input v-model.trim="eventForm.experienceConfig.heroImageUrl" type="url" class="form-control" placeholder="https://…" /></label>
+                  <label>Venue name<input v-model.trim="eventForm.experienceConfig.venueName" class="form-control" placeholder="Bharat Mandapam" /></label>
+                  <label>Map link<input v-model.trim="eventForm.experienceConfig.mapUrl" type="url" class="form-control" placeholder="https://maps.google.com/…" /></label>
+                  <label class="wide">Venue address<textarea v-model.trim="eventForm.experienceConfig.venueAddress" rows="2" class="form-control" /></label>
+                  <label>Live stream URL<input v-model.trim="eventForm.experienceConfig.livestreamUrl" type="url" class="form-control" placeholder="YouTube or other live URL" /></label>
+                  <label>Live CTA label<input v-model.trim="eventForm.experienceConfig.livestreamLabel" class="form-control" placeholder="Watch live" /></label>
+                </div>
+                <div class="experience-options" aria-label="Event page options">
+                  <label><input v-model="eventForm.experienceConfig.registrationEnabled" type="checkbox" /> Registration</label>
+                  <label><input v-model="eventForm.experienceConfig.reminderEnabled" type="checkbox" /> Set reminder</label>
+                  <label><input v-model="eventForm.experienceConfig.countdownEnabled" type="checkbox" /> Countdown</label>
+                  <label><input v-model="eventForm.experienceConfig.organizerVisible" type="checkbox" /> Show organizer</label>
+                  <label class="reminder-mode">Reminder
+                    <select v-model="eventForm.experienceConfig.reminderMode" class="form-select">
+                      <option value="timed">Use event timings</option>
+                      <option value="all_day">All-day calendar entry</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="guest-editor">
+                  <div class="guest-editor-heading">
+                    <div><h5>Guests, speakers & performers</h5><p class="hint">Optional profiles; no Peshkash account required.</p></div>
+                    <button class="btn btn-outline-primary btn-sm" type="button" @click="addEventGuest"><i class="bi bi-plus-lg"></i> Add guest</button>
+                  </div>
+                  <article v-for="(guest, index) in eventForm.experienceConfig.guests" :key="guest.id" class="guest-editor-card">
+                    <div class="guest-card-toolbar">
+                      <strong>Guest {{ index + 1 }}</strong>
+                      <span>
+                        <button class="icon-btn" type="button" :disabled="index === 0" aria-label="Move guest up" @click="moveEventGuest(index, -1)"><i class="bi bi-arrow-up"></i></button>
+                        <button class="icon-btn" type="button" :disabled="index === eventForm.experienceConfig.guests.length - 1" aria-label="Move guest down" @click="moveEventGuest(index, 1)"><i class="bi bi-arrow-down"></i></button>
+                        <button class="icon-btn icon-btn--danger" type="button" aria-label="Remove guest" @click="removeEventGuest(index)"><i class="bi bi-trash"></i></button>
+                      </span>
+                    </div>
+                    <div class="form-grid compact-grid">
+                      <label>Name<input v-model.trim="guest.name" class="form-control" placeholder="Guest name" /></label>
+                      <label>Role<input v-model.trim="guest.role" class="form-control" placeholder="Speaker, singer, exhibitor…" /></label>
+                      <label class="wide">Short bio<textarea v-model.trim="guest.bio" rows="2" class="form-control" /></label>
+                      <label>Portrait URL<input v-model.trim="guest.imageUrl" type="url" class="form-control" /></label>
+                      <label>Peshkash vendor slug<input v-model.trim="guest.vendorSlug" class="form-control" placeholder="Optional linked profile" /></label>
+                      <label>Website<input v-model.trim="guest.website" type="url" class="form-control" /></label>
+                      <label>Phone<input v-model.trim="guest.phone" type="tel" class="form-control" /></label>
+                      <label>Instagram<input v-model.trim="guest.instagram" type="url" class="form-control" /></label>
+                      <label>YouTube<input v-model.trim="guest.youtube" type="url" class="form-control" /></label>
+                      <label>LinkedIn<input v-model.trim="guest.linkedin" type="url" class="form-control" /></label>
+                      <label class="guest-visible"><input v-model="guest.visible" type="checkbox" /> Visible on page</label>
+                    </div>
+                  </article>
+                  <p v-if="!eventForm.experienceConfig.guests.length" class="muted guest-empty">No guests added. The page will focus on the event, countdown and CTAs.</p>
+                </div>
+                <a v-if="eventForm.id" class="event-page-preview" :href="`/event/${eventForm.name}`" target="_blank" rel="noreferrer"><i class="bi bi-box-arrow-up-right"></i> Preview public event page</a>
+              </template>
+            </section>
             <div class="actions">
               <button class="btn btn-primary" type="submit" :disabled="!selectedVendor">{{ eventForm.id ? 'Update Event' : 'Create Event' }}</button>
               <button class="btn btn-outline-secondary" type="button" @click="closeEventEditor">Cancel</button>
@@ -449,12 +517,13 @@
           </form>
           <div class="table-wrap">
             <table class="table table-sm align-middle action-table events-table">
-              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Menus</th><th></th></tr></thead>
+              <thead><tr><th>Event</th><th>Window</th><th>Status</th><th>Experience</th><th>Menus</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="event in vendorEvents" :key="event.id">
                   <td><strong>{{ event.displayName }}</strong><br /><code>{{ event.name }}</code></td>
                   <td>{{ eventWindow(event) }}</td>
                   <td><span class="status-pill" :class="`status-${event.status}`">{{ event.status }}</span></td>
+                  <td><span class="status-pill" :class="event.experienceConfig?.enabled ? 'status-active' : 'status-draft'">{{ event.experienceConfig?.enabled ? 'Standalone page' : 'Menu-based' }}</span></td>
                   <td>{{ eventMenus(event.id).length }}</td>
                   <td class="row-actions">
                     <RouterLink class="icon-btn" :to="adminEventRoute(event)" title="Open event workspace"><i class="bi bi-box-arrow-up-right"></i></RouterLink>
@@ -463,7 +532,7 @@
                     <button v-if="event.status !== 'active'" class="icon-btn icon-btn--danger" title="Delete event" @click.stop="deleteEvent(event)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
-                <tr v-if="!vendorEvents.length"><td colspan="5" class="muted">No events for this vendor yet.</td></tr>
+                <tr v-if="!vendorEvents.length"><td colspan="6" class="muted">No events for this vendor yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -479,8 +548,8 @@
             <div class="event-steps">
               <span class="step done"><i class="bi bi-check-circle-fill"></i> Details</span>
               <span class="step-arrow">→</span>
-              <span class="step" :class="{ done: selectedEventMenus.length > 0 }">
-                <i :class="selectedEventMenus.length > 0 ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i> Menu
+              <span class="step" :class="{ done: selectedEventMenus.length > 0 || selectedEventHasPage }">
+                <i :class="selectedEventMenus.length > 0 || selectedEventHasPage ? 'bi bi-check-circle-fill' : 'bi bi-circle'"></i> Public experience
               </span>
               <span class="step-arrow">→</span>
               <span class="step" :class="{ done: selectedEventForItems?.status === 'active' }">
@@ -492,12 +561,13 @@
             </div>
           </div>
           <div class="hero-actions">
+            <button class="icon-btn icon-btn--outlined" type="button" title="Edit event and public page" @click="openEventEditorFromWorkspace(selectedEventForItems!)"><i class="bi bi-pencil"></i></button>
             <button
               v-if="selectedEventForItems?.status !== 'active'"
               class="btn btn-primary"
-              :disabled="!selectedEventMenus.length"
+              :disabled="!selectedEventMenus.length && !selectedEventHasPage"
               @click="openPublishDrawer(selectedEventForItems)"
-              :title="!selectedEventMenus.length ? 'Link a menu first' : 'Activate event'"
+              :title="!selectedEventMenus.length && !selectedEventHasPage ? 'Link a menu or enable the public event page first' : 'Activate event'"
             ><i class="bi bi-send-check"></i> Activate</button>
             <button
               v-else
@@ -514,7 +584,7 @@
             <div class="event-qr-header">
               <div>
                 <h3>Event QR</h3>
-                <p class="hint">One permanent QR for this event. It always resolves to the current linked menu — no reprinting needed when menus change.</p>
+                <p class="hint">One permanent QR for this event. It resolves to the standalone event page when enabled, otherwise to the current linked menu.</p>
               </div>
               <span v-if="eventQrMapping" class="status-pill status-active">Active</span>
             </div>
@@ -526,7 +596,7 @@
                   <code>{{ eventQrMapping.shortQrUrl }}</code>
                   <button class="btn btn-outline-secondary btn-sm" @click="copyText(eventQrMapping!.shortQrUrl)" title="Copy URL"><i class="bi bi-clipboard"></i></button>
                 </div>
-                <p class="hint dynamic-hint"><i class="bi bi-arrow-repeat"></i> Resolves dynamically → serves current linked menu at scan time</p>
+                <p class="hint dynamic-hint"><i class="bi bi-arrow-repeat"></i> Resolves dynamically → {{ selectedEventHasPage ? 'serves the registration and reminder page' : 'serves the current linked menu' }}</p>
                 <div class="event-qr-actions">
                   <a :href="eventQrMapping.shortQrUrl" target="_blank" rel="noreferrer" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right"></i> Test scan</a>
                   <button class="btn btn-outline-secondary btn-sm" @click="openQrEditor(eventQrMapping!)"><i class="bi bi-pencil"></i> Manage</button>
@@ -1936,7 +2006,7 @@ import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer'
 async function makeQrDataUrl(url: string, size = 180): Promise<string> {
   return svgDataUri(renderBrandedQrSvg(url, 'porcelain-cameo', Math.max(384, size * 2)));
 }
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { Bar, Doughnut } from 'vue-chartjs';
 import {
@@ -1957,12 +2027,14 @@ import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
+import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
 
 const authStore = useAuthStore();
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
-type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
+type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; guests: any[] };
+type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
 type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
@@ -2330,13 +2402,17 @@ const eventQrDataUrl = ref('');
 const itemRows = ref<DraftItem[]>([]);
 
 const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
-const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
+function defaultEventExperience(): EventExperience {
+  return { enabled: false, eyebrow: '', heroImageUrl: '', venueName: '', venueAddress: '', mapUrl: '', registrationEnabled: true, reminderEnabled: true, reminderMode: 'timed', countdownEnabled: true, organizerVisible: true, contactVisible: false, livestreamUrl: '', livestreamLabel: 'Watch live', guests: [] };
+}
+const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
 const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
 const productSelections = reactive<Record<string, boolean>>({
   contactCard: false,
+  eventPage: true,
   fullMenuQr: false,
   itemQrSheet: true,
   menuPreview: true,
@@ -2445,17 +2521,20 @@ const menuPreviewUrl = computed(() => selectedEventForItems.value && selectedMen
   : '');
 const activeEventId = computed(() => selectedEventIdForItems.value || Number(route.params.eventId || 0));
 const selectedEventMenus = computed(() => activeEventId.value ? eventMenus(activeEventId.value) : []);
+const selectedEventHasPage = computed(() => hasStandaloneEventPage(selectedEventForItems.value));
 const selectedEventMenuIds = computed(() => selectedEventMenus.value.map((menu) => menu.id));
 const attachMenuId = ref(0);
 const attachableMenus = computed(() => vendorMenus.value.filter((m) => !selectedEventMenuIds.value.includes(m.id)));
 const selectedEventItems = computed(() => items.value.filter((item) => selectedEventMenuIds.value.includes(item.menuId)));
-const publishChecklist = computed(() => [
-  { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
-  { label: 'Event selected or saved', done: Boolean(selectedEventForItems.value || eventForm.id) },
-  { label: 'Event has active dates', done: Boolean((selectedEventForItems.value?.startTime || eventForm.startTime) && (selectedEventForItems.value?.endTime || eventForm.endTime)) },
-  { label: 'At least one menu linked', done: selectedEventMenus.value.length > 0 },
-  { label: 'Linked menus contain items', done: selectedEventItems.value.length > 0 },
-]);
+const publishChecklist = computed(() => eventPublishChecklist({
+  vendorSelected: Boolean(selectedVendor.value),
+  eventSelected: Boolean(selectedEventForItems.value || eventForm.id),
+  hasStartTime: Boolean(selectedEventForItems.value?.startTime || eventForm.startTime),
+  hasEndTime: Boolean(selectedEventForItems.value?.endTime || eventForm.endTime),
+  standalonePageEnabled: selectedEventHasPage.value,
+  linkedMenuCount: selectedEventMenus.value.length,
+  linkedItemCount: selectedEventItems.value.length,
+}));
 const canPublish = computed(() => publishChecklist.value.every((item) => item.done));
 const originUrl = computed(() => window.location.origin);
 const vendorQrIsActive = computed(() => Boolean(
@@ -2464,8 +2543,16 @@ const vendorQrIsActive = computed(() => Boolean(
   && vendorQrDraft.qrHash
   && qrMappings.value.some((mapping) => mapping.qrHash === vendorQrDraft.qrHash && mapping.url === vendorQrDraft.url && mapping.isActive)
 ));
-const publishProducts = computed(() => [
-  {
+const publishProducts = computed(() => {
+  const products = [
+    ...(selectedEventHasPage.value ? [{
+      key: 'eventPage',
+      label: 'Standalone event page',
+      description: 'Registration, calendar reminder, countdown, guests and event links.',
+      icon: 'bi bi-calendar2-event',
+      selected: true,
+    }] : []),
+    {
     key: 'contactCard',
     label: 'Vendor contact card',
     description: selectedVendor.value?.hasContactPage ? 'Reusable vendor-card QR is active.' : 'Enable from Vendor management when needed.',
@@ -2492,8 +2579,12 @@ const publishProducts = computed(() => [
     description: 'Previewable menu before publish and QR printing.',
     icon: 'bi bi-phone',
     selected: Boolean(productSelections.menuPreview),
-  },
-]);
+    },
+  ];
+  return selectedEventMenus.value.length
+    ? products
+    : products.filter((product) => !['fullMenuQr', 'itemQrSheet', 'menuPreview'].includes(product.key));
+});
 const eventProducts = computed(() => publishProducts.value.filter((product) => product.key !== 'contactCard' || selectedVendor.value?.hasContactPage));
 const activeTitle = computed(() => {
   const contextual: Partial<Record<SectionKey, string>> = {
@@ -2583,6 +2674,7 @@ function normalizeEvent(event: any): EventRow {
     id: Number(event.id),
     vendorId: Number(event.vendorId),
     vendor: event.vendor ? normalizeVendor(event.vendor) : undefined,
+    experienceConfig: { ...defaultEventExperience(), ...(event.experienceConfig || {}), guests: Array.isArray(event.experienceConfig?.guests) ? event.experienceConfig.guests : [] },
   };
 }
 
@@ -2791,9 +2883,9 @@ function eventChecklist(event: EventRow) {
   return [
     { label: 'Vendor selected', done: Boolean(selectedVendor.value) },
     { label: 'Event has active dates', done: Boolean(event.startTime && event.endTime) },
-    { label: 'At least one menu linked', done: linkedMenus.length > 0 },
-    { label: 'Linked menus contain items', done: linkedItems.length > 0 },
-    { label: 'QR sheet has targets', done: linkedMenus.length + linkedItems.length > 0 },
+    { label: 'Public experience configured', done: Boolean(event.experienceConfig?.enabled) || linkedMenus.length > 0 },
+    { label: 'Content is ready', done: Boolean(event.experienceConfig?.enabled) || linkedItems.length > 0 },
+    { label: 'QR has a destination', done: Boolean(event.experienceConfig?.enabled) || linkedMenus.length + linkedItems.length > 0 },
   ];
 }
 
@@ -2802,6 +2894,13 @@ const NON_SCANNABLE_TYPES = new Set(['category', 'serving', 'dishtype', 'modifie
 function eventQrTargets(event: EventRow) {
   const menusForEvent = eventMenus(event.id);
   return [
+    ...(event.experienceConfig?.enabled ? [{
+      key: `event-page-${event.id}`,
+      label: event.displayName,
+      context: 'Registration, reminder and event details',
+      type: 'Event page',
+      path: `/event/${event.name}`,
+    }] : []),
     ...menusForEvent.map((menu) => ({
       key: `menu-${menu.id}`,
       label: menu.displayName,
@@ -3080,11 +3179,26 @@ async function saveVendorQrMapping() {
 }
 
 function resetEvent() {
-  Object.assign(eventForm, { id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft' });
+  Object.assign(eventForm, { id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
 }
 
 function editEvent(event: EventRow) {
-  Object.assign(eventForm, { ...event, startTime: toDateTimeLocal(event.startTime), endTime: toDateTimeLocal(event.endTime) });
+  Object.assign(eventForm, { ...event, startTime: toDateTimeLocal(event.startTime), endTime: toDateTimeLocal(event.endTime), experienceConfig: { ...defaultEventExperience(), ...(event.experienceConfig || {}), guests: (event.experienceConfig?.guests || []).map((guest: any) => ({ ...guest })) } });
+}
+
+function addEventGuest() {
+  eventForm.experienceConfig.guests.push({ id: `guest-${Date.now()}`, name: '', role: '', bio: '', imageUrl: '', website: '', phone: '', instagram: '', youtube: '', linkedin: '', vendorSlug: '', visible: true });
+}
+
+function removeEventGuest(index: number) {
+  eventForm.experienceConfig.guests.splice(index, 1);
+}
+
+function moveEventGuest(index: number, delta: number) {
+  const target = index + delta;
+  if (target < 0 || target >= eventForm.experienceConfig.guests.length) return;
+  const [guest] = eventForm.experienceConfig.guests.splice(index, 1);
+  eventForm.experienceConfig.guests.splice(target, 0, guest);
 }
 
 function startNewEvent() {
@@ -3113,19 +3227,51 @@ async function saveEvent() {
     if (!selectedVendor.value) throw new Error('Select or create a vendor before creating an event');
     fillEventSlug();
     requireSlug(eventForm.name, 'Event slug');
-    const payload = { ...eventForm, vendorId: selectedVendorId.value };
-    const { data } = eventForm.id
+    if (eventForm.experienceConfig?.enabled && eventForm.experienceConfig.guests.some((guest: any) => !guest.name?.trim())) {
+      throw new Error('Give every guest a name, or remove the unfinished guest card before saving.');
+    }
+    const payload = {
+      ...eventForm,
+      startTime: eventForm.startTime ? new Date(eventForm.startTime).toISOString() : null,
+      endTime: eventForm.endTime ? new Date(eventForm.endTime).toISOString() : null,
+      vendorId: selectedVendorId.value,
+    };
+    const previouslyEnabled = Boolean(eventForm.id && events.value.find((event) => event.id === Number(eventForm.id))?.experienceConfig?.enabled);
+    const { data: eventData } = eventForm.id
       ? await axios.put<EventRow>(adminUrl(`/events/${eventForm.id}`), payload)
       : await axios.post<EventRow>(adminUrl('/events'), payload);
-    resetEvent();
-    await loadAll();
-    const savedEvent = data ? normalizeEvent(data) : events.value.find((event) => event.name === payload.name && event.vendorId === selectedVendorId.value);
-    showEventEditor.value = false;
-    if (savedEvent && activeSection.value !== 'events') {
-      selectedEventIdForItems.value = savedEvent.id;
-      router.push(adminEventRoute(savedEvent));
+    const persistedId = Number(eventData?.id || eventForm.id);
+    if (!persistedId) throw new Error('The event was not assigned an ID. Its page settings were not saved.');
+    eventForm.id = persistedId;
+    let persistedData: EventRow = eventData;
+    if (payload.experienceConfig?.enabled || previouslyEnabled) {
+      try {
+        const response = await axios.patch<EventRow>(adminUrl(`/events/${persistedId}/experience`), {
+          experienceConfig: payload.experienceConfig,
+        });
+        persistedData = response.data;
+      } catch (experienceError: any) {
+        await loadAll().catch(() => undefined);
+        const detail = experienceError?.response?.status === 404
+          ? 'The backend does not have the event-page persistence endpoint yet.'
+          : (experienceError?.response?.data?.message || experienceError?.message || 'The page-settings request failed.');
+        throw new Error(`The event details were saved, but the public page settings were not. ${detail} Your form has been kept open so nothing is lost.`);
+      }
     }
-    setNotice('Event saved');
+    const verifiedEvent = normalizeEvent(persistedData);
+    if (!eventExperienceWasPersisted(payload.experienceConfig, verifiedEvent.experienceConfig)) {
+      await loadAll().catch(() => undefined);
+      throw new Error('The event details were saved, but the backend did not persist the public page state. Your form has been kept open so you can retry after the backend is updated.');
+    }
+    await loadAll();
+    const savedEvent = events.value.find((event) => event.id === persistedId) || verifiedEvent;
+    resetEvent();
+    showEventEditor.value = false;
+    if (savedEvent) {
+      selectedEventIdForItems.value = savedEvent.id;
+      await router.push(adminEventRoute(savedEvent));
+    }
+    setNotice(savedEvent.experienceConfig?.enabled ? 'Event and standalone page saved' : 'Event saved');
   } catch (err) {
     setError(err);
   }
@@ -3133,6 +3279,11 @@ async function saveEvent() {
 
 function resetMenu() {
   Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
+}
+
+async function openEventEditorFromWorkspace(event: EventRow) {
+  await router.push('/dashboard/events');
+  editEventInline(event);
 }
 
 function editMenu(menu: MenuRow) {
@@ -4941,8 +5092,8 @@ async function deleteVendorById(id: number, name: string) {
   /* Events tables: hide Window and Menus columns on mobile */
   .events-table th:nth-child(2),
   .events-table td:nth-child(2),
-  .events-table th:nth-child(4),
-  .events-table td:nth-child(4),
+  .events-table th:nth-child(5),
+  .events-table td:nth-child(5),
   .home-events-table th:nth-child(2),
   .home-events-table td:nth-child(2),
   .home-events-table th:nth-child(4),
@@ -7053,6 +7204,52 @@ td.row-actions .icon-btn + a {
 
 /* ── Mobile overrides (placed after base rules to win cascade) ──────────────── */
 @media (max-width: 767px) {
+  /* Vendor editor: keep the editable form first and make the whole body scroll.
+     The previous stacked grid put the large QR pane first and left the form
+     outside the usable viewport on phones. */
+  .modal-backdrop-custom {
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .vendor-modal {
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .vendor-modal-grid {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vendor-modal-grid .modal-pane-scroll {
+    flex: 0 0 auto;
+    order: -1;
+    overflow: visible;
+    padding: 14px 16px 0;
+  }
+
+  .vendor-modal-grid .qr-pane {
+    border-bottom: 0;
+    border-top: 1px solid #e6dfd4;
+    flex: 0 0 auto;
+    order: 0;
+  }
+
+  .vendor-modal .modal-title-row {
+    padding: 16px 16px 12px;
+  }
+
+  .vendor-modal .modal-pane-scroll .actions:last-child {
+    margin-inline: -16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    z-index: 4;
+  }
+
   /* Stack home intro text above action grid */
   .home-intro {
     flex-direction: column;
@@ -7306,6 +7503,30 @@ td.row-actions .icon-btn + a {
 .icon-btn--active { background: #fff8ed; border-color: #c9a96e; color: #7a5418; }
 .icon-btn:disabled,
 .icon-btn[disabled] { opacity: 0.45; pointer-events: none; }
+
+.event-experience-editor { border-top: 1px solid var(--admin-line); margin-top: 1.5rem; padding-top: 1.5rem; }
+.experience-save-note { align-items: center; background: #fff7e8; border-left: 3px solid #bd945a; display: flex; gap: 0.5rem; margin: 0.75rem 0 1rem; padding: 0.7rem 0.85rem; }
+.experience-heading, .guest-editor-heading, .guest-card-toolbar { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; }
+.experience-heading h4, .guest-editor-heading h5 { margin: 0 0 0.25rem; }
+.switch-label { align-items: center; display: inline-flex; gap: 0.55rem; white-space: nowrap; }
+.experience-options { align-items: center; background: #f5efe7; border: 1px solid #e4d7c6; display: flex; flex-wrap: wrap; gap: 0.8rem 1.25rem; margin-top: 1rem; padding: 1rem; }
+.experience-options > label { align-items: center; display: inline-flex; gap: 0.45rem; margin: 0; }
+.experience-options .reminder-mode { margin-left: auto; }
+.experience-options .form-select { min-width: 190px; }
+.guest-editor { margin-top: 1.4rem; }
+.guest-editor-card { background: #fffdf9; border: 1px solid #e5d9ca; margin-top: 0.85rem; padding: 1rem; }
+.guest-card-toolbar { align-items: center; border-bottom: 1px solid #eee4d8; margin-bottom: 1rem; padding-bottom: 0.65rem; }
+.guest-card-toolbar span { display: flex; gap: 0.25rem; }
+.compact-grid { margin-bottom: 0; }
+.guest-visible { align-items: center; display: flex; gap: 0.45rem; }
+.guest-empty { border: 1px dashed #d8c7b1; margin-top: 0.8rem; padding: 1rem; text-align: center; }
+.event-page-preview { display: inline-flex; gap: 0.45rem; margin-top: 1rem; }
+
+@media (max-width: 767px) {
+  .experience-heading, .guest-editor-heading { align-items: stretch; flex-direction: column; }
+  .experience-options { align-items: stretch; flex-direction: column; }
+  .experience-options .reminder-mode { align-items: stretch; flex-direction: column; margin-left: 0; }
+}
 
 /* ── Sidebar vendor persona ──────────────────────────────────────────────── */
 .sidebar-vendor-section {

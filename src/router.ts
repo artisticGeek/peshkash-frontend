@@ -14,6 +14,11 @@ const routes: Array<RouteRecordRaw> = [
     component: MenuPage
   },
   {
+    path: '/event/:eventName',
+    name: 'EventRegistration',
+    component: () => import('./pages/EventRegistrationPage.vue')
+  },
+  {
     path: '/event/:eventName/menu/:menuName/item/:itemName',
     name: 'ItemDetail',
     component: ItemDetailPage
