@@ -901,7 +901,11 @@
               <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
                 <span><i class="bi bi-grip-vertical"></i> <strong>{{ itemLabel(item) }}</strong></span>
                 <small>{{ itemTypeLabel(item.type) }} · {{ childCount(item) }} children</small>
-                <button class="icon-button outlined small" title="Move to root" aria-label="Move to root" @click="setItemParent(item, null)"><i class="bi bi-arrow-up-square"></i></button>
+                <div class="arrange-row-actions">
+                  <button class="icon-button outlined small" title="Edit" aria-label="Edit" @click="editDesignerItem(item)"><i class="bi bi-pencil"></i></button>
+                  <button class="icon-button outlined small" title="Move up" aria-label="Move up" @click="moveDesignerItem(item, -1)"><i class="bi bi-arrow-up"></i></button>
+                  <button class="icon-button outlined small" title="Move down" aria-label="Move down" @click="moveDesignerItem(item, 1)"><i class="bi bi-arrow-down"></i></button>
+                </div>
               </div>
               <textarea v-model="designerNotes[item.id]" class="form-control admin-note" rows="1" placeholder="Private admin/vendor note"></textarea>
               <div class="tree-children-admin">
@@ -916,7 +920,12 @@
                 >
                   <span><i class="bi bi-grip-vertical"></i> {{ itemLabel(child) }}</span>
                   <small>{{ itemTypeLabel(child.type) }}{{ child.enumType ? ' · ' + child.enumType : '' }}</small>
-                  <button class="icon-button outlined small" title="Move under this item" aria-label="Move under this item" @click="setItemParent(child, item.id)"><i class="bi bi-arrow-return-right"></i></button>
+                  <div class="arrange-row-actions">
+                    <button class="icon-button outlined small" title="Edit" aria-label="Edit" @click="editDesignerItem(child)"><i class="bi bi-pencil"></i></button>
+                    <button class="icon-button outlined small" title="Move up" aria-label="Move up" @click="moveDesignerItem(child, -1)"><i class="bi bi-arrow-up"></i></button>
+                    <button class="icon-button outlined small" title="Move down" aria-label="Move down" @click="moveDesignerItem(child, 1)"><i class="bi bi-arrow-down"></i></button>
+                    <button class="icon-button outlined small" title="Move to root" aria-label="Move to root" @click="setItemParent(child, null, true)"><i class="bi bi-arrow-up-square"></i></button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1068,15 +1077,20 @@
         <!-- ── QR Bank header ─────────────────────────────────────── -->
         <div class="qr-bank-header panel">
           <div>
-            <h3>QR Bank <span v-if="filteredQrMappings.length" class="qr-count-badge">{{ filteredQrMappings.length }}</span></h3>
+            <h3>QR Bank <span v-if="vendorQrMappings.length || unmappedQrTargets.length" class="qr-count-badge">{{ vendorQrMappings.length + unmappedQrTargets.length }}</span></h3>
           </div>
-          <button class="btn btn-primary" type="button" @click="openQrEditor()">
-            <i class="bi bi-plus-lg"></i> New QR Asset
-          </button>
+          <div class="actions">
+            <button v-if="selectedQrIds.length" class="btn btn-outline-primary" type="button" @click="showQrBatchPrint = true">
+              <i class="bi bi-printer"></i> Print / export {{ selectedQrIds.length }}
+            </button>
+            <button class="btn btn-primary" type="button" @click="openQrEditor()">
+              <i class="bi bi-plus-lg"></i> New QR Asset
+            </button>
+          </div>
         </div>
 
         <!-- ── Empty state ────────────────────────────────────────── -->
-        <div v-if="!vendorQrMappings.length" class="qr-empty-state panel">
+        <div v-if="!vendorQrMappings.length && !unmappedQrTargets.length" class="qr-empty-state panel">
           <i class="bi bi-qr-code qr-empty-icon"></i>
           <div>
             <p class="mb-0">No QR assets yet.</p>
@@ -1111,6 +1125,7 @@
               <table class="table table-sm align-middle action-table qr-table">
                 <thead>
                   <tr>
+                    <th class="qr-select-col"><input type="checkbox" :checked="filteredQrMappings.length > 0 && filteredQrMappings.every(mapping => selectedQrIds.includes(mapping.id))" aria-label="Select all visible QRs" @change="toggleAllVisibleQrs" /></th>
                     <th>Hash</th>
                     <th>Type</th>
                     <th>Target</th>
@@ -1128,6 +1143,7 @@
                     :class="{ 'qr-row-warn': qrStatus(mapping) === 'needs_reassignment' }"
                     @click="openQrEditor(mapping)"
                   >
+                    <td class="qr-select-col" @click.stop><input v-model="selectedQrIds" type="checkbox" :value="mapping.id" :aria-label="`Select ${mapping.qrHash}`" /></td>
                     <td><code class="qr-hash-code">{{ mapping.qrHash }}</code></td>
                     <td><span :class="`type-badge type-${qrTypeBadge(mapping).css}`">{{ qrTypeBadge(mapping).label }}</span></td>
                     <td class="qr-target-cell">{{ qrTargetLabel(mapping) }}</td>
@@ -1149,8 +1165,18 @@
                       <button class="icon-btn" title="Print template" @click.stop="openPrintForQr(mapping)"><i class="bi bi-printer"></i></button>
                     </td>
                   </tr>
-                  <tr v-if="!filteredQrMappings.length">
-                    <td colspan="7" class="muted" style="padding:20px;text-align:center">No QR codes match your filter.</td>
+                  <tr v-for="target in filteredUnmappedQrTargets" :key="target.key" class="qr-row-warn clickable-row" @click="openUnmappedQrTarget(target)">
+                    <td class="qr-select-col"></td>
+                    <td><span class="qr-pending-hash">Not created</span></td>
+                    <td><span :class="`type-badge type-${target.type}`">{{ target.type === 'menu' ? 'Menu' : 'Item Spotlight' }}</span></td>
+                    <td class="qr-target-cell"><strong>{{ target.label }}</strong><small>{{ target.context }}</small></td>
+                    <td><span class="status-chip chip-needs_reassignment"><i class="bi bi-plus-circle-fill"></i> Needs QR</span></td>
+                    <td><span class="paid-badge paid-badge--unpaid">Unassigned</span></td>
+                    <td class="col-scans">—</td>
+                    <td class="row-actions"><button class="btn btn-outline-primary btn-sm" type="button" @click.stop="openUnmappedQrTarget(target)">Create QR</button></td>
+                  </tr>
+                  <tr v-if="!filteredQrMappings.length && !filteredUnmappedQrTargets.length">
+                    <td colspan="8" class="muted" style="padding:20px;text-align:center">No QR codes match your filter.</td>
                   </tr>
                 </tbody>
               </table>
@@ -1420,6 +1446,20 @@
             </div>
           </form>
         </div>
+
+        <div v-if="showQrBatchPrint" class="modal-backdrop-custom qr-batch-backdrop" @click.self="showQrBatchPrint = false">
+          <div class="qr-batch-modal">
+            <div class="modal-title-row">
+              <div><h3>Batch print & export</h3><p class="hint">Choose one template, then print or export the selected QR assets together.</p></div>
+              <button class="icon-button" type="button" aria-label="Close" @click="showQrBatchPrint = false"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <PrintStudio
+              :event="{ id: 0, name: 'qr-bank', displayName: 'QR Bank selection' }"
+              :targets="qrBatchTargets"
+              :qr-mappings="selectedQrMappings"
+            />
+          </div>
+        </div>
       </section>
 
       <section v-if="activeSection === 'qr-templates'" class="qrt-embedded-section">
@@ -1642,7 +1682,7 @@
       <div class="item-add-modal">
         <div class="modal-title-row">
           <div>
-            <h3>Add to Menu</h3>
+            <h3>{{ editingDesignerItemId != null ? 'Edit menu entry' : 'Add to menu' }}</h3>
             <p class="hint">
               {{ itemDraft.parentId != null
                 ? `Under: ${designerDraftItems.find(i => i.id === itemDraft.parentId)?.displayName || '#' + itemDraft.parentId}`
@@ -1667,7 +1707,7 @@
           </button>
           <button
             type="button"
-            :class="{ active: itemDraft.type === 'item' }"
+            :class="{ active: itemDraft.type !== 'category' }"
             @click="itemDraft.type = 'item'"
           >
             <i class="bi bi-card-text"></i>
@@ -1688,13 +1728,43 @@
               @keydown.enter.prevent="saveItemFromDrawer"
             />
           </label>
-          <template v-if="itemDraft.type === 'item'">
+          <label>
+            Description
+            <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short customer-facing description"></textarea>
+          </label>
+          <template v-if="itemDraft.type !== 'category'">
+            <div class="item-field-pair">
+              <label>
+                Content type
+                <select v-model="itemDraft.type" class="form-select">
+                  <option value="item">Item</option>
+                  <option value="dish">Dish</option>
+                  <option value="product">Product</option>
+                  <option value="service">Service</option>
+                  <option value="art">Art piece</option>
+                  <option value="modifier">Modifier</option>
+                  <option value="addon">Add-on</option>
+                </select>
+              </label>
+              <label>
+                Price / display price
+                <input v-model.trim="itemDraft.price" class="form-control" placeholder="₹450 or From ₹2,500" />
+              </label>
+            </div>
             <label>
-              Description
-              <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short description, optional"></textarea>
+              Ingredients / details
+              <textarea v-model.trim="itemDraft.ingredients" class="form-control" rows="2" placeholder="Comma-separated ingredients or key details"></textarea>
             </label>
             <label>
-              Image URL <small class="muted">(direct link to image, optional)</small>
+              Image
+              <div class="designer-upload-row">
+                <label class="btn btn-outline-secondary btn-sm designer-upload-btn">
+                  <i class="bi bi-cloud-arrow-up"></i>
+                  {{ uploadingDesignerImage ? 'Uploading…' : 'Upload image' }}
+                  <input type="file" accept="image/*" :disabled="uploadingDesignerImage" @change="uploadDesignerImage" />
+                </label>
+                <span class="muted">or paste a direct URL</span>
+              </div>
               <input
                 v-model.trim="itemDraft.image"
                 class="form-control"
@@ -1729,14 +1799,45 @@
               </div>
               <p v-else class="tag-no-hints">No tags used by this vendor yet — type any label above.</p>
             </label>
+            <div class="item-field-pair">
+              <label>
+                Dietary
+                <select v-model="itemDraft.isVeg" class="form-select">
+                  <option :value="null">Not specified</option>
+                  <option :value="true">Vegetarian</option>
+                  <option :value="false">Non-vegetarian</option>
+                </select>
+              </label>
+              <label>
+                Spice level
+                <select v-model.number="itemDraft.spiceLevel" class="form-select">
+                  <option :value="0">Not specified</option>
+                  <option :value="1">Mild</option>
+                  <option :value="2">Medium</option>
+                  <option :value="3">Hot</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Search tags <small class="muted">(comma-separated)</small>
+              <input v-model.trim="itemDraft.tagsText" class="form-control" placeholder="popular, seasonal, bestseller" />
+            </label>
+            <label>
+              Allergens <small class="muted">(comma-separated)</small>
+              <input v-model.trim="itemDraft.allergensText" class="form-control" placeholder="nuts, dairy, gluten" />
+            </label>
           </template>
+          <label class="designer-active-toggle">
+            <input v-model="itemDraft.isActive" type="checkbox" />
+            <span>Visible on the public menu</span>
+          </label>
         </div>
 
         <div class="drawer-actions">
           <button class="btn btn-outline-secondary" @click="showItemDrawer = false">Cancel</button>
           <button class="btn btn-primary" :disabled="!itemDraft.displayName" @click="saveItemFromDrawer">
             <i class="bi bi-plus-lg"></i>
-            Add {{ itemDraft.type === 'category' ? 'Category' : 'Item' }}
+            {{ editingDesignerItemId != null ? 'Save changes' : `Add ${itemDraft.type === 'category' ? 'category' : 'item'}` }}
           </button>
         </div>
       </div>
@@ -1813,60 +1914,11 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { drawPeshkashMark } from '../utils/qrRenderer';
 import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer';
 
-/** Renders a framed, branded QR card (beige bg, border, P mark, right-aligned attribution). */
+/** Shared admin QR preview: the protected QR signature, without print-only attribution. */
 async function makeQrDataUrl(url: string, size = 180): Promise<string> {
-  const brandedQr = new Image();
-  brandedQr.src = svgDataUri(renderBrandedQrSvg(url, 'porcelain-cameo', Math.max(384, size * 2)));
-  await brandedQr.decode();
-
-  const pad      = Math.round(size * 0.10);
-  const footerH  = Math.round(size * 0.14);
-  const totalW   = size + pad * 2;
-  const totalH   = size + pad + footerH;
-
-  const canvas = document.createElement('canvas');
-  canvas.width  = totalW;
-  canvas.height = totalH;
-  const ctx = canvas.getContext('2d')!;
-
-  // Beige card background
-  ctx.fillStyle = '#f5f1eb';
-  ctx.fillRect(0, 0, totalW, totalH);
-
-  // Thin warm border framing the QR area
-  ctx.strokeStyle = '#c8b89a';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(pad - 1.5, pad - 1.5, size + 3, size + 3);
-
-  // QR code
-  ctx.drawImage(brandedQr, pad, pad, size, size);
-
-  // Footer: right-aligned "powered by [P] peshkash" — no separator
-  const fY       = pad + size + footerH * 0.54;
-  const rightX   = totalW - Math.round(pad * 0.45);
-  const markSz   = footerH * 0.44;
-  const gap      = Math.round(markSz * 0.28);
-
-  ctx.textBaseline = 'middle';
-  ctx.textAlign    = 'right';
-
-  ctx.font      = `600 ${Math.round(footerH * 0.37)}px Georgia, serif`;
-  ctx.fillStyle = '#BD945A';
-  const wmW = ctx.measureText('peshkash').width;
-  ctx.fillText('peshkash', rightX, fY);
-
-  const markCX = rightX - wmW - gap - markSz * 0.5;
-  drawPeshkashMark(ctx, markCX, fY, markSz);
-
-  ctx.font      = `400 ${Math.round(footerH * 0.26)}px Arial, sans-serif`;
-  ctx.fillStyle = '#a89880';
-  ctx.textAlign = 'right';
-  ctx.fillText('powered by', markCX - markSz * 0.5 - gap, fY);
-
-  return canvas.toDataURL('image/png');
+  return svgDataUri(renderBrandedQrSvg(url, 'porcelain-cameo', Math.max(384, size * 2)));
 }
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
@@ -1896,9 +1948,10 @@ type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWork
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
-type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number };
+type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
 type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
+type UnmappedQrTarget = { key: string; label: string; context: string; type: 'menu' | 'item'; eventId: number; menuId: number; itemId?: number; path: string };
 type DraftItem = { clientId: string; id?: number; menuId: number; parentId: number; name: string; displayName: string; type: string; enumType: string; description: string; ingredients: string; image: string; isActive: boolean; isDirty: boolean; isNew: boolean };
 
 const sections = [
@@ -2036,7 +2089,7 @@ const designerFullMenuQr = ref(false);
 const designerNotes = reactive<Record<number, string>>({});
 const designerSearch = ref('');
 const designerDraftItems = ref<ItemRow[]>([]);
-const designerOriginalParents = ref<Record<number, number | undefined>>({});
+const designerOriginalItems = ref<Record<number, string>>({});
 const designerTempId = ref(-1);
 const itemSearch = ref('');
 const itemMenuFilter = ref(0);
@@ -2045,7 +2098,9 @@ const selectedAnalyticsItemId = ref<number | null>(null);
 const draggedLibraryItemId = ref<number | null>(null);
 const draggedDesignedItemId = ref<number | null>(null);
 const showItemDrawer = ref(false);
-const itemDraft = reactive({ displayName: '', name: '', type: 'item' as 'item' | 'category', enumType: '', description: '', image: '', parentId: null as number | null });
+const editingDesignerItemId = ref<number | null>(null);
+const uploadingDesignerImage = ref(false);
+const itemDraft = reactive<any>({ displayName: '', name: '', type: 'item', enumType: '', description: '', ingredients: '', image: '', price: '', tagsText: '', allergensText: '', isVeg: null, spiceLevel: 0, isActive: true, parentId: null as number | null });
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
@@ -2063,6 +2118,8 @@ const events = ref<EventRow[]>([]);
 const menus = ref<MenuRow[]>([]);
 const items = ref<ItemRow[]>([]);
 const qrMappings = ref<QrMapping[]>([]);
+const selectedQrIds = ref<number[]>([]);
+const showQrBatchPrint = ref(false);
 const qrLocalMeta = ref<Record<number, { paid?: boolean; templateLabel?: string; selectedTemplateId?: number }>>({});
 const selectedQrMapping = ref<QrMapping | null>(null);
 const qrModalMode = ref<'view' | 'edit'>('view');
@@ -2299,9 +2356,7 @@ const selectedEventForItems = computed(() => {
 const selectedDesignerItems = computed(() => designerDraftItems.value);
 const selectedDesignerTree = computed(() => buildItemTree(selectedDesignerItems.value));
 const designerDirty = computed(() => {
-  const hasNewItems = designerDraftItems.value.some((item) => item.id < 0);
-  const hasParentChanges = designerDraftItems.value.some((item) => item.id > 0 && (item.parentId || undefined) !== designerOriginalParents.value[item.id]);
-  return hasNewItems || hasParentChanges;
+  return designerDraftItems.value.some((item) => item.id < 0 || designerItemSignature(item) !== designerOriginalItems.value[item.id]);
 });
 const dirtyItemRows = computed(() => itemRows.value.filter((row) => row.isDirty || row.isNew));
 const miscMenu = computed(() => vendorMenus.value.find((menu) => menu.name === miscMenuSlug.value));
@@ -2492,6 +2547,11 @@ function normalizeItem(item: any): ItemRow {
     id: Number(item.id),
     menuId: Number(item.menuId),
     parentId: item.parentId ? Number(item.parentId) : undefined,
+    sortOrder: Number(item.sortOrder ?? 0),
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    allergens: Array.isArray(item.allergens) ? item.allergens : [],
+    isVeg: typeof item.isVeg === 'boolean' ? item.isVeg : null,
+    spiceLevel: item.spiceLevel == null ? null : Number(item.spiceLevel),
   };
 }
 
@@ -2522,7 +2582,8 @@ function syncItemRows() {
 
 function resetDesignerDraft() {
   designerDraftItems.value = selectedMenuItems.value.map((item) => ({ ...item }));
-  designerOriginalParents.value = Object.fromEntries(selectedMenuItems.value.map((item) => [item.id, item.parentId]));
+  normalizeAllDesignerOrders();
+  designerOriginalItems.value = Object.fromEntries(designerDraftItems.value.map((item) => [item.id, designerItemSignature(item)]));
   designerTempId.value = -1;
 }
 
@@ -3214,29 +3275,128 @@ function uniqueDraftSlug(base: string) {
   return `${clean}-${index}`;
 }
 
+function splitList(value: string): string[] {
+  return value.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function designerItemSignature(item: ItemRow): string {
+  return JSON.stringify({
+    name: item.name,
+    displayName: item.displayName,
+    description: item.description || '',
+    ingredients: item.ingredients || '',
+    image: item.image || '',
+    type: item.type || 'item',
+    enumType: item.enumType || '',
+    isActive: item.isActive,
+    parentId: item.parentId || null,
+    sortOrder: item.sortOrder || 0,
+    price: item.price || '',
+    tags: item.tags || [],
+    allergens: item.allergens || [],
+    isVeg: item.isVeg ?? null,
+    spiceLevel: item.spiceLevel ?? null,
+  });
+}
+
+function normalizeDesignerOrder(parentId: number | null) {
+  designerDraftItems.value
+    .filter((item) => (item.parentId || null) === parentId)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id)
+    .forEach((item, index) => { item.sortOrder = index; });
+}
+
+function normalizeAllDesignerOrders() {
+  const parents = new Set<number | null>(designerDraftItems.value.map((item) => item.parentId || null));
+  parents.forEach(normalizeDesignerOrder);
+}
+
 function openItemDrawer(parentId: number | null) {
   if (!selectedMenuForItems.value) { setError(new Error('Select a working menu first')); return; }
-  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', image: '', parentId: parentId ?? null });
+  editingDesignerItemId.value = null;
+  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', ingredients: '', image: '', price: '', tagsText: '', allergensText: '', isVeg: null, spiceLevel: 0, isActive: true, parentId: parentId ?? null });
   showItemDrawer.value = true;
+}
+
+function editDesignerItem(item: ItemRow) {
+  editingDesignerItemId.value = item.id;
+  Object.assign(itemDraft, {
+    displayName: item.displayName,
+    name: item.name,
+    type: item.type || 'item',
+    enumType: item.enumType || '',
+    description: item.description || '',
+    ingredients: item.ingredients || '',
+    image: item.image || '',
+    price: item.price || '',
+    tagsText: (item.tags || []).join(', '),
+    allergensText: (item.allergens || []).join(', '),
+    isVeg: item.isVeg ?? null,
+    spiceLevel: item.spiceLevel ?? 0,
+    isActive: item.isActive,
+    parentId: item.parentId ?? null,
+  });
+  showItemDrawer.value = true;
+}
+
+async function uploadDesignerImage(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file || !selectedVendor.value) return;
+  if (!file.type.startsWith('image/')) return setError(new Error('Choose an image file'));
+  if (file.size > 8 * 1024 * 1024) return setError(new Error('Image must be smaller than 8 MB'));
+  uploadingDesignerImage.value = true;
+  try {
+    const form = new FormData();
+    form.append('image', file);
+    const { data } = await axios.post<{ url: string }>(`${API_BASE_URL}/onboard/${selectedVendor.value.name}/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    itemDraft.image = data.url;
+  } catch (err) {
+    setError(err);
+  } finally {
+    uploadingDesignerImage.value = false;
+    input.value = '';
+  }
 }
 
 function saveItemFromDrawer() {
   try {
     if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
     if (!itemDraft.displayName.trim()) throw new Error('Add a name first');
-    const name = uniqueDraftSlug(itemDraft.displayName);
-    designerDraftItems.value.push({
-      id: designerTempId.value--,
-      menuId: selectedMenuIdForItems.value,
-      name,
-      displayName: itemDraft.displayName,
+    const existing = editingDesignerItemId.value != null
+      ? designerDraftItems.value.find((item) => item.id === editingDesignerItemId.value)
+      : null;
+    const parentId = itemDraft.parentId ?? undefined;
+    const nextOrder = designerDraftItems.value.filter((item) => (item.parentId || undefined) === parentId).length;
+    const values: Partial<ItemRow> = {
+      displayName: itemDraft.displayName.trim(),
       type: itemDraft.type,
-      enumType: itemDraft.type === 'item' ? itemDraft.enumType : '',
-      description: itemDraft.type === 'item' ? itemDraft.description : '',
-      image: itemDraft.type === 'item' ? itemDraft.image : '',
-      parentId: itemDraft.parentId ?? undefined,
-      isActive: true,
-    });
+      enumType: itemDraft.type === 'category' ? '' : itemDraft.enumType,
+      description: itemDraft.description,
+      ingredients: itemDraft.type === 'category' ? '' : itemDraft.ingredients,
+      image: itemDraft.type === 'category' ? '' : itemDraft.image,
+      price: itemDraft.type === 'category' ? '' : itemDraft.price,
+      tags: itemDraft.type === 'category' ? [] : splitList(itemDraft.tagsText),
+      allergens: itemDraft.type === 'category' ? [] : splitList(itemDraft.allergensText),
+      isVeg: itemDraft.type === 'category' ? null : itemDraft.isVeg,
+      spiceLevel: itemDraft.type === 'category' ? null : Number(itemDraft.spiceLevel || 0),
+      parentId,
+      isActive: Boolean(itemDraft.isActive),
+    };
+    if (existing) {
+      Object.assign(existing, values);
+    } else {
+      designerDraftItems.value.push({
+        id: designerTempId.value--,
+        menuId: selectedMenuIdForItems.value,
+        name: uniqueDraftSlug(itemDraft.displayName),
+        sortOrder: nextOrder,
+        ...values,
+      } as ItemRow);
+    }
+    normalizeAllDesignerOrders();
     showItemDrawer.value = false;
   } catch (err) {
     setError(err);
@@ -3247,7 +3407,10 @@ async function saveDesignerChanges() {
   try {
     if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
     const idMap = new Map<number, number>();
-    const newItems = designerDraftItems.value.filter((item) => item.id < 0);
+    normalizeAllDesignerOrders();
+    const newItems = designerDraftItems.value
+      .filter((item) => item.id < 0)
+      .sort((a, b) => Number(Boolean(a.parentId && a.parentId < 0)) - Number(Boolean(b.parentId && b.parentId < 0)));
     for (const item of newItems) {
       const parentId = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
       const { data } = await axios.post<ItemRow>(adminUrl('/items'), {
@@ -3261,14 +3424,21 @@ async function saveDesignerChanges() {
         enumType: item.enumType,
         parentId: parentId || null,
         isActive: item.isActive,
+        sortOrder: item.sortOrder,
+        price: item.price,
+        tags: item.tags,
+        allergens: item.allergens,
+        isVeg: item.isVeg,
+        spiceLevel: item.spiceLevel,
       });
       idMap.set(item.id, Number(data.id));
     }
 
     for (const item of designerDraftItems.value.filter((row) => row.id > 0)) {
       const nextParent = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
-      if ((nextParent || undefined) !== designerOriginalParents.value[item.id]) {
-        await axios.put(adminUrl(`/items/${item.id}`), { ...item, parentId: nextParent || null });
+      const nextItem = { ...item, parentId: nextParent || null };
+      if (designerItemSignature(nextItem as ItemRow) !== designerOriginalItems.value[item.id]) {
+        await axios.put(adminUrl(`/items/${item.id}`), nextItem);
       }
     }
 
@@ -3381,9 +3551,10 @@ function openItemAnalytics(itemId?: number) {
 
 function buildItemTree(flatItems: ItemRow[]) {
   const map = new Map<number, any>();
-  flatItems.forEach((item) => map.set(item.id, { ...item, itemType: item.type, subCategoryLineItems: [] }));
+  const ordered = [...flatItems].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id);
+  ordered.forEach((item) => map.set(item.id, { ...item, itemType: item.type, subCategoryLineItems: [] }));
   const roots: any[] = [];
-  flatItems.forEach((item) => {
+  ordered.forEach((item) => {
     const node = map.get(item.id);
     if (item.parentId && map.has(item.parentId)) map.get(item.parentId).subCategoryLineItems.push(node);
     else roots.push(node);
@@ -3411,7 +3582,7 @@ async function dropOnMenuRoot() {
     if (item) await copyItemToDesignedMenu(item);
   } else if (draggedDesignedItemId.value) {
     const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
-    if (item) await setItemParent(item, null);
+    if (item) await setItemParent(item, null, true);
   }
   draggedLibraryItemId.value = null;
   draggedDesignedItemId.value = null;
@@ -3421,21 +3592,60 @@ async function dropOnDesignedItem(target: ItemRow) {
   if (draggedLibraryItemId.value) {
     const item = items.value.find((row) => row.id === draggedLibraryItemId.value);
     if (item) {
-      await copyItemToDesignedMenu(item, target.id);
+      await copyItemToDesignedMenu(item, target.type === 'category' ? target.id : (target.parentId || null));
     }
   } else if (draggedDesignedItemId.value && draggedDesignedItemId.value !== target.id) {
     const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
-    if (item) await setItemParent(item, target.id);
+    if (item && target.type === 'category') await setItemParent(item, target.id, true);
+    else if (item) reorderDesignerItem(item, target);
   }
   draggedLibraryItemId.value = null;
   draggedDesignedItemId.value = null;
 }
 
-async function setItemParent(item: ItemRow, parentId: number | null) {
+async function setItemParent(item: ItemRow, parentId: number | null, placeLast = false) {
   if (parentId === item.id) return setError(new Error('An item cannot be its own parent'));
+  let ancestorId = parentId;
+  while (ancestorId) {
+    if (ancestorId === item.id) return setError(new Error('A category cannot be moved inside one of its descendants'));
+    ancestorId = designerDraftItems.value.find((row) => row.id === ancestorId)?.parentId || null;
+  }
   const draft = designerDraftItems.value.find((row) => row.id === item.id);
   if (!draft) return;
+  const oldParent = draft.parentId || null;
   draft.parentId = parentId || undefined;
+  if (placeLast) draft.sortOrder = designerDraftItems.value.filter((row) => row.id !== draft.id && (row.parentId || null) === parentId).length;
+  normalizeDesignerOrder(oldParent);
+  normalizeDesignerOrder(parentId);
+}
+
+function reorderDesignerItem(item: ItemRow, target: ItemRow) {
+  const draft = designerDraftItems.value.find((row) => row.id === item.id);
+  const targetDraft = designerDraftItems.value.find((row) => row.id === target.id);
+  if (!draft || !targetDraft) return;
+  const oldParent = draft.parentId || null;
+  const targetParent = targetDraft.parentId || null;
+  if (targetParent === draft.id) return setError(new Error('A category cannot be reordered inside its own contents'));
+  const siblings = designerDraftItems.value
+    .filter((row) => row.id !== draft.id && (row.parentId || null) === targetParent)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id);
+  const targetIndex = Math.max(0, siblings.findIndex((row) => row.id === targetDraft.id));
+  siblings.splice(targetIndex, 0, draft);
+  draft.parentId = targetParent || undefined;
+  siblings.forEach((row, index) => { row.sortOrder = index; });
+  normalizeDesignerOrder(oldParent);
+}
+
+function moveDesignerItem(item: ItemRow, direction: -1 | 1) {
+  const parentId = item.parentId || null;
+  const siblings = designerDraftItems.value
+    .filter((row) => (row.parentId || null) === parentId)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id);
+  const index = siblings.findIndex((row) => row.id === item.id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= siblings.length) return;
+  [siblings[index], siblings[nextIndex]] = [siblings[nextIndex], siblings[index]];
+  siblings.forEach((row, order) => { row.sortOrder = order; });
 }
 
 async function createDesignerMenu() {
@@ -3509,6 +3719,7 @@ async function copyItemToDesignedMenu(item: ItemRow, parentId: number | null = n
     name: uniqueDraftSlug(baseSlug),
     displayName: itemLabel(item),
     parentId: parentId || undefined,
+    sortOrder: designerDraftItems.value.filter((row) => (row.parentId || null) === parentId).length,
   });
 }
 
@@ -3618,7 +3829,34 @@ function openQrEditor(mapping?: QrMapping) {
   showQrEditor.value = true;
   qrModalMode.value = mapping ? 'view' : 'edit';
   if (mapping) editQr(mapping);
+  else {
+    qrTargetType.value = 'vendor';
+    Object.assign(qrForm, { qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
+    Object.assign(qrPreview, { shortQrUrl: '', finalPublicUrl: '' });
+    qrCodeDataUrl.value = '';
+  }
   loadQrTemplates();
+}
+
+async function openUnmappedQrTarget(target: UnmappedQrTarget) {
+  openQrEditor();
+  qrTargetType.value = target.type;
+  const event = events.value.find((row) => row.id === target.eventId);
+  const menu = menus.value.find((row) => row.id === target.menuId);
+  const item = target.itemId ? items.value.find((row) => row.id === target.itemId) : undefined;
+  const base = [event?.name, menu?.name, item?.name].filter(Boolean).join('-') || target.key;
+  let hash = base;
+  let index = 2;
+  const used = new Set(qrMappings.value.map((mapping) => mapping.qrHash));
+  while (used.has(hash)) hash = `${base}-${index++}`;
+  Object.assign(qrForm, {
+    qrHash: hash,
+    url: target.path,
+    eventId: target.eventId,
+    menuId: target.menuId,
+    itemId: target.itemId || 0,
+  });
+  await buildQrDestination();
 }
 
 function closeQrEditor() {
@@ -3735,6 +3973,7 @@ async function saveQr() {
 
 watch(selectedVendorId, (vendorId) => {
   localStorage.setItem('peshkash-admin-vendor-id', String(vendorId || ''));
+  selectedQrIds.value = [];
   if (route.params.vendorId || route.params.eventId || route.params.menuId) {
     syncItemRows();
     return;
@@ -3926,6 +4165,68 @@ const filteredQrMappings = computed(() => {
   else list.sort((a, b) => qrStatus(a).localeCompare(qrStatus(b)));
   return list;
 });
+
+const unmappedQrTargets = computed<UnmappedQrTarget[]>(() => {
+  const vendorEventIds = new Set(vendorEvents.value.map((event) => event.id));
+  // A dynamic event QR may currently resolve to the same URL as its linked menu, but it is not a
+  // reusable static menu asset. Keep that menu visible as "Needs QR" until its own QR is created.
+  const normalizedMappings = new Set(
+    vendorQrMappings.value
+      .filter((mapping) => mapping.type !== 'event')
+      .map((mapping) => mapping.url?.replace(/\/$/, '')),
+  );
+  const menuTargets = previews.menus
+    .filter((preview) => vendorEventIds.has(preview.eventId) && !normalizedMappings.has(preview.publicPath.replace(/\/$/, '')))
+    .map((preview) => ({
+      key: `menu-${preview.eventId}-${preview.menuId}`,
+      label: menus.value.find((menu) => menu.id === preview.menuId)?.displayName || preview.menuName,
+      context: events.value.find((event) => event.id === preview.eventId)?.displayName || preview.eventName,
+      type: 'menu' as const,
+      eventId: preview.eventId,
+      menuId: preview.menuId,
+      path: preview.publicPath,
+    }));
+  const itemTargets = previews.items
+    .filter((preview) => vendorEventIds.has(preview.eventId) && !normalizedMappings.has(preview.publicPath.replace(/\/$/, '')))
+    .map((preview) => ({
+      key: `item-${preview.eventId}-${preview.itemId}`,
+      label: items.value.find((item) => item.id === preview.itemId)?.displayName || preview.itemName || 'Item',
+      context: `${events.value.find((event) => event.id === preview.eventId)?.displayName || preview.eventName} · ${menus.value.find((menu) => menu.id === preview.menuId)?.displayName || preview.menuName}`,
+      type: 'item' as const,
+      eventId: preview.eventId,
+      menuId: preview.menuId,
+      itemId: preview.itemId,
+      path: preview.publicPath,
+    }));
+  return [...menuTargets, ...itemTargets];
+});
+
+const filteredUnmappedQrTargets = computed(() => {
+  let list = [...unmappedQrTargets.value];
+  if (qrTypeFilter.value !== 'all') list = list.filter((target) => target.type === qrTypeFilter.value);
+  if (qrSearch.value) {
+    const query = qrSearch.value.toLowerCase();
+    list = list.filter((target) => `${target.label} ${target.context} ${target.path}`.toLowerCase().includes(query));
+  }
+  return list.sort((a, b) => a.label.localeCompare(b.label));
+});
+
+const selectedQrMappings = computed(() => vendorQrMappings.value.filter((mapping) => selectedQrIds.value.includes(mapping.id)));
+const qrBatchTargets = computed(() => selectedQrMappings.value.map((mapping) => ({
+  key: `mapping-${mapping.id}`,
+  label: qrTargetLabel(mapping),
+  context: mapping.qrHash,
+  type: qrTypeBadge(mapping).label,
+  path: mapping.url,
+})));
+
+function toggleAllVisibleQrs() {
+  const visibleIds = filteredQrMappings.value.map((mapping) => mapping.id);
+  const everySelected = visibleIds.length > 0 && visibleIds.every((id) => selectedQrIds.value.includes(id));
+  selectedQrIds.value = everySelected
+    ? selectedQrIds.value.filter((id) => !visibleIds.includes(id))
+    : [...new Set([...selectedQrIds.value, ...visibleIds])];
+}
 
 function openPrintForQr(mapping: QrMapping) {
   selectedQrHashForPrint.value = mapping.qrHash;
@@ -6193,6 +6494,13 @@ td a {
   min-width: 0;
 }
 
+.arrange-row-actions { display: inline-flex; gap: 4px; }
+
+@media (max-width: 520px) {
+  .admin-tree-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-tree-row > small { grid-column: 1 / -1; }
+}
+
 .tree-children-admin {
   display: grid;
   gap: 8px;
@@ -6471,8 +6779,18 @@ td a {
 }
 .item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
 .item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
+.item-field-pair { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.designer-upload-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.designer-upload-btn { align-items: center; display: inline-flex !important; flex-direction: row !important; gap: 6px !important; margin: 0; width: fit-content; }
+.designer-upload-btn input { display: none; }
+.designer-active-toggle { align-items: center !important; flex-direction: row !important; gap: 8px !important; text-transform: none !important; }
+.designer-active-toggle input { accent-color: #bd945a; height: 16px; width: 16px; }
 .image-preview { line-height: 0; }
 .item-img-preview { border-radius: 8px; max-height: 120px; max-width: 100%; object-fit: cover; border: 1px solid #e6ddd2; }
+
+@media (max-width: 520px) {
+  .item-field-pair { grid-template-columns: 1fr; }
+}
 
 .tag-combobox {
   position: relative;
@@ -7548,6 +7866,12 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 .col-window { color: #6b7280; font-size: 0.82rem; white-space: nowrap; }
 
 .qr-image { border: none; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); display: block; height: auto; max-width: 200px; width: 100%; }
+.qr-select-col { text-align: center; width: 36px; }
+.qr-select-col input { accent-color: #bd945a; height: 15px; width: 15px; }
+.qr-pending-hash { color: #9a7450; font-size: 0.72rem; font-weight: 700; }
+.qr-target-cell small { color: #8c7667; display: block; font-size: 0.7rem; margin-top: 2px; }
+.qr-batch-backdrop { align-items: flex-start; overflow-y: auto; padding: 3vh 20px; }
+.qr-batch-modal { background: #f8f5f1; border: 1px solid #dccbb8; border-radius: 12px; box-shadow: 0 24px 70px rgba(26,20,16,.24); margin: auto; max-width: 1500px; padding: 20px; width: 100%; }
 
 .saved-state { color: #9a8878; font-size: 0.75rem; }
 

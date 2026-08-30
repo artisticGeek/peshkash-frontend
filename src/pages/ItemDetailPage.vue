@@ -44,7 +44,18 @@
       <div class="d-flex justify-content-center mb-3">
         <div class="col-12 col-md-10 col-lg-8">
           <div class="ratio ratio-16x9">
-            <img :src="itemData?.image" :alt="itemData?.displayName || itemData?.name" class="w-100 h-100 rounded shadow pk-hero-img" loading="lazy" />
+            <img
+              v-if="itemData?.image && !imageFailed"
+              :src="itemData.image"
+              :alt="itemData?.displayName || itemData?.name"
+              class="w-100 h-100 rounded shadow pk-hero-img"
+              loading="lazy"
+              @error="imageFailed = true"
+            />
+            <div v-else class="pk-image-fallback rounded shadow" role="img" :aria-label="`${itemData?.displayName || itemData?.name} image unavailable`">
+              <i class="bi bi-image"></i>
+              <span>Image coming soon</span>
+            </div>
           </div>
         </div>
       </div>
@@ -67,9 +78,9 @@
         </ol>
       </nav>
 
-      <div class="card pk-detail-card mb-4">
+      <div class="card bg-light border-0 mb-4 shadow-sm">
         <div class="card-body">
-          <h2 class="h5 mb-3 pk-detail-heading">
+          <h2 class="h5 mb-3 text-primary">
             <i :class="['bi', 'me-2', itemSectionIcon]"></i>{{ itemSectionLabel }}
           </h2>
           <p class="mb-3">{{ itemData?.description }}</p>
@@ -94,21 +105,22 @@
         </div>
       </div>
 
-      <div class="pk-engage-bar" aria-label="Item actions">
-        <button class="pk-engage-btn" :class="{ active: userReaction === 'like' }" @click="toggleReaction('like')" aria-label="Like this item">
+      <div class="pk-engage-section" aria-label="Item actions">
+        <span class="pk-engage-title">Your take</span>
+        <div class="pk-engage-actions">
+        <button class="btn btn-sm" :class="userReaction === 'like' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('like')" aria-label="Like this item">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
           <span>Like</span>
         </button>
-        <div class="pk-engage-sep" aria-hidden="true"></div>
-        <button class="pk-engage-btn" :class="{ active: userReaction === 'dislike', 'is-dislike': true }" @click="toggleReaction('dislike')" aria-label="Dislike this item">
+        <button class="btn btn-sm" :class="userReaction === 'dislike' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('dislike')" aria-label="Dislike this item">
           <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
           <span>Dislike</span>
         </button>
-        <div class="pk-engage-sep" aria-hidden="true"></div>
-        <button class="pk-engage-btn" :class="{ active: isBookmarked }" @click="toggleBookmark" aria-label="Bookmark this item">
+        <button class="btn btn-sm" :class="isBookmarked ? 'btn-primary' : 'btn-outline-primary'" @click="toggleBookmark" aria-label="Bookmark this item">
           <i :class="isBookmarked ? 'bi bi-bookmark-fill' : 'bi bi-bookmark'"></i>
           <span>Save</span>
         </button>
+        </div>
       </div>
     </div>
 
@@ -150,6 +162,7 @@ onUnmounted(resetMeta)
 
 const itemData = ref<any>(null)
 const isLoading = ref(true)
+const imageFailed = ref(false)
 
 const ITEM_SECTION_MAP: Record<string, { label: string; icon: string }> = {
   dish:     { label: 'About the dish',    icon: 'bi-fork-knife' },
@@ -250,6 +263,7 @@ async function loadItem() {
   isLoading.value = true
   error.value = null
   itemData.value = null
+  imageFailed.value = false
   loadEngagement()
 
   try {
@@ -325,13 +339,20 @@ onMounted(loadItem)
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
 .pk-hero-img { object-fit: cover; }
-.pk-beige-text { color: beige; }
-
-.pk-detail-card {
-  background: var(--rx-surface-color, #ebe7e1);
-  border: 1px solid var(--rx-border-color, #d8d2c8);
+.pk-image-fallback {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.55rem;
+  color: #9a8064;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(189, 148, 90, 0.14), transparent 30%),
+    linear-gradient(145deg, #f8f4ee, #eee7dd);
+  border: 1px solid rgba(189, 148, 90, 0.22);
 }
-.pk-detail-heading { color: #bd945a; }
+.pk-image-fallback i { font-size: 2rem; }
+.pk-image-fallback span { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em; }
+.pk-beige-text { color: beige; }
 
 .vendor-name,
 .event-name {
@@ -359,45 +380,16 @@ onMounted(loadItem)
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
 }
 
-.pk-engage-bar {
+.pk-engage-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   margin: 1.5rem auto;
-  max-width: 300px;
-  background: rgba(26, 20, 16, 0.55);
-  border: 1px solid rgba(189, 148, 90, 0.22);
-  border-radius: 100px;
-  padding: 0.3rem;
-  gap: 0;
+  gap: 0.55rem;
 }
-
-.pk-engage-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: none;
-  border: none;
-  padding: 0.45rem 1rem;
-  border-radius: 100px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(245, 242, 238, 0.5);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-.pk-engage-btn:hover { color: #bd945a; }
-.pk-engage-btn.active {
-  background: rgba(189, 148, 90, 0.14);
-  color: #bd945a;
-}
-
-.pk-engage-sep {
-  width: 1px;
-  height: 1.1rem;
-  background: rgba(189, 148, 90, 0.2);
-  flex-shrink: 0;
-}
+.pk-engage-title { color: var(--pk-mushroom, #8c7667); font-size: 0.82rem; font-weight: 600; }
+.pk-engage-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.pk-engage-actions .btn { align-items: center; display: inline-flex; gap: 0.35rem; min-width: 82px; justify-content: center; }
 </style>
 

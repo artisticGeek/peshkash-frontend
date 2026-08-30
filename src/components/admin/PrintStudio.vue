@@ -47,6 +47,7 @@ const isGenerating = ref(false);
 const isDownloading = ref(false);
 const downloadProgress = ref(0);
 const downloadTotal = ref(0);
+const selectedTargetKeys = ref<string[]>([]);
 
 const selectedTemplate = computed(() =>
   templates.value.find(t => String(t.id) === String(selectedTemplateId.value)) ?? null
@@ -62,7 +63,7 @@ const exportPixelSize = computed(() => {
 
 // Deep-links directly into the editor for the currently selected design
 const editTemplateRoute = computed(() =>
-  selectedTemplate.value?.id
+  typeof selectedTemplate.value?.id === 'number'
     ? `/dashboard/qr-templates?edit=${selectedTemplate.value.id}`
     : '/dashboard/qr-templates'
 );
@@ -79,7 +80,8 @@ function qrHashForTarget(target: QrTarget): string | null {
   return mappingForTarget(target)?.qrHash ?? null;
 }
 
-const unmappedTargets = computed(() => props.targets.filter(target => !mappingForTarget(target)));
+const selectedTargets = computed(() => props.targets.filter(target => selectedTargetKeys.value.includes(target.key)));
+const unmappedTargets = computed(() => selectedTargets.value.filter(target => !mappingForTarget(target)));
 
 function templateDefinition(design: StudioDesign): QrTemplateDefinition | undefined {
   return qrManifest.templates.find(t => t.id === design.libraryTemplateId)
@@ -99,7 +101,7 @@ function layoutFor(design: StudioDesign, template: QrTemplateDefinition): FixedE
 
 const printPreflight = computed(() => {
   const design = selectedTemplate.value;
-  const firstMapping = props.targets.map(mappingForTarget).find((mapping): mapping is QrMapping => Boolean(mapping));
+  const firstMapping = selectedTargets.value.map(mappingForTarget).find((mapping): mapping is QrMapping => Boolean(mapping));
   if (!design || !firstMapping) return null;
   const definition = templateDefinition(design);
   if (!definition) return null;
@@ -113,7 +115,7 @@ const printPreflight = computed(() => {
 
 const canExport = computed(() => Boolean(
   selectedTemplate.value
-  && props.targets.length
+  && selectedTargets.value.length
   && unmappedTargets.value.length === 0
   && printPreflight.value?.canExport
 ));
@@ -164,14 +166,32 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
   };
 }
 
+function builtInTemplates(): StudioDesign[] {
+  return qrManifest.templates.slice(0, 6).map((template) => ({
+    ...blankDesign(),
+    id: `library:${template.id}`,
+    name: template.label,
+    libraryTemplateId: template.id,
+    theme: template.defaultTheme,
+    widthMm: 120,
+    heightMm: 120 * (template.canvas.height / template.canvas.width),
+    merchantName: template.merchantType,
+    ...template.defaultCopy,
+    destination: template.sampleDestination,
+  }));
+}
+
 async function loadTemplates(): Promise<void> {
   try {
     const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/designs`);
-    templates.value = data.map(fromApi);
+    templates.value = data.length ? data.map(fromApi) : builtInTemplates();
     if (templates.value.length > 0 && selectedTemplateId.value === null) {
       selectedTemplateId.value = templates.value[0].id ?? null;
     }
-  } catch { /* ignore */ }
+  } catch {
+    templates.value = builtInTemplates();
+    selectedTemplateId.value = templates.value[0]?.id ?? null;
+  }
 }
 
 // Renders a StudioDesign to a PNG data URL at 300 DPI.
@@ -205,14 +225,14 @@ async function renderToPng(design: StudioDesign, destinationOverride: string): P
 }
 
 async function generatePreviews(): Promise<void> {
-  if (!selectedTemplate.value || !props.targets.length) {
+  if (!selectedTemplate.value || !selectedTargets.value.length) {
     previews.value = {};
     return;
   }
   isGenerating.value = true;
   previews.value = {};
   const result: Record<string, string> = {};
-  for (const target of props.targets) {
+  for (const target of selectedTargets.value) {
     const destination = qrValueForTarget(target);
     if (!destination) continue;
     result[target.key] = await renderToPng(selectedTemplate.value, destination);
@@ -225,9 +245,9 @@ async function downloadAll(): Promise<void> {
   if (!selectedTemplate.value || !canExport.value) return;
   isDownloading.value = true;
   downloadProgress.value = 0;
-  downloadTotal.value = props.targets.length;
-  for (let i = 0; i < props.targets.length; i++) {
-    const target = props.targets[i];
+  downloadTotal.value = selectedTargets.value.length;
+  for (let i = 0; i < selectedTargets.value.length; i++) {
+    const target = selectedTargets.value[i];
     const destination = qrValueForTarget(target);
     if (!destination) continue;
     const png = await renderToPng(selectedTemplate.value, destination);
@@ -250,8 +270,37 @@ function downloadSingle(target: QrTarget): void {
   link.click();
 }
 
+function toggleAllTargets(): void {
+  selectedTargetKeys.value = selectedTargetKeys.value.length === props.targets.length
+    ? []
+    : props.targets.map(target => target.key);
+}
+
+function escapeHtml(value: string): string {
+  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return value.replace(/[&<>"']/g, character => entities[character] ?? character);
+}
+
+async function printSelected(): Promise<void> {
+  if (!canExport.value) return;
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+  printWindow.opener = null;
+  await generatePreviews();
+  const widthMm = selectedTemplate.value!.widthMm;
+  const pages = selectedTargets.value.map(target => {
+    const src = previews.value[target.key];
+    return src ? `<figure><img src="${src}" alt="${escapeHtml(target.label)}"><figcaption>${escapeHtml(target.label)}</figcaption></figure>` : '';
+  }).join('');
+  printWindow.document.write(`<!doctype html><html><head><title>Peshkash QR print</title><style>@page{margin:10mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.sheet{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8mm}figure{break-inside:avoid;margin:0;text-align:center;width:${widthMm}mm}img{display:block;height:auto;width:100%;margin:auto}figcaption{font-size:9pt;margin-top:3mm}</style></head><body><main class="sheet">${pages}</main><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`);
+  printWindow.document.close();
+}
+
 watch(selectedTemplate, () => { generatePreviews(); });
-watch(() => props.targets, () => { generatePreviews(); }, { deep: true });
+watch(selectedTargetKeys, () => { generatePreviews(); }, { deep: true });
+watch(() => props.targets, (targets) => {
+  selectedTargetKeys.value = targets.map(target => target.key);
+}, { deep: true, immediate: true });
 onMounted(() => { loadTemplates(); });
 </script>
 
@@ -279,7 +328,7 @@ onMounted(() => { loadTemplates(); });
       <div class="ps-event-pill">
         <i class="bi bi-calendar2-event"></i>
         <strong>{{ event.displayName }}</strong>
-        <span class="ps-count-badge">{{ targets.length }} QR{{ targets.length !== 1 ? 's' : '' }}</span>
+        <span class="ps-count-badge">{{ selectedTargets.length }}/{{ targets.length }} selected</span>
       </div>
 
       <div class="ps-controls">
@@ -298,6 +347,14 @@ onMounted(() => { loadTemplates(); });
           <i class="bi bi-pencil-square"></i> Edit Template
         </RouterLink>
 
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleAllTargets">
+          <i class="bi bi-check2-square"></i> {{ selectedTargetKeys.length === targets.length ? 'Clear all' : 'Select all' }}
+        </button>
+
+        <button class="btn btn-outline-primary btn-sm" :disabled="!canExport || isGenerating" type="button" @click="printSelected">
+          <i class="bi bi-printer"></i> Print selection
+        </button>
+
         <button
           class="btn btn-primary btn-sm"
           :disabled="!canExport || isDownloading || isGenerating"
@@ -311,7 +368,7 @@ onMounted(() => { loadTemplates(); });
             <i class="bi bi-hourglass-split spin"></i> Preparing…
           </template>
           <template v-else>
-            <i class="bi bi-download"></i> Download All ({{ targets.length }})
+            <i class="bi bi-download"></i> Export PNGs ({{ selectedTargets.length }})
           </template>
         </button>
       </div>
@@ -345,7 +402,7 @@ onMounted(() => { loadTemplates(); });
     <!-- No targets -->
     <div v-if="targets.length === 0" class="ps-empty ps-empty--inline">
       <i class="bi bi-qr-code"></i>
-      <p>No QR targets for this event yet. Attach menus or link items first.</p>
+      <p>No QR targets yet. Attach menus, link items, or select QR Bank assets first.</p>
     </div>
 
     <!-- Generating spinner -->
@@ -356,7 +413,11 @@ onMounted(() => { loadTemplates(); });
 
     <!-- QR Grid -->
     <div v-else class="ps-grid">
-      <div v-for="target in targets" :key="target.key" class="ps-card">
+      <div v-for="target in targets" :key="target.key" class="ps-card" :class="{ 'ps-card--selected': selectedTargetKeys.includes(target.key) }">
+        <label class="ps-card-select">
+          <input v-model="selectedTargetKeys" type="checkbox" :value="target.key" :aria-label="`Select ${target.label}`" />
+          <span>{{ selectedTargetKeys.includes(target.key) ? 'Selected' : 'Select' }}</span>
+        </label>
         <!-- Template preview -->
         <div class="ps-card-preview" :style="selectedTemplate ? { aspectRatio: `${selectedTemplate.widthMm} / ${selectedTemplate.heightMm}` } : {}">
           <img
@@ -533,6 +594,24 @@ onMounted(() => { loadTemplates(); });
   transform: translateY(-1px);
 }
 
+.ps-card--selected { border-color: #BD945A; box-shadow: 0 0 0 1px rgba(189, 148, 90, 0.22); }
+.ps-card-select {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #E8DBCE;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.67rem;
+  font-weight: 700;
+  gap: 5px;
+  left: 8px;
+  padding: 3px 7px;
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+}
+.ps-card-select input { accent-color: #BD945A; }
+
 .ps-card-preview {
   background: #F5F2EE;
   border-bottom: 1px solid #E8DBCE;
@@ -619,4 +698,9 @@ onMounted(() => { loadTemplates(); });
 
 .btn { font-size: 0.84rem; }
 .btn-sm { font-size: 0.78rem; padding: 4px 10px; }
+
+@media (max-width: 720px) {
+  .ps-production-blocker { grid-template-columns: auto minmax(0, 1fr); }
+  .ps-production-blocker .btn { grid-column: 1 / -1; }
+}
 </style>

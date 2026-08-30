@@ -10,6 +10,7 @@
       <!-- ═══════ HERO ═══════════════════════════════════════ -->
       <section class="hero" id="hero">
         <div class="hero-content">
+          <PeshkashLogo class="hero-logo scene-in" variant="light-bg" :height="46" style="--d:0s" />
           <p class="kicker scene-in" style="--d:0s">
             <span class="kdot"></span> The QR revolution · For every offline business
           </p>
@@ -45,7 +46,6 @@
             <div class="demo-wrap" @click="scanned = !scanned">
               <div class="demo-qr-card" :class="{ scanned }">
                 <img :src="qrImg" alt="" class="demo-qr-img" />
-                <span class="demo-scan-label">{{ scanned ? 'tap to reset' : 'tap to scan ✦' }}</span>
               </div>
               <div class="demo-connector" :class="{ show: scanned }"></div>
               <Transition name="phone-reveal">
@@ -813,6 +813,7 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   /* No negative margin — that was the source of the horizontal
      overflow on mobile (a bleed effect isn't worth a broken viewport) */
 }
+.hero-logo { margin-bottom: 1.5rem; }
 @media (max-width: 860px) {
   .hero-content { padding: 1.5rem 1.25rem; }
 }
@@ -869,12 +870,6 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   50%      { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) translateY(-9px); }
 }
 .demo-qr-img { width: 100%; display: block; border-radius: 6px; }
-.demo-scan-label {
-  position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
-  background: var(--g); color: #0a0908;
-  font-size: 0.62rem; font-weight: 900;
-  padding: 0.2rem 0.8rem; border-radius: 100px; white-space: nowrap;
-}
 .demo-connector { width: 1.5px; height: 0; background: var(--g); transition: height 0.4s; opacity: 0; }
 .demo-connector.show { height: 60px; opacity: 1; }
 
