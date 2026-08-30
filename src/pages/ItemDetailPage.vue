@@ -99,35 +99,25 @@
           </div>
       </section>
 
-      <div class="pk-engage-section" aria-label="Item actions">
-        <span class="pk-engage-title">Keep what speaks to you</span>
-        <div class="pk-engage-actions">
-        <button class="btn btn-sm" :class="userReaction === 'like' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('like')" aria-label="Like this item">
+      <nav class="pk-action-dock" aria-label="Item actions">
+        <button class="pk-action-icon" :class="{ active: userReaction === 'like' }" type="button" @click="toggleReaction('like')" aria-label="Like this item" :aria-pressed="userReaction === 'like'" title="Like">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
-          <span>Like</span>
+          <span class="visually-hidden">Like</span>
         </button>
-        <button class="btn btn-sm" :class="userReaction === 'dislike' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('dislike')" aria-label="Dislike this item">
+        <button class="pk-action-icon" :class="{ active: userReaction === 'dislike' }" type="button" @click="toggleReaction('dislike')" aria-label="Dislike this item" :aria-pressed="userReaction === 'dislike'" title="Dislike">
           <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
-          <span>Dislike</span>
+          <span class="visually-hidden">Dislike</span>
         </button>
-        <button class="btn btn-sm pk-save-action" :class="isBookmarked ? 'btn-primary' : 'btn-outline-primary'" @click="saveItemToPhone" aria-label="Save this item using your phone">
+        <button class="pk-action-icon" :class="{ active: isBookmarked }" type="button" @click="saveItemToPhone" aria-label="Save this item using your phone" :aria-pressed="isBookmarked" title="Save">
           <i :class="isBookmarked ? 'bi bi-bookmark-check-fill' : 'bi bi-bookmark-plus'"></i>
-          <span>{{ isBookmarked ? 'Saved' : 'Save' }}</span>
+          <span class="visually-hidden">{{ isBookmarked ? 'Saved' : 'Save' }}</span>
         </button>
-        </div>
-      </div>
+        <button class="pk-action-icon" type="button" @click="shareItem" aria-label="Share this item" title="Share">
+          <i class="bi bi-share-fill"></i>
+          <span class="visually-hidden">Share</span>
+        </button>
+      </nav>
     </main>
-
-    <!-- Floating Share Button -->
-    <button
-      v-if="itemData"
-      class="btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-3 shadow-lg pk-share-fab"
-      @click="shareItem"
-      aria-label="Share this item"
-      style="width: 56px; height: 56px; z-index: 1000;"
-    >
-      <i class="bi bi-share-fill fs-5"></i>
-    </button>
   </div>
   </div>
 </template>
@@ -344,7 +334,7 @@ onMounted(loadItem)
 <style scoped>
 .pk-item-page-surface { background: #f3ede4; min-height: 100vh; }
 .pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
-.pk-item-shell { margin: 0 auto; max-width: 1060px; }
+.pk-item-shell { display: flex; flex-direction: column; margin: 0 auto; max-width: 1060px; }
 .pk-back-btn {
   display: inline-flex;
   align-items: center;
@@ -407,19 +397,22 @@ onMounted(loadItem)
 .pk-item-lineage .breadcrumb-item { color: #8d7b67; font-size: 0.76rem; letter-spacing: 0.04em; }
 .pk-story {
   border-top: 1px solid #ddd1c1;
+  display: flex;
+  flex-direction: column;
   margin: clamp(3.5rem, 8vw, 6.75rem) auto 0;
   max-width: 760px;
   padding-top: clamp(2.25rem, 5vw, 4rem);
+  width: 100%;
 }
 .pk-story--no-media { margin-top: 1.5rem; }
 .pk-story h2 {
-  color: #1d1711;
+  color: #7a5b3d;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.25rem, 5vw, 4rem);
+  font-size: clamp(1.9rem, 3.4vw, 2.75rem);
   font-weight: 500;
-  letter-spacing: -0.035em;
-  line-height: 1;
-  margin: 0 0 1.4rem;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  margin: 0 0 1.15rem;
 }
 .pk-story-copy { color: #594c40; font-size: clamp(1rem, 2vw, 1.15rem); line-height: 1.85; margin-bottom: 1.5rem; }
 .pk-story .badge { background: transparent !important; border: 1px solid #d9ccbc; color: #6c5944 !important; font-weight: 500; padding: 0.45rem 0.65rem; }
@@ -441,50 +434,60 @@ onMounted(loadItem)
   border-bottom-color: #bd945a;
 }
 
-.pk-share-fab {
-  background: #b98a4d;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.pk-share-fab:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
-}
-
-.pk-engage-section {
+.pk-action-dock {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: rgba(247, 241, 232, 0.9);
+  border: 1px solid rgba(189, 148, 90, 0.42);
+  border-radius: 999px;
+  box-shadow: 0 14px 36px rgba(52, 37, 22, 0.16);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid #e5dbce;
-  margin: clamp(3rem, 7vw, 5rem) auto 0;
-  max-width: 760px;
-  padding-top: 2rem;
-  gap: 0.8rem;
+  gap: 0.25rem;
+  padding: 0.45rem;
+  position: fixed;
+  right: clamp(0.75rem, 2vw, 2rem);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1000;
 }
-.pk-engage-title { color: var(--pk-mushroom, #8c7667); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.pk-engage-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
-.pk-engage-actions .btn { align-items: center; border-radius: 999px; display: inline-flex; gap: 0.35rem; justify-content: center; min-height: 40px; min-width: 92px; padding-inline: 1rem; }
-.pk-save-action { min-width: 112px !important; }
+.pk-action-icon {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: #7a5b3d;
+  display: inline-flex;
+  font-size: 1rem;
+  height: 44px;
+  justify-content: center;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  width: 44px;
+}
+.pk-action-icon:hover { background: rgba(189, 148, 90, 0.16); color: #402b18; transform: scale(1.06); }
+.pk-action-icon.active { background: #bd945a; color: #1a1410; }
+.pk-action-icon:focus-visible { box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.28); outline: 2px solid #7a5b3d; outline-offset: 2px; }
 
 @media (max-width: 640px) {
-  .pk-item-page { padding-left: 1rem; padding-right: 1rem; }
+  .pk-item-page { padding-bottom: 8rem; padding-left: 1rem; padding-right: 1rem; }
   .pk-item-header { padding-bottom: 2rem; padding-top: 3.5rem; }
   .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
   .pk-item-media .ratio { --bs-aspect-ratio: 78%; }
   .pk-story { margin-top: 3.5rem; padding-inline: 0.35rem; }
   .pk-story--no-media { margin-top: 1rem; }
   .pk-story-copy { line-height: 1.7; }
-  .pk-engage-actions { width: 100%; }
-  .pk-engage-actions .btn { flex: 1; min-width: 88px; }
-  .pk-share-fab {
-    display: flex;
-    height: 48px !important;
-    margin: 1.25rem auto 0 !important;
-    position: static !important;
-    width: 48px !important;
+  .pk-action-dock {
+    align-self: flex-end;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    flex-direction: row;
+    left: auto;
+    margin-top: 1.75rem;
+    right: auto;
+    position: sticky;
+    top: auto;
+    transform: none;
   }
+  .pk-action-icon { height: 46px; width: 46px; }
 }
 </style>
 

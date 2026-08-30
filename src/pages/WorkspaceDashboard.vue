@@ -7053,6 +7053,52 @@ td.row-actions .icon-btn + a {
 
 /* ── Mobile overrides (placed after base rules to win cascade) ──────────────── */
 @media (max-width: 767px) {
+  /* Vendor editor: keep the editable form first and make the whole body scroll.
+     The previous stacked grid put the large QR pane first and left the form
+     outside the usable viewport on phones. */
+  .modal-backdrop-custom {
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .vendor-modal {
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .vendor-modal-grid {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vendor-modal-grid .modal-pane-scroll {
+    flex: 0 0 auto;
+    order: -1;
+    overflow: visible;
+    padding: 14px 16px 0;
+  }
+
+  .vendor-modal-grid .qr-pane {
+    border-bottom: 0;
+    border-top: 1px solid #e6dfd4;
+    flex: 0 0 auto;
+    order: 0;
+  }
+
+  .vendor-modal .modal-title-row {
+    padding: 16px 16px 12px;
+  }
+
+  .vendor-modal .modal-pane-scroll .actions:last-child {
+    margin-inline: -16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    z-index: 4;
+  }
+
   /* Stack home intro text above action grid */
   .home-intro {
     flex-direction: column;
