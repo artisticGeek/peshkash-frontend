@@ -1,5 +1,5 @@
 <template>
-  <PublicNav />
+  <PublicNav v-if="!error" />
 
   <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
   <LoginModal
@@ -14,12 +14,13 @@
   </div>
 
   <!-- Error State -->
-  <div v-else-if="error" class="container py-5">
-    <div class="alert alert-danger" role="alert">
-      <i class="bi bi-exclamation-triangle-fill me-2"></i>
-      {{ error }}
-    </div>
-  </div>
+  <PublicErrorState
+    v-else-if="error"
+    title="This menu is not available right now"
+    message="The link may have changed, or the menu may be temporarily unavailable. Please try again."
+    :reference="`${eventName}/${menuName}`"
+    @retry="loadMenu"
+  />
 
   <!-- Menu Content -->
   <div v-else class="container py-3">
@@ -126,6 +127,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PublicNav from '../components/PublicNav.vue'
+import PublicErrorState from '../components/PublicErrorState.vue'
 import MenuTree from '../components/MenuTree.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
@@ -227,7 +229,10 @@ watch([searchQuery, selectedFilter], ([newSearch, newFilter], [oldSearch, oldFil
   }
 })
 
-onMounted(async () => {
+async function loadMenu() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}`)
     
@@ -258,11 +263,13 @@ onMounted(async () => {
       menuId: data?.menu?.id,
     })
   } catch (err: any) {
-    error.value = err.message || 'An error occurred while loading the menu'
+    error.value = 'unavailable'
     console.error('Error loading menu:', err)
   } finally {
     isLoading.value = false
-    
+
+    if (error.value) return
+
     // Trigger animations after content loads
     await nextTick()
     const els = document.querySelectorAll<HTMLElement>('.pk-reveal')
@@ -281,7 +288,9 @@ onMounted(async () => {
     }, { threshold: 0.2 })
     els.forEach((el) => io.observe(el))
   }
-})
+}
+
+onMounted(loadMenu)
 </script>
 
 <style scoped>

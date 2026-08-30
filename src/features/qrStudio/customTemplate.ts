@@ -1,4 +1,4 @@
-import type { CustomTemplateSpec, QrTemplateDefinition, TemplateFormat } from './types';
+import type { CanvasElement, CustomTemplateSpec, QrTemplateDefinition, TemplateFormat } from './types';
 
 export interface FormatPreset {
   format: TemplateFormat;
@@ -20,6 +20,41 @@ export const FORMAT_PRESETS: FormatPreset[] = [
   { format: 'ticket', label: 'Ticket strip', description: 'Wide entry pass or coupon', aspect: { w: 12, h: 5 }, defaultMm: { w: 180, h: 75 } },
   { format: 'label', label: 'Shelf label', description: 'Wide product or shelf label', aspect: { w: 12, h: 7 }, defaultMm: { w: 120, h: 70 } },
 ];
+
+export type LayeredStarterId = 'blank' | 'brass-frame' | 'editorial-split' | 'offer-badge';
+
+export const LAYERED_STARTERS: Array<{ id: LayeredStarterId; label: string; description: string; icon: string }> = [
+  { id: 'blank', label: 'Blank canvas', description: 'Start with protected QR and copy layers', icon: 'bi bi-bounding-box' },
+  { id: 'brass-frame', label: 'Brass frame', description: 'Inset border with an editable edition label', icon: 'bi bi-square' },
+  { id: 'editorial-split', label: 'Editorial split', description: 'Layered color field with a caption accent', icon: 'bi bi-layout-split' },
+  { id: 'offer-badge', label: 'Offer badge', description: 'Backdrop medallion and editable CTA ribbon', icon: 'bi bi-patch-check' },
+];
+
+let starterSequence = 0;
+function starterId(prefix: string): string {
+  starterSequence += 1;
+  return `${prefix}-${Date.now().toString(36)}-${starterSequence}`;
+}
+
+/** Layer-native starter compositions. Every decoration is an ordinary editable studio element. */
+export function buildLayeredStarter(starter: LayeredStarterId, canvas: { width: number; height: number }): CanvasElement[] {
+  const { width: w, height: h } = canvas;
+  const short = Math.min(w, h);
+  if (starter === 'brass-frame') return [
+    { id: starterId('frame'), kind: 'shape', shape: 'frame', x: w * 0.045, y: h * 0.065, w: w * 0.91, h: h * 0.87, fill: '#BB9057', opacity: 0.72, radius: short * 0.012, layer: 'back', name: 'Brass frame' },
+    { id: starterId('edition'), kind: 'text', x: w * 0.07, y: h * 0.07, w: w * 0.36, h: short * 0.08, text: 'LIMITED EDITION', color: '#BB9057', fontFamily: 'Urbanist, Arial, sans-serif', fontSize: Math.round(short * 0.026), fontWeight: '700', align: 'left', layer: 'front', name: 'Edition label' },
+  ];
+  if (starter === 'editorial-split') return [
+    { id: starterId('field'), kind: 'shape', shape: 'rect', x: w * 0.56, y: 0, w: w * 0.44, h, fill: '#D9C4AE', opacity: 0.72, radius: 0, layer: 'back', name: 'Editorial color field' },
+    { id: starterId('rule'), kind: 'shape', shape: 'line', x: w * 0.08, y: h * 0.84, w: w * 0.28, h: Math.max(3, short * 0.006), fill: '#BB9057', opacity: 1, layer: 'front', name: 'Caption rule' },
+    { id: starterId('caption'), kind: 'text', x: w * 0.08, y: h * 0.865, w: w * 0.38, h: short * 0.07, text: 'MADE WITH INTENTION', color: '#1A1410', fontFamily: 'Urbanist, Arial, sans-serif', fontSize: Math.round(short * 0.024), fontWeight: '700', align: 'left', layer: 'front', name: 'Editorial caption' },
+  ];
+  if (starter === 'offer-badge') return [
+    { id: starterId('medallion'), kind: 'shape', shape: 'circle', x: w * 0.67, y: h * 0.06, w: short * 0.24, h: short * 0.24, fill: '#BB9057', opacity: 0.18, layer: 'back', name: 'Offer medallion' },
+    { id: starterId('ribbon'), kind: 'cta', style: 'ribbon', x: w * 0.57, y: h * 0.12, w: w * 0.36, h: short * 0.09, fill: '#1A1410', textColor: '#F5F2EE', text: 'SPECIAL EDITION', opacity: 1, layer: 'front', name: 'Offer ribbon' },
+  ];
+  return [];
+}
 
 // Logical canvas px baseline shared with the built-in manifest templates, so type scale
 // (which is relative to the short side) reads at the same size as the library.

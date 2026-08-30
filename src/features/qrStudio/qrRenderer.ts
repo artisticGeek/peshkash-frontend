@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { qrManifest, type QrStyleId } from './types';
+import { qrManifest, type QrColorSpec, type QrStyleId } from './types';
 
 interface QrMatrix {
   size: number;
@@ -13,10 +13,22 @@ const CREAM = '#E8DBCE';
 const STONE = '#C5AF9D';
 const FOLD = '#8C7667';
 
+export const DEFAULT_QR_COLORS: QrColorSpec = {
+  foreground: INK,
+  background: PAPER,
+  accent: BRASS,
+  transparent: false,
+};
+
 function esc(value: string): string {
   return value.replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&apos;', '"': '&quot;',
   })[char] ?? char);
+}
+
+function roundedRectPath(x: number, y: number, width: number, radius: number): string {
+  const r = Math.max(0, Math.min(radius, width / 2));
+  return `M${(x + r).toFixed(3)} ${y.toFixed(3)}H${(x + width - r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + width).toFixed(3)} ${(y + r).toFixed(3)}V${(y + width - r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + width - r).toFixed(3)} ${(y + width).toFixed(3)}H${(x + r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${x.toFixed(3)} ${(y + width - r).toFixed(3)}V${(y + r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + r).toFixed(3)} ${y.toFixed(3)}Z`;
 }
 
 function matrixFor(value: string, maskPattern?: number): QrMatrix {
@@ -83,8 +95,14 @@ function peshkashMark(cx: number, cy: number, diameter: number, lightIcon: boole
   </g>`;
 }
 
-export function renderBrandedQrSvg(value: string, styleId: QrStyleId, pixelSize = 900): string {
+export function renderBrandedQrSvg(
+  value: string,
+  styleId: QrStyleId,
+  pixelSize = 900,
+  colorOptions: Partial<QrColorSpec> = {},
+): string {
   const style = qrManifest.qrStyles[styleId];
+  const colors: QrColorSpec = { ...DEFAULT_QR_COLORS, ...colorOptions };
   const matrix = selectMatrix(value, styleId);
   const quiet = qrManifest.qrStandard.quietZoneModules;
   const total = matrix.size + (quiet * 2);
@@ -98,7 +116,7 @@ export function renderBrandedQrSvg(value: string, styleId: QrStyleId, pixelSize 
       if (isFinder(row, col, matrix.size) || !matrix.data[row * matrix.size + col]) continue;
       const x = (col + quiet) * cell;
       const y = (row + quiet) * cell;
-      paths.push(`<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${cell.toFixed(3)}" height="${cell.toFixed(3)}" rx="${moduleRadius.toFixed(3)}" fill="${INK}"/>`);
+      paths.push(`<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${cell.toFixed(3)}" height="${cell.toFixed(3)}" rx="${moduleRadius.toFixed(3)}" fill="${colors.foreground}"/>`);
     }
   }
 
@@ -108,9 +126,14 @@ export function renderBrandedQrSvg(value: string, styleId: QrStyleId, pixelSize 
   finderOrigins.forEach(([col, row]) => {
     const x = col * cell;
     const y = row * cell;
-    paths.push(`<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${(7 * cell).toFixed(3)}" height="${(7 * cell).toFixed(3)}" rx="${finderRadius.toFixed(3)}" fill="${INK}"/>`);
-    paths.push(`<rect x="${(x + cell).toFixed(3)}" y="${(y + cell).toFixed(3)}" width="${(5 * cell).toFixed(3)}" height="${(5 * cell).toFixed(3)}" rx="${(finderRadius * 0.72).toFixed(3)}" fill="${PAPER}"/>`);
-    paths.push(`<circle cx="${(x + (3.5 * cell)).toFixed(3)}" cy="${(y + (3.5 * cell)).toFixed(3)}" r="${(1.5 * cell).toFixed(3)}" fill="${style.finderCore}"/>`);
+    const outerW = 7 * cell;
+    const innerX = x + cell;
+    const innerY = y + cell;
+    const innerW = 5 * cell;
+    const outerPath = roundedRectPath(x, y, outerW, finderRadius);
+    const innerPath = roundedRectPath(innerX, innerY, innerW, Math.max(0, finderRadius - cell));
+    paths.push(`<path d="${outerPath} ${innerPath}" fill="${colors.foreground}" fill-rule="evenodd"/>`);
+    paths.push(`<circle cx="${(x + (3.5 * cell)).toFixed(3)}" cy="${(y + (3.5 * cell)).toFixed(3)}" r="${(1.5 * cell).toFixed(3)}" fill="${colors.accent || style.finderCore}"/>`);
   });
 
   const centre = pixelSize / 2;
@@ -123,7 +146,8 @@ export function renderBrandedQrSvg(value: string, styleId: QrStyleId, pixelSize 
   medallion.push(`<circle cx="${centre}" cy="${centre}" r="${(diameter / 2).toFixed(3)}" fill="${style.medallionFill}" stroke="${style.medallionStroke}" stroke-width="${stroke.toFixed(3)}"/>`);
   medallion.push(peshkashMark(centre, centre, diameter * style.medallionIconRatio, styleId === 'obsidian-ring'));
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${pixelSize}" height="${pixelSize}" viewBox="0 0 ${pixelSize} ${pixelSize}" role="img" aria-label="Peshkash branded QR code"><rect width="${pixelSize}" height="${pixelSize}" fill="${PAPER}"/>${paths.join('')}${medallion.join('')}</svg>`;
+  const background = colors.transparent ? '' : `<rect width="${pixelSize}" height="${pixelSize}" fill="${colors.background}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${pixelSize}" height="${pixelSize}" viewBox="0 0 ${pixelSize} ${pixelSize}" role="img" aria-label="Peshkash branded QR code">${background}${paths.join('')}${medallion.join('')}</svg>`;
 }
 
 export function svgDataUri(svg: string): string {

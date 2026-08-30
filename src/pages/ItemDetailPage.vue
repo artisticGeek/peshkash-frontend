@@ -1,5 +1,5 @@
 <template>
-  <PublicNav />
+  <PublicNav v-if="!error" />
   <div
     v-if="showFeedback"
     class="position-fixed top-0 start-50 translate-middle-x mt-3"
@@ -8,17 +8,25 @@
     <div class="alert alert-warning shadow" role="alert">{{ feedback }}</div>
   </div>
 
-  <div class="container py-3">
+  <PublicErrorState
+    v-if="error"
+    title="This item is not available right now"
+    message="The link may have changed, or the item may be temporarily unavailable. Please try again."
+    :reference="`${eventName}/${menuName}/${itemName}`"
+    @retry="loadItem"
+  />
+
+  <div v-else class="container py-3 pk-item-page">
     <div v-if="isLoading" class="pk-page-loader">
       <peshkash-loader size="110" theme="light" label="Loading item" />
     </div>
-    <div v-else-if="error" class="text-danger">{{ error }}</div>
-    <div v-else class="pk-reveal" data-anim="animate__fadeInUp">
+    <main v-else class="pk-reveal pk-item-shell" data-anim="animate__fadeInUp">
       <button v-if="canGoBack" class="pk-back-btn" @click="router.back()" aria-label="Go back">
         <i class="bi bi-chevron-left"></i> Back
       </button>
-      <div class="text-center mb-4">
-        <h1 class="fw-bold mb-1">{{ itemData?.displayName || itemData?.name }}</h1>
+      <header class="pk-item-header">
+        <p class="pk-item-overline">{{ itemData?.menu?.displayName || 'Peshkash selection' }}</p>
+        <h1>{{ itemData?.displayName || itemData?.name }}</h1>
          <small class="d-block">
         <RouterLink
           v-if="itemData?.event?.vendor?.hasContactPage"
@@ -31,41 +39,50 @@
           <span class="event-name">{{ itemData.event.displayName }}</span>
         </template>
       </small>
-        <small v-if="itemData?.price" class="d-block text-info">{{ itemData.price }}</small>
-      </div>
+        <small v-if="itemData?.price" class="pk-item-price">{{ itemData.price }}</small>
+      </header>
 
-      <div class="d-flex justify-content-center mb-3">
-        <div class="col-12 col-md-10 col-lg-8">
+      <div class="pk-item-media-wrap">
+        <div class="pk-item-media">
           <div class="ratio ratio-16x9">
-            <img :src="itemData?.image" :alt="itemData?.displayName || itemData?.name" class="w-100 h-100 rounded shadow pk-hero-img" loading="lazy" />
+            <img
+              v-if="itemData?.image && !imageFailed"
+              :src="itemData.image"
+              :alt="itemData?.displayName || itemData?.name"
+              class="w-100 h-100 rounded shadow pk-hero-img"
+              loading="lazy"
+              @error="imageFailed = true"
+            />
+            <div v-else class="pk-image-fallback rounded shadow" role="img" :aria-label="`${itemData?.displayName || itemData?.name} image unavailable`">
+              <i class="bi bi-image"></i>
+              <span>Image coming soon</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
-        <span v-if="itemData?.isVeg !== undefined" class="badge bg-light text-dark d-flex align-items-center">
+      <div v-if="itemData?.isVeg !== undefined || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
+        <span v-if="itemData?.isVeg !== undefined" class="pk-item-chip">
           <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
           <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
         </span>
-        <span v-for="tag in itemData?.tags || []" :key="tag" class="badge bg-info text-dark">{{ tag }}</span>
-        <span v-for="allergen in itemData?.allergens || []" :key="allergen" class="badge bg-warning text-dark">{{ allergen }}</span>
-        <span v-if="itemData?.spiceLevel" class="badge bg-light text-danger">
+        <span v-for="tag in itemData?.tags || []" :key="tag" class="pk-item-chip">{{ tag }}</span>
+        <span v-for="allergen in itemData?.allergens || []" :key="allergen" class="pk-item-chip pk-item-chip--warning">{{ allergen }}</span>
+        <span v-if="itemData?.spiceLevel" class="pk-item-chip text-danger">
           <i v-for="n in 3" :key="n" class="bi bi-fire" :class="{'opacity-25': n > itemData.spiceLevel}"></i>
         </span>
       </div>
 
-      <nav v-if="itemData.parentItems?.length" class="mb-3" aria-label="breadcrumb">
+      <nav v-if="itemData.parentItems?.length" class="pk-item-lineage" aria-label="breadcrumb">
         <ol class="breadcrumb justify-content-center mb-0">
           <li v-for="parentItem in itemData.parentItems" :key="parentItem.displayName" class="breadcrumb-item">{{ parentItem.displayName }}</li>
         </ol>
       </nav>
 
-      <div class="card pk-detail-card mb-4">
-        <div class="card-body">
-          <h2 class="h5 mb-3 pk-detail-heading">
-            <i :class="['bi', 'me-2', itemSectionIcon]"></i>{{ itemSectionLabel }}
-          </h2>
-          <p class="mb-3">{{ itemData?.description }}</p>
+      <section class="pk-story">
+          <p class="pk-story-kicker">Discover</p>
+          <h2>{{ itemSectionLabel }}</h2>
+          <p class="pk-story-copy">{{ itemData?.description }}</p>
           <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2 mb-3">
             <span
               v-for="ing in itemData.ingredients.split(',')"
@@ -84,26 +101,26 @@
               {{ allergen }}
             </span>
           </div>
-        </div>
-      </div>
+      </section>
 
-      <div class="pk-engage-bar" aria-label="Item actions">
-        <button class="pk-engage-btn" :class="{ active: userReaction === 'like' }" @click="toggleReaction('like')" aria-label="Like this item">
+      <div class="pk-engage-section" aria-label="Item actions">
+        <span class="pk-engage-title">Keep what speaks to you</span>
+        <div class="pk-engage-actions">
+        <button class="btn btn-sm" :class="userReaction === 'like' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('like')" aria-label="Like this item">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
           <span>Like</span>
         </button>
-        <div class="pk-engage-sep" aria-hidden="true"></div>
-        <button class="pk-engage-btn" :class="{ active: userReaction === 'dislike', 'is-dislike': true }" @click="toggleReaction('dislike')" aria-label="Dislike this item">
+        <button class="btn btn-sm" :class="userReaction === 'dislike' ? 'btn-primary' : 'btn-outline-primary'" @click="toggleReaction('dislike')" aria-label="Dislike this item">
           <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
           <span>Dislike</span>
         </button>
-        <div class="pk-engage-sep" aria-hidden="true"></div>
-        <button class="pk-engage-btn" :class="{ active: isBookmarked }" @click="toggleBookmark" aria-label="Bookmark this item">
-          <i :class="isBookmarked ? 'bi bi-bookmark-fill' : 'bi bi-bookmark'"></i>
-          <span>Save</span>
+        <button class="btn btn-sm pk-save-action" :class="isBookmarked ? 'btn-primary' : 'btn-outline-primary'" @click="saveItemToPhone" aria-label="Save this item using your phone">
+          <i :class="isBookmarked ? 'bi bi-bookmark-check-fill' : 'bi bi-bookmark-plus'"></i>
+          <span>{{ isBookmarked ? 'Saved' : 'Save' }}</span>
         </button>
+        </div>
       </div>
-    </div>
+    </main>
 
     <!-- Floating Share Button -->
     <button
@@ -122,6 +139,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PublicNav from '../components/PublicNav.vue';
+import PublicErrorState from '../components/PublicErrorState.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
@@ -142,23 +160,21 @@ onUnmounted(resetMeta)
 
 const itemData = ref<any>(null)
 const isLoading = ref(true)
+const imageFailed = ref(false)
 
 const ITEM_SECTION_MAP: Record<string, { label: string; icon: string }> = {
-  dish:     { label: 'About the dish',    icon: 'bi-fork-knife' },
-  dishtype: { label: 'About the dish',    icon: 'bi-fork-knife' },
-  product:  { label: 'About this piece',  icon: 'bi-box-seam' },
-  item:     { label: 'About this item',   icon: 'bi-tag' },
-  service:  { label: 'About this service', icon: 'bi-gear' },
-  art:      { label: 'About this piece',  icon: 'bi-palette' },
+  dish:     { label: 'The flavour story', icon: 'bi-fork-knife' },
+  dishtype: { label: 'The flavour story', icon: 'bi-fork-knife' },
+  product:  { label: 'Behind the piece',  icon: 'bi-box-seam' },
+  item:     { label: 'Worth knowing',     icon: 'bi-tag' },
+  service:  { label: 'What to expect',    icon: 'bi-gear' },
+  art:      { label: 'Behind the work',   icon: 'bi-palette' },
 }
 
 const itemSectionLabel = computed(() => {
-  const t = itemData.value?.type?.toLowerCase()
-  return ITEM_SECTION_MAP[t]?.label ?? 'Details'
-})
-const itemSectionIcon = computed(() => {
-  const t = itemData.value?.type?.toLowerCase()
-  return ITEM_SECTION_MAP[t]?.icon ?? 'bi-info-circle'
+  if (itemData.value?.menu?.itemStoryHeading) return itemData.value.menu.itemStoryHeading
+  const t = (itemData.value?.itemType || itemData.value?.type)?.toLowerCase()
+  return ITEM_SECTION_MAP[t]?.label ?? 'The backstory'
 })
 const error = ref<string | null>(null)
 const feedback = ref('')
@@ -168,8 +184,9 @@ const analytics = useAnalytics()
 const userReaction = ref<'like' | 'dislike' | null>(null)
 const isBookmarked = ref(false)
 
-function reactionKey() { return `pk-reaction-${itemName}` }
-function bookmarkKey() { return `pk-bookmark-${itemName}` }
+function engagementKey() { return `${eventName}:${menuName}:${itemName}` }
+function reactionKey() { return `pk-reaction-${engagementKey()}` }
+function bookmarkKey() { return `pk-bookmark-${engagementKey()}` }
 
 function loadEngagement() {
   try {
@@ -194,14 +211,13 @@ function toggleReaction(type: 'like' | 'dislike') {
   })
 }
 
-function toggleBookmark() {
-  isBookmarked.value = !isBookmarked.value
+function markItemSaved() {
+  isBookmarked.value = true
   try {
-    if (isBookmarked.value) localStorage.setItem(bookmarkKey(), '1')
-    else localStorage.removeItem(bookmarkKey())
+    localStorage.setItem(bookmarkKey(), '1')
   } catch {}
   analytics.track('item_bookmark', {
-    bookmarked: isBookmarked.value,
+    bookmarked: true,
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
@@ -209,18 +225,73 @@ function toggleBookmark() {
   })
 }
 
-function shareItem() {
+async function saveItemToPhone() {
+  const title = itemData.value?.displayName || itemData.value?.name || 'Peshkash item'
+  const vendor = itemData.value?.event?.vendor?.displayName
+  const text = [title, vendor, itemData.value?.description].filter(Boolean).join(' — ')
+  const url = window.location.href
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url })
+      markItemSaved()
+      feedback.value = 'Saved through your phone'
+      showFeedback.value = true
+      window.setTimeout(() => { showFeedback.value = false }, 2200)
+      return
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`)
+    markItemSaved()
+    feedback.value = 'Item link copied — paste it into Notes, Messages, or your browser bookmarks'
+    showFeedback.value = true
+    window.setTimeout(() => { showFeedback.value = false }, 3200)
+  } catch {
+    feedback.value = 'Use your browser menu to bookmark this item'
+    showFeedback.value = true
+    window.setTimeout(() => { showFeedback.value = false }, 3200)
+  }
+}
+
+async function shareItem() {
   analytics.track('share_click', {
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   });
-  navigator.share?.({ title: itemData.value?.name, url: window.location.href });
+  const shareData = { title: itemData.value?.displayName || itemData.value?.name, url: window.location.href }
+
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData)
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('Unable to share item:', err)
+    }
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    feedback.value = 'Link copied'
+    showFeedback.value = true
+    window.setTimeout(() => { showFeedback.value = false }, 2200)
+  } catch (err) {
+    console.error('Unable to copy item link:', err)
+  }
 }
 
-onMounted(async () => {
+async function loadItem() {
+  isLoading.value = true
+  error.value = null
+  itemData.value = null
+  imageFailed.value = false
   loadEngagement()
+
   try {
     const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}/item/${itemName}`)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -244,9 +315,13 @@ onMounted(async () => {
       itemId: data?.numericId,
     })
   } catch (err: any) {
-    error.value = err.message
+    error.value = 'unavailable'
+    console.error('Error loading item:', err)
   } finally {
     isLoading.value = false
+
+    if (error.value) return
+
     await nextTick()
     const els = document.querySelectorAll<HTMLElement>('.pk-reveal');
     const io = new IntersectionObserver((entries) => {
@@ -264,10 +339,14 @@ onMounted(async () => {
     }, { threshold: 0.2 });
     els.forEach((el) => io.observe(el));
   }
-})
+}
+
+onMounted(loadItem)
 </script>
 
 <style scoped>
+.pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
+.pk-item-shell { margin: 0 auto; max-width: 1060px; }
 .pk-back-btn {
   display: inline-flex;
   align-items: center;
@@ -275,7 +354,7 @@ onMounted(async () => {
   background: none;
   border: none;
   padding: 0.3rem 0;
-  margin-bottom: 0.75rem;
+  margin-top: 1.25rem;
   font-size: 0.82rem;
   font-weight: 500;
   color: #bd945a;
@@ -287,14 +366,79 @@ onMounted(async () => {
 
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
-.pk-hero-img { object-fit: cover; }
-.pk-beige-text { color: beige; }
-
-.pk-detail-card {
-  background: var(--rx-surface-color, #ebe7e1);
-  border: 1px solid var(--rx-border-color, #d8d2c8);
+.pk-item-header { padding: clamp(3.25rem, 8vw, 6.5rem) 1rem clamp(2rem, 4vw, 3.25rem); text-align: center; }
+.pk-item-overline,
+.pk-story-kicker {
+  color: #a77d45;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
 }
-.pk-detail-heading { color: #bd945a; }
+.pk-item-header h1 {
+  color: #19140f;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.55rem, 6vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.96;
+  margin: 0 auto 1.25rem;
+  max-width: 900px;
+  overflow-wrap: anywhere;
+}
+.pk-item-price { color: #1c1712; display: block; font-size: 1rem; margin-top: 0.85rem; }
+.pk-item-media-wrap { display: flex; justify-content: center; }
+.pk-item-media { width: min(100%, 960px); }
+.pk-item-media .ratio { --bs-aspect-ratio: 62.5%; }
+.pk-hero-img { border-radius: 2px !important; box-shadow: 0 24px 70px rgba(39, 27, 16, 0.12) !important; object-fit: cover; }
+.pk-image-fallback {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.55rem;
+  color: #9a8064;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(189, 148, 90, 0.14), transparent 30%),
+    linear-gradient(145deg, #f8f4ee, #eee7dd);
+  border: 1px solid rgba(189, 148, 90, 0.18);
+  border-radius: 2px !important;
+  box-shadow: 0 24px 70px rgba(39, 27, 16, 0.09) !important;
+}
+.pk-image-fallback i { font-size: 2rem; }
+.pk-image-fallback span { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em; }
+.pk-beige-text { color: beige; }
+.pk-item-badges { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; margin: 1.5rem auto; }
+.pk-item-chip {
+  align-items: center;
+  border: 1px solid #ded3c4;
+  border-radius: 999px;
+  color: #625344;
+  display: inline-flex;
+  font-size: 0.72rem;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+}
+.pk-item-chip--warning { background: #fbf5e9; }
+.pk-item-lineage { margin: 1.75rem auto 0; }
+.pk-item-lineage .breadcrumb-item { color: #8d7b67; font-size: 0.76rem; letter-spacing: 0.04em; }
+.pk-story {
+  border-top: 1px solid #ddd1c1;
+  margin: clamp(3.5rem, 8vw, 6.75rem) auto 0;
+  max-width: 760px;
+  padding-top: clamp(2.25rem, 5vw, 4rem);
+}
+.pk-story h2 {
+  color: #1d1711;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  margin: 0 0 1.4rem;
+}
+.pk-story-copy { color: #594c40; font-size: clamp(1rem, 2vw, 1.15rem); line-height: 1.85; margin-bottom: 1.5rem; }
+.pk-story .badge { background: transparent !important; border: 1px solid #d9ccbc; color: #6c5944 !important; font-weight: 500; padding: 0.45rem 0.65rem; }
 
 .vendor-name,
 .event-name {
@@ -314,6 +458,8 @@ onMounted(async () => {
 }
 
 .pk-share-fab {
+  background: #b98a4d;
+  border: 1px solid rgba(255, 255, 255, 0.55);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -322,45 +468,38 @@ onMounted(async () => {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
 }
 
-.pk-engage-bar {
+.pk-engage-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 1.5rem auto;
-  max-width: 300px;
-  background: rgba(26, 20, 16, 0.55);
-  border: 1px solid rgba(189, 148, 90, 0.22);
-  border-radius: 100px;
-  padding: 0.3rem;
-  gap: 0;
+  border-top: 1px solid #e5dbce;
+  margin: clamp(3rem, 7vw, 5rem) auto 0;
+  max-width: 760px;
+  padding-top: 2rem;
+  gap: 0.8rem;
 }
+.pk-engage-title { color: var(--pk-mushroom, #8c7667); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.pk-engage-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.pk-engage-actions .btn { align-items: center; border-radius: 999px; display: inline-flex; gap: 0.35rem; justify-content: center; min-height: 40px; min-width: 92px; padding-inline: 1rem; }
+.pk-save-action { min-width: 112px !important; }
 
-.pk-engage-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: none;
-  border: none;
-  padding: 0.45rem 1rem;
-  border-radius: 100px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(245, 242, 238, 0.5);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-.pk-engage-btn:hover { color: #bd945a; }
-.pk-engage-btn.active {
-  background: rgba(189, 148, 90, 0.14);
-  color: #bd945a;
-}
-
-.pk-engage-sep {
-  width: 1px;
-  height: 1.1rem;
-  background: rgba(189, 148, 90, 0.2);
-  flex-shrink: 0;
+@media (max-width: 640px) {
+  .pk-item-page { padding-left: 1rem; padding-right: 1rem; }
+  .pk-item-header { padding-bottom: 2rem; padding-top: 3.5rem; }
+  .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
+  .pk-item-media .ratio { --bs-aspect-ratio: 78%; }
+  .pk-story { margin-top: 3.5rem; padding-inline: 0.35rem; }
+  .pk-story-copy { line-height: 1.7; }
+  .pk-engage-actions { width: 100%; }
+  .pk-engage-actions .btn { flex: 1; min-width: 88px; }
+  .pk-share-fab {
+    display: flex;
+    height: 48px !important;
+    margin: 1.25rem auto 0 !important;
+    position: static !important;
+    width: 48px !important;
+  }
 }
 </style>
 
