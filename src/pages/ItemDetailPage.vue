@@ -1,4 +1,5 @@
 <template>
+  <div class="pk-item-page-surface">
   <PublicNav v-if="!error" />
   <div
     v-if="showFeedback"
@@ -42,21 +43,16 @@
         <small v-if="itemData?.price" class="pk-item-price">{{ itemData.price }}</small>
       </header>
 
-      <div class="pk-item-media-wrap">
+      <div v-if="itemData?.image && !imageFailed" class="pk-item-media-wrap">
         <div class="pk-item-media">
           <div class="ratio ratio-16x9">
             <img
-              v-if="itemData?.image && !imageFailed"
               :src="itemData.image"
               :alt="itemData?.displayName || itemData?.name"
               class="w-100 h-100 rounded shadow pk-hero-img"
               loading="lazy"
               @error="imageFailed = true"
             />
-            <div v-else class="pk-image-fallback rounded shadow" role="img" :aria-label="`${itemData?.displayName || itemData?.name} image unavailable`">
-              <i class="bi bi-image"></i>
-              <span>Image coming soon</span>
-            </div>
           </div>
         </div>
       </div>
@@ -79,7 +75,7 @@
         </ol>
       </nav>
 
-      <section class="pk-story">
+      <section class="pk-story" :class="{ 'pk-story--no-media': !itemData?.image || imageFailed }">
           <p class="pk-story-kicker">Discover</p>
           <h2>{{ itemSectionLabel }}</h2>
           <p class="pk-story-copy">{{ itemData?.description }}</p>
@@ -132,6 +128,7 @@
     >
       <i class="bi bi-share-fill fs-5"></i>
     </button>
+  </div>
   </div>
 </template>
 
@@ -345,6 +342,7 @@ onMounted(loadItem)
 </script>
 
 <style scoped>
+.pk-item-page-surface { background: #f3ede4; min-height: 100vh; }
 .pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
 .pk-item-shell { margin: 0 auto; max-width: 1060px; }
 .pk-back-btn {
@@ -392,21 +390,6 @@ onMounted(loadItem)
 .pk-item-media { width: min(100%, 960px); }
 .pk-item-media .ratio { --bs-aspect-ratio: 62.5%; }
 .pk-hero-img { border-radius: 2px !important; box-shadow: 0 24px 70px rgba(39, 27, 16, 0.12) !important; object-fit: cover; }
-.pk-image-fallback {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 0.55rem;
-  color: #9a8064;
-  background:
-    radial-gradient(circle at 24% 18%, rgba(189, 148, 90, 0.14), transparent 30%),
-    linear-gradient(145deg, #f8f4ee, #eee7dd);
-  border: 1px solid rgba(189, 148, 90, 0.18);
-  border-radius: 2px !important;
-  box-shadow: 0 24px 70px rgba(39, 27, 16, 0.09) !important;
-}
-.pk-image-fallback i { font-size: 2rem; }
-.pk-image-fallback span { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em; }
 .pk-beige-text { color: beige; }
 .pk-item-badges { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; margin: 1.5rem auto; }
 .pk-item-chip {
@@ -428,6 +411,7 @@ onMounted(loadItem)
   max-width: 760px;
   padding-top: clamp(2.25rem, 5vw, 4rem);
 }
+.pk-story--no-media { margin-top: 1.5rem; }
 .pk-story h2 {
   color: #1d1711;
   font-family: Georgia, 'Times New Roman', serif;
@@ -490,6 +474,7 @@ onMounted(loadItem)
   .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
   .pk-item-media .ratio { --bs-aspect-ratio: 78%; }
   .pk-story { margin-top: 3.5rem; padding-inline: 0.35rem; }
+  .pk-story--no-media { margin-top: 1rem; }
   .pk-story-copy { line-height: 1.7; }
   .pk-engage-actions { width: 100%; }
   .pk-engage-actions .btn { flex: 1; min-width: 88px; }
