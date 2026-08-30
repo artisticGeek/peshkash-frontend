@@ -10,6 +10,10 @@
       <i class="bi bi-calendar-x"></i><h1>Event unavailable</h1><p>{{ error || 'This event page is not live.' }}</p>
     </main>
     <main v-else class="event-content">
+      <aside v-if="event.preview" class="preview-notice" role="status">
+        <i class="bi bi-eye"></i>
+        <div><strong>Preview mode</strong><span>Publish this event to open registration to guests.</span></div>
+      </aside>
       <section class="event-hero" :class="{ 'has-image': event.experience.heroImageUrl }">
         <img v-if="event.experience.heroImageUrl" :src="event.experience.heroImageUrl" :alt="event.displayName" />
         <div class="event-hero-copy">
@@ -74,8 +78,8 @@
     </main>
 
     <nav v-if="event" class="event-cta-dock" aria-label="Event actions">
-      <button v-if="event.experience.registrationEnabled && eventState !== 'ended'" :class="{ complete: event.registered }" @click="registerForEvent">
-        <i :class="event.registered ? 'bi bi-check-circle-fill' : 'bi bi-person-check'"></i><span>{{ event.registered ? 'Registered' : 'Register' }}</span>
+      <button v-if="event.experience.registrationEnabled && eventState !== 'ended'" :class="{ complete: event.registered, unavailable: !registrationIsOpen }" :disabled="!registrationIsOpen" @click="registerForEvent">
+        <i :class="event.registered ? 'bi bi-check-circle-fill' : registrationIsOpen ? 'bi bi-person-check' : 'bi bi-lock'"></i><span>{{ event.registered ? 'Registered' : registrationIsOpen ? 'Register' : 'Publish to open' }}</span>
       </button>
       <button v-if="event.experience.reminderEnabled && eventState !== 'ended'" @click="setReminder"><i class="bi bi-calendar2-plus"></i><span>Set reminder</span></button>
       <a v-if="event.experience.livestreamUrl && eventState === 'live'" :href="event.experience.livestreamUrl" target="_blank" rel="noreferrer" class="live-cta" @click="track('event_livestream_click')"><i class="bi bi-youtube"></i><span>{{ event.experience.livestreamLabel || 'Watch live' }}</span></a>
@@ -96,7 +100,7 @@ import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { useAuthStore } from '../stores/auth';
 
-type EventPageData = { id: number; name: string; displayName: string; description?: string; startTime?: string; endTime?: string; status: string; registered: boolean; organizer?: any; experience: any };
+type EventPageData = { id: number; name: string; displayName: string; description?: string; startTime?: string; endTime?: string; status: string; preview?: boolean; registrationOpen?: boolean; registered: boolean; organizer?: any; experience: any };
 const route = useRoute();
 const auth = useAuthStore();
 const analytics = useAnalytics();
@@ -115,6 +119,7 @@ const eventState = computed<'upcoming' | 'live' | 'ended'>(() => {
   return now.value < start ? 'upcoming' : now.value <= end ? 'live' : 'ended';
 });
 const stateLabel = computed(() => eventState.value === 'live' ? 'Live now' : eventState.value === 'ended' ? 'Event ended' : 'Coming up');
+const registrationIsOpen = computed(() => event.value?.registrationOpen ?? event.value?.status === 'active');
 const eventDate = computed(() => event.value?.startTime ? new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date(event.value.startTime)) : '');
 const countdown = computed(() => {
   const remaining = Math.max(0, new Date(event.value?.startTime || 0).getTime() - now.value);
@@ -133,7 +138,7 @@ function devEventFixture(): EventPageData {
   return {
     id: 42, name: 'demo-event', displayName: 'Designing What Comes Next',
     description: 'An evening of ideas, craft and conversation with the people shaping tomorrow.',
-    startTime: start.toISOString(), endTime: end.toISOString(), status: 'active', registered: false,
+    startTime: start.toISOString(), endTime: end.toISOString(), status: 'active', preview: false, registrationOpen: true, registered: false,
     organizer: { id: 7, name: 'artistic-geek-studios', displayName: 'ArtisticGeek Studios', description: 'Independent design and technology studio.', logoUrl: null },
     experience: { enabled: true, eyebrow: 'New Delhi · September 2026', heroImageUrl: '', venueName: 'The Imperial Hall', venueAddress: 'Janpath, New Delhi, India', mapUrl: 'https://maps.google.com', registrationEnabled: true, reminderEnabled: true, reminderMode: 'timed', countdownEnabled: true, organizerVisible: true, contactVisible: false, livestreamUrl: 'https://youtube.com', livestreamLabel: 'Watch live', guests: [
       { id: 'g1', name: 'Aarav Mehta', role: 'Keynote speaker', bio: 'Designer and founder exploring humane technology.', visible: true, sortOrder: 0, instagram: 'https://instagram.com' },
@@ -208,10 +213,12 @@ onUnmounted(() => { if (timer) window.clearInterval(timer); });
 .event-state.is-live { background:#8b261d; border-color:#b74a3e; color:#fff; }
 .event-message { align-items:center; display:flex; flex-direction:column; gap:1rem; justify-content:center; min-height:70vh; padding:2rem; text-align:center; }.event-message>i{font-size:2rem}.event-message h1{font-family:Georgia,serif}
 .event-content { margin:auto; max-width:1120px; padding:clamp(2rem,6vw,5rem) clamp(1rem,4vw,3rem); }
+.preview-notice { align-items:center;background:#fff8e8;border:1px solid #d6b273;color:#6f4e27;display:flex;gap:.8rem;margin:0 0 2rem;padding:.85rem 1rem}.preview-notice>i{font-size:1.25rem}.preview-notice>div{display:flex;flex-direction:column}.preview-notice strong{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase}.preview-notice span{font-size:.88rem}
 .event-hero { display:grid; gap:clamp(2rem,5vw,5rem); grid-template-columns:1fr; }.event-hero.has-image{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:center}.event-hero>img{aspect-ratio:4/5;border-radius:160px 160px 12px 12px;height:auto;object-fit:cover;width:100%}
 .event-eyebrow,.section-kicker { color:#9b7243; font-size:.72rem; font-weight:700; letter-spacing:.2em; text-transform:uppercase; }.event-hero h1{font-family:Georgia,serif;font-size:clamp(3rem,8vw,7.2rem);font-weight:400;letter-spacing:-.055em;line-height:.9;margin:1rem 0 1.5rem}.event-intro{font-size:clamp(1.05rem,2vw,1.35rem);line-height:1.7;max-width:660px}.event-meta{border-top:1px solid #d8c9b8;display:flex;flex-wrap:wrap;gap:1rem 2rem;margin-top:2rem;padding-top:1.2rem}.event-meta span{align-items:center;display:flex;gap:.55rem}
 .countdown { background:#211812;color:#f8f1e7;margin:clamp(3rem,8vw,7rem) 0;padding:clamp(1.5rem,4vw,3rem);text-align:center}.countdown>p{color:#c7a36d;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase}.countdown>div{display:grid;grid-template-columns:repeat(4,1fr);margin-top:1rem}.countdown span{border-right:1px solid #554638;display:flex;flex-direction:column}.countdown span:last-child{border:0}.countdown strong{font-family:Georgia,serif;font-size:clamp(2rem,6vw,4.5rem);font-weight:400}.countdown small{color:#b9aa9a;text-transform:uppercase}
 .event-section { border-top:1px solid #d8c9b8;margin-top:clamp(3rem,8vw,7rem);padding-top:2rem}.event-section>h2,.organizer-card h2{font-family:Georgia,serif;font-size:clamp(2rem,5vw,4rem);font-weight:400}.venue-card a,.organizer-card a{color:#7f5b32;display:inline-flex;gap:.45rem;margin-top:.75rem}.guest-grid{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:2rem}.guest-card{background:#fbf7f0;display:grid;gap:1rem;grid-template-columns:120px 1fr;padding:1rem}.guest-card>img{height:150px;object-fit:cover;width:120px}.guest-role{color:#9b7243;font-size:.68rem;font-weight:700;letter-spacing:.13em;margin:0;text-transform:uppercase}.guest-card h3{font-family:Georgia,serif;font-size:1.65rem;margin:.25rem 0}.guest-links{display:flex;gap:.5rem}.guest-links a{align-items:center;border:1px solid #d4c0a7;border-radius:50%;color:#6e4d2a;display:inline-flex;height:34px;justify-content:center;width:34px}.organizer-card>div{align-items:center;display:flex;gap:1rem}.organizer-card img{height:56px;object-fit:contain;width:56px}.organizer-links{align-items:flex-start!important;display:flex!important;flex-direction:column;gap:.25rem!important}.event-footnote{color:#9b8773;margin:6rem 0 1rem;text-align:center}
 .event-cta-dock { backdrop-filter:blur(16px);background:rgba(30,23,18,.94);border:1px solid #6e563d;border-radius:999px;bottom:max(1rem,env(safe-area-inset-bottom));box-shadow:0 18px 45px rgba(33,24,18,.28);display:flex;gap:.25rem;left:50%;padding:.42rem;position:fixed;transform:translateX(-50%);z-index:1050}.event-cta-dock button,.event-cta-dock a{align-items:center;background:transparent;border:0;border-radius:999px;color:#f6ead9;display:flex;gap:.5rem;min-height:46px;padding:.65rem 1rem;text-decoration:none;white-space:nowrap}.event-cta-dock button:hover,.event-cta-dock a:hover{background:#3d3025}.event-cta-dock .complete{color:#d7b67f}.event-cta-dock .live-cta{background:#a62a20;color:#fff}.event-toast{background:#fff8ec;border:1px solid #d4b17c;border-radius:8px;bottom:6rem;box-shadow:0 10px 30px #3b2b1d33;left:50%;padding:.75rem 1rem;position:fixed;transform:translateX(-50%);z-index:1060}
+.event-cta-dock button.unavailable{color:#b7a998;cursor:not-allowed;opacity:.72}.event-cta-dock button.unavailable:hover{background:transparent}
 @media(max-width:760px){.event-content{padding-top:3rem}.event-hero.has-image{grid-template-columns:1fr}.event-hero>img{aspect-ratio:4/3;border-radius:90px 90px 8px 8px}.event-hero h1{font-size:clamp(3rem,16vw,5rem)}.countdown{margin-inline:-1rem}.countdown small{font-size:.6rem}.guest-grid{grid-template-columns:1fr}.event-cta-dock{max-width:calc(100vw - 1rem);overflow-x:auto}.event-cta-dock button,.event-cta-dock a{flex-direction:column;font-size:.65rem;gap:.15rem;min-width:68px;padding:.45rem .65rem}.event-cta-dock i{font-size:1rem}}
 </style>
