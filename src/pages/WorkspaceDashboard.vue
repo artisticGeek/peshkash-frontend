@@ -470,7 +470,6 @@
                   <label><input v-model="eventForm.experienceConfig.reminderEnabled" type="checkbox" /> Set reminder</label>
                   <label><input v-model="eventForm.experienceConfig.countdownEnabled" type="checkbox" /> Countdown</label>
                   <label><input v-model="eventForm.experienceConfig.organizerVisible" type="checkbox" /> Show organizer</label>
-                  <label><input v-model="eventForm.experienceConfig.contactVisible" type="checkbox" /> Show organizer contact</label>
                   <label class="reminder-mode">Reminder
                     <select v-model="eventForm.experienceConfig.reminderMode" class="form-select">
                       <option value="timed">Use event timings</option>
