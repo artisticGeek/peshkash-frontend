@@ -2784,6 +2784,7 @@ async function loadAll() {
     }
     await loadEventMenuLinks();
     hydrateRouteContext();
+    await loadEventRegistrations();
   } catch (err) {
     setError(err);
   } finally {
@@ -2910,9 +2911,19 @@ async function loadEventRegistrations() {
   if (!eventId || !selectedEventForItems.value?.experienceConfig?.enabled) { eventRegistrations.value = []; return; }
   try {
     const { data } = await axios.get(adminUrl(`/events/${eventId}/registrations`));
-    eventRegistrations.value = Array.isArray(data) ? data : [];
+    if (selectedEventForItems.value?.id === eventId) {
+      eventRegistrations.value = Array.isArray(data) ? data : [];
+    }
   } catch (err) { setError(err); }
 }
+
+function refreshRegistrationsWhenVisible() {
+  if (authStore.isLoggedIn && document.visibilityState === 'visible' && activeSection.value === 'eventWorkspace') {
+    loadEventRegistrations();
+  }
+}
+
+let registrationRefreshTimer: number | undefined;
 
 function formatRegistrationDate(value: string) {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
@@ -4255,7 +4266,11 @@ watch(eventQrMapping, async (mapping) => {
   }
 }, { immediate: true });
 
-watch(() => selectedEventForItems.value?.id, () => { loadEventRegistrations(); }, { immediate: true });
+watch(
+  () => [selectedEventForItems.value?.id, selectedEventForItems.value?.experienceConfig?.enabled] as const,
+  () => { loadEventRegistrations(); },
+  { immediate: true },
+);
 
 watch(() => route.fullPath, hydrateRouteContext);
 
@@ -4269,6 +4284,9 @@ watch(activeSection, (section) => {
 });
 
 onMounted(async () => {
+  window.addEventListener('focus', refreshRegistrationsWhenVisible);
+  document.addEventListener('visibilitychange', refreshRegistrationsWhenVisible);
+  registrationRefreshTimer = window.setInterval(refreshRegistrationsWhenVisible, 15000);
   // The dashboard shell remains visible behind the sign-in modal, but protected requests must not
   // run until authentication succeeds. Besides being unnecessary, the previous eager load showed
   // a misleading 401 error toast on the login screen.
@@ -4285,6 +4303,12 @@ onMounted(async () => {
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
   hydrateRouteContext(); // must run last so URL params always win
   syncItemRows();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('focus', refreshRegistrationsWhenVisible);
+  document.removeEventListener('visibilitychange', refreshRegistrationsWhenVisible);
+  if (registrationRefreshTimer) window.clearInterval(registrationRefreshTimer);
 });
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
