@@ -68,6 +68,13 @@ const LABELS: Record<string, string> = {
   vendor_contact_view: 'Page View',
   item_expand:         'Item Expand',
   menu_view:           'Menu View',
+  event_page_view:     'Event Page',
+  event_registration:  'Registration',
+  event_reminder_click:'Reminder',
+  event_share_click:   'Event Share',
+  event_directions_click: 'Directions',
+  event_livestream_click: 'Live Stream',
+  event_organizer_profile_click: 'Organizer',
 };
 
 const SCANS_COLOR = '99,102,241';   // indigo — distinct from CTAs
@@ -86,6 +93,13 @@ const CTA_COLORS: Record<string, string> = {
   youtube_click:       '255,0,0',
   google_review_click: '66,133,244',
   social_click:        '107,114,128',
+  event_page_view:     '139,92,246',
+  event_registration:  '22,163,74',
+  event_reminder_click:'14,165,233',
+  event_share_click:   '249,115,22',
+  event_directions_click: '234,179,8',
+  event_livestream_click: '220,38,38',
+  event_organizer_profile_click: '168,85,247',
 };
 const CTA_FALLBACK = '16,185,129';
 

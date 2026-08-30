@@ -125,6 +125,13 @@ const ACTION_LABELS: Record<string, string> = {
   menu_view:           'Menu viewed',
   item_expand:         'Item expanded',
   item_detail_view:    'Item detail opened',
+  event_page_view:     'Event page opened',
+  event_registration:  'Registration completed',
+  event_reminder_click:'Reminder saved',
+  event_share_click:   'Event shared',
+  event_directions_click: 'Event directions opened',
+  event_livestream_click: 'Live stream opened',
+  event_organizer_profile_click: 'Organizer profile opened',
 };
 
 const DOT_COLORS: Record<string, string> = {
@@ -143,6 +150,13 @@ const DOT_COLORS: Record<string, string> = {
   youtube_click:       '#ff0000',
   google_review_click: '#4285f4',
   social_click:        '#6b7280',
+  event_page_view:     '#8b5cf6',
+  event_registration:  '#16a34a',
+  event_reminder_click:'#0ea5e9',
+  event_share_click:   '#f97316',
+  event_directions_click: '#eab308',
+  event_livestream_click: '#dc2626',
+  event_organizer_profile_click: '#a855f7',
 };
 
 function rowKind(row: EventRow) {

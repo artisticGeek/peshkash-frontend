@@ -1,204 +1,175 @@
 <template>
   <AnalyticsDrawer
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     icon="bi bi-calendar2-week"
     :title="eventName"
     subtitle="Event Analytics"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
-    <!-- Range selector in header -->
-    <template #header-actions>
-      <div class="btn-group btn-group-sm">
-        <button
-          v-for="r in RANGES"
-          :key="r.value"
-          type="button"
-          class="btn btn-outline-secondary"
-          :class="{ active: range === r.value }"
-          @click="setRange(r.value)"
-        >{{ r.label }}</button>
-      </div>
-    </template>
-
-    <!-- Loading -->
-    <div v-if="loading" class="row g-2 mb-3">
-      <div v-for="n in 4" :key="n" class="col-6">
-        <div class="card border-0 shadow-sm placeholder-glow" style="height:76px;border-radius:10px;">
-          <div class="card-body"><span class="placeholder col-8 rounded"></span></div>
-        </div>
+    <div class="eda-toolbar">
+      <span class="eda-last">
+        <i class="bi bi-clock me-1"></i>{{ lastActivityLabel ? `Last activity: ${lastActivityLabel}` : 'No activity yet' }}
+      </span>
+      <div class="eda-controls">
+        <DateRangePicker v-model="dateRange" @update:modelValue="load" />
+        <button class="btn btn-sm btn-outline-secondary" type="button" :disabled="loading" title="Refresh" @click="load">
+          <i class="bi bi-arrow-clockwise" :class="{ spin: loading }"></i>
+        </button>
       </div>
     </div>
 
-    <!-- Error -->
-    <div v-else-if="error" class="alert alert-warning py-2 small">
-      <i class="bi bi-exclamation-triangle me-1"></i>Analytics unavailable.
+    <div v-if="loading && !summary" class="eda-stats-strip placeholder-glow mb-3">
+      <div v-for="n in 4" :key="n" class="eda-stat">
+        <span class="placeholder col-5 rounded d-block mx-auto mb-1" style="height:2.2rem"></span>
+        <span class="placeholder col-7 rounded d-block mx-auto" style="height:.65rem"></span>
+      </div>
     </div>
 
-    <!-- Empty -->
-    <div v-else-if="!summary || summary.totalScans === 0 && !itemHasData" class="edd-empty">
-      <i class="bi bi-qr-code-scan"></i>
-      <p class="mb-1 fw-medium">No data yet</p>
-      <p class="mb-0">Analytics will appear after customers scan this event's QR code.</p>
+    <div v-else-if="error" class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-exclamation-triangle me-1"></i>Event analytics could not be loaded.
     </div>
 
     <template v-else-if="summary">
-      <!-- Summary sentence -->
-      <p class="edd-summary-text mb-3">
-        <strong>{{ eventName }}</strong> received
-        <strong>{{ summary.totalScans }} scan{{ summary.totalScans !== 1 ? 's' : '' }}</strong>
-        and <strong>{{ summary.totalActions }} action{{ summary.totalActions !== 1 ? 's' : '' }}</strong>.
-        <span v-if="engagementRate > 0"> Engagement rate: <strong>{{ engagementRate }}%</strong>.</span>
-      </p>
+      <div class="eda-stats-strip mb-3">
+        <div class="eda-stat"><div class="eda-stat-value">{{ summary.totalScans }}</div><div class="eda-stat-label">Scans</div></div>
+        <div class="eda-divider" />
+        <div class="eda-stat"><div class="eda-stat-value">{{ summary.totalActions }}</div><div class="eda-stat-label">Actions</div></div>
+        <div class="eda-divider" />
+        <div class="eda-stat"><div class="eda-stat-value">{{ registrations.length }}</div><div class="eda-stat-label">Registrations</div></div>
+        <div class="eda-divider" />
+        <div class="eda-stat"><div class="eda-stat-value">{{ engagementRate }}<span class="eda-pct">%</span></div><div class="eda-stat-label">Engagement</div></div>
+      </div>
 
-      <!-- KPIs: 2-up on mobile, 4-up on wider -->
-      <div class="row g-2 mb-3">
-        <div class="col-6">
-          <div class="edd-kpi-card">
-            <div class="edd-kpi-icon text-primary"><i class="bi bi-qr-code-scan"></i></div>
-            <div class="edd-kpi-val">{{ summary.totalScans }}</div>
-            <div class="edd-kpi-label">Scans</div>
-          </div>
-        </div>
-        <div class="col-6">
-          <div class="edd-kpi-card">
-            <div class="edd-kpi-icon text-warning"><i class="bi bi-eye"></i></div>
-            <div class="edd-kpi-val">{{ itemViewCount }}</div>
-            <div class="edd-kpi-label">Item Views</div>
-          </div>
-        </div>
-        <div class="col-6">
-          <div class="edd-kpi-card">
-            <div class="edd-kpi-icon text-success"><i class="bi bi-cursor-fill"></i></div>
-            <div class="edd-kpi-val">{{ summary.totalActions }}</div>
-            <div class="edd-kpi-label">Actions</div>
-          </div>
-        </div>
-        <div class="col-6">
-          <div class="edd-kpi-card">
-            <div class="edd-kpi-icon" style="color:#7c3aed"><i class="bi bi-arrow-repeat"></i></div>
-            <div class="edd-kpi-val">{{ engagementRate }}%</div>
-            <div class="edd-kpi-label">Engagement</div>
-          </div>
+      <div class="eda-card mb-3">
+        <div class="eda-section-label">Activity</div>
+        <div class="eda-chart-wrap">
+          <ContactActionsChart
+            :scans-per-period="scansPerPeriod"
+            :actions-per-period-by-type="actionsPerPeriodByType"
+            :from="dateRange.from"
+            :to="dateRange.to"
+            :granularity="chartGranularity"
+          />
         </div>
       </div>
 
-      <!-- Scans Over Time -->
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body pb-2">
-          <h6 class="fw-semibold mb-2 small text-uppercase text-muted">Scans Over Time</h6>
-          <ScanChart :data="summary.scansPerDay" />
-        </div>
+      <div class="eda-card mb-3">
+        <div class="eda-section-label">Activity Log</div>
+        <div class="eda-hint">Scans and guest actions for this event in chronological order.</div>
+        <EventLog :event-id="eventId" :from="dateRange.from" :to="dateRange.to" />
       </div>
 
-      <!-- Actions breakdown (compact bar list) -->
-      <div v-if="topActions.length" class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
-          <h6 class="fw-semibold mb-3 small text-uppercase text-muted">Top Actions</h6>
-          <div v-for="(a, i) in topActions" :key="a.actionType" class="edd-action-row">
-            <span class="edd-action-label">{{ ACTION_LABEL[a.actionType] ?? a.actionType }}</span>
-            <div class="edd-action-bar-wrap">
-              <div
-                class="edd-action-bar"
-                :style="{ width: (topActions[0].count ? (a.count / topActions[0].count) * 100 : 0) + '%' }"
-                :class="['edd-bar-color-' + (i % 5)]"
-              ></div>
-            </div>
-            <span class="edd-action-count">{{ a.count }}</span>
+      <div class="eda-card mb-3">
+        <div class="eda-card-heading">
+          <div>
+            <div class="eda-section-label mb-0">Verified Registrations</div>
+            <div class="eda-hint mb-0">OTP-verified guests registered during this date range.</div>
           </div>
+          <span class="eda-count">{{ registrations.length }}</span>
+        </div>
+        <div v-if="registrations.length" class="eda-registration-list">
+          <div v-for="registration in registrations" :key="registration.id" class="eda-registration-row">
+            <span class="eda-phone"><i class="bi bi-shield-check"></i>{{ registration.phone }}</span>
+            <time :datetime="registration.registeredAt">{{ formatRegistrationDate(registration.registeredAt) }}</time>
+          </div>
+        </div>
+        <div v-else class="eda-empty-inline"><i class="bi bi-person-check"></i>No registrations in this period.</div>
+      </div>
+
+      <div v-if="summary.actionBreakdown.length" class="eda-card">
+        <div class="eda-section-label">Actions Breakdown</div>
+        <div v-for="row in summary.actionBreakdown.slice(0, 8)" :key="row.actionType" class="eda-action-row">
+          <span class="eda-action-name">{{ ACTION_LABEL[row.actionType] ?? row.actionType.replace(/_/g, ' ') }}</span>
+          <div class="eda-action-bar-wrap"><div class="eda-action-bar" :style="{ width: pct(row.count, maxAction) + '%' }"></div></div>
+          <span class="eda-action-count">{{ row.count }}</span>
         </div>
       </div>
     </template>
-
-    <!-- Items breakdown table — always shown when event has data -->
-    <div class="edd-items-section">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <h6 class="fw-semibold mb-0 small text-uppercase text-muted">Items Detail</h6>
-        <span class="badge bg-secondary-subtle text-secondary border" style="font-size:0.7rem;">sortable · searchable</span>
-      </div>
-      <ItemBreakdownTable :event-id="eventId" :range="range" />
-    </div>
   </AnalyticsDrawer>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import AnalyticsDrawer from './AnalyticsDrawer.vue';
-import ScanChart from './ScanChart.vue';
-import ItemBreakdownTable from './ItemBreakdownTable.vue';
+import ContactActionsChart from './ContactActionsChart.vue';
+import DateRangePicker, { type DateRange } from './DateRangePicker.vue';
+import EventLog from './EventLog.vue';
 
-const props = defineProps<{
-  modelValue: boolean;
-  eventId: number;
-  eventName: string;
-}>();
+const props = defineProps<{ modelValue: boolean; eventId: number; eventName: string }>();
+defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 
-defineEmits<{
-  (e: 'update:modelValue', val: boolean): void;
-}>();
-
-const RANGES = [
-  { label: '7D', value: '7d' },
-  { label: '30D', value: '30d' },
-  { label: '90D', value: '90d' },
-  { label: 'All', value: 'all' },
-] as const;
-type RangeValue = typeof RANGES[number]['value'];
-
-const ACTION_LABEL: Record<string, string> = {
-  whatsapp_click: 'WhatsApp', call_click: 'Phone Call', email_click: 'Email',
-  directions_click: 'Directions', share_click: 'Share', save_contact: 'Save Contact',
-  social_click: 'Social', item_expand: 'Item Expand',
-  item_detail_view: 'Item Detail', menu_view: 'Menu View',
-  vendor_contact_view: 'Contact View',
-};
-
+interface Registration { id: number; phone: string; registeredAt: string; updatedAt: string }
 interface Summary {
   totalScans: number;
   totalActions: number;
-  scansPerDay: Array<{ date: string; count: number }>;
+  scansPerPeriod?: Array<{ period: string; count: number }>;
+  scansPerDay?: Array<{ date: string; count: number }>;
+  actionsPerPeriodByType?: Array<{ period: string; actionType: string; count: number }>;
+  actionsPerDayByType?: Array<{ date: string; actionType: string; count: number }>;
   actionBreakdown: Array<{ actionType: string; count: number }>;
-  topItemsViewed: Array<{ itemId: number; itemName: string; views: number }>;
+  granularity?: 'hour' | 'day';
   lastActivity: string | null;
 }
 
+const ACTION_LABEL: Record<string, string> = {
+  event_page_view: 'Event page viewed', event_registration: 'Registration',
+  event_reminder_click: 'Reminder saved', event_share_click: 'Event shared',
+  event_directions_click: 'Directions opened', event_livestream_click: 'Live stream opened',
+  event_organizer_profile_click: 'Organizer profile opened', menu_view: 'Menu viewed',
+  item_expand: 'Item expanded', item_detail_view: 'Item detail opened',
+};
+
+const dateRange = ref<DateRange>({
+  from: new Date(Date.now() - 30 * 24 * 3600 * 1000),
+  to: new Date(),
+  label: 'Last 30 days',
+});
+const summary = ref<Summary | null>(null);
+const registrations = ref<Registration[]>([]);
 const loading = ref(false);
 const error = ref(false);
-const summary = ref<Summary | null>(null);
-const range = ref<RangeValue>('30d');
 
+const scansPerPeriod = computed(() => summary.value?.scansPerPeriod?.length
+  ? summary.value.scansPerPeriod
+  : (summary.value?.scansPerDay ?? []).map(row => ({ period: row.date, count: row.count })));
+const actionsPerPeriodByType = computed(() => summary.value?.actionsPerPeriodByType?.length
+  ? summary.value.actionsPerPeriodByType
+  : (summary.value?.actionsPerDayByType ?? []).map(row => ({ period: row.date, actionType: row.actionType, count: row.count })));
+const chartGranularity = computed(() => summary.value?.granularity ?? 'day');
 const engagementRate = computed(() => {
-  const s = summary.value?.totalScans ?? 0;
-  return s ? Math.round(((summary.value?.totalActions ?? 0) / s) * 100) : 0;
+  const scans = summary.value?.totalScans ?? 0;
+  return scans ? Math.min(100, Math.round(((summary.value?.totalActions ?? 0) / scans) * 100)) : 0;
+});
+const maxAction = computed(() => Math.max(...(summary.value?.actionBreakdown ?? []).map(row => row.count), 1));
+const lastActivityLabel = computed(() => {
+  const value = summary.value?.lastActivity;
+  if (!value) return null;
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 });
 
-const itemViewCount = computed(() => {
-  const b = summary.value?.actionBreakdown ?? [];
-  const expand = b.find(a => a.actionType === 'item_expand')?.count ?? 0;
-  const detail = b.find(a => a.actionType === 'item_detail_view')?.count ?? 0;
-  return expand + detail;
-});
-
-const topActions = computed(() =>
-  (summary.value?.actionBreakdown ?? []).slice(0, 5)
-);
-
-const itemHasData = computed(() =>
-  (summary.value?.topItemsViewed?.length ?? 0) > 0
-);
-
-function setRange(v: RangeValue) { range.value = v; load(); }
+function pct(value: number, max: number) { return max ? Math.round((value / max) * 100) : 0; }
+function formatRegistrationDate(value: string) {
+  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
 
 async function load() {
   if (!props.eventId) return;
   loading.value = true;
   error.value = false;
+  const params = { from: dateRange.value.from.toISOString(), to: dateRange.value.to.toISOString() };
   try {
-    const { data } = await axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, {
-      params: { range: range.value, eventId: props.eventId },
-    });
-    summary.value = data;
+    const [summaryResponse, registrationResponse] = await Promise.all([
+      axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, { params: { ...params, eventId: props.eventId } }),
+      axios.get<Registration[]>(`${API_BASE_URL}/admin/events/${props.eventId}/registrations`, { params }),
+    ]);
+    summary.value = summaryResponse.data;
+    registrations.value = Array.isArray(registrationResponse.data) ? registrationResponse.data : [];
   } catch {
     error.value = true;
   } finally {
@@ -206,94 +177,38 @@ async function load() {
   }
 }
 
-// Reload when opened or event changes
-watch(() => [props.modelValue, props.eventId], ([open]) => {
-  if (open) load();
-});
+watch(() => [props.modelValue, props.eventId], ([open]) => { if (open) load(); });
 onMounted(() => { if (props.modelValue) load(); });
 </script>
 
-<style scoped>
-/* KPI cards */
-.edd-kpi-card {
-  padding: 0.75rem;
-  border: 1px solid var(--bs-border-color, #dee2e6);
-  border-radius: 10px;
-  background: var(--bs-body-bg, #fff);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.edd-kpi-icon { font-size: 1rem; margin-bottom: 4px; }
-.edd-kpi-val { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
-.edd-kpi-label { font-size: 0.72rem; color: var(--bs-secondary-color, #6c757d); font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
-
-/* Summary text */
-.edd-summary-text { font-size: 0.875rem; color: var(--bs-secondary-color, #6c757d); line-height: 1.6; }
-
-/* Action bars */
-.edd-action-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-.edd-action-label {
-  font-size: 0.78rem;
-  color: var(--bs-body-color);
-  width: 110px;
-  flex-shrink: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.edd-action-bar-wrap {
-  flex: 1;
-  height: 8px;
-  background: var(--bs-light, #f0f0f0);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.edd-action-bar {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.4s ease;
-  min-width: 4px;
-}
-.edd-bar-color-0 { background: #6366f1; }
-.edd-bar-color-1 { background: #22c55e; }
-.edd-bar-color-2 { background: #f59e0b; }
-.edd-bar-color-3 { background: #ec4899; }
-.edd-bar-color-4 { background: #14b8a6; }
-.edd-action-count {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--bs-secondary-color, #6c757d);
-  width: 28px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-/* Items section */
-.edd-items-section {
-  border-top: 1px solid var(--bs-border-color, #dee2e6);
-  padding-top: 1rem;
-  margin-top: 0.5rem;
-}
-
-/* Empty state */
-.edd-empty {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--bs-secondary-color, #6c757d);
-}
-.edd-empty i { font-size: 2.5rem; opacity: 0.2; display: block; margin-bottom: 0.75rem; }
-.edd-empty p { font-size: 0.875rem; }
-
-/* Range toggle active state */
-.btn-group .btn.active {
-  background-color: var(--bs-primary);
-  color: #fff;
-  border-color: var(--bs-primary);
-}
+<!-- The drawer teleports its slot to <body>; these component-prefixed selectors must
+     remain global so the teleported content receives its presentation styles. -->
+<style>
+.eda-toolbar { align-items:center;display:flex;flex-wrap:wrap;gap:.5rem;justify-content:space-between;margin-bottom:1.25rem }
+.eda-last { color:var(--bs-secondary-color,#6c757d);font-size:.8rem }
+.eda-controls { align-items:center;display:flex;gap:.375rem }
+.eda-stats-strip { align-items:center;background:var(--bs-tertiary-bg,#f8f9fa);border-radius:12px;display:flex;padding:1rem 1.25rem }
+.eda-stat { flex:1;text-align:center }
+.eda-stat-value { color:var(--bs-body-color);font-size:2rem;font-weight:700;line-height:1.1 }
+.eda-pct { color:var(--bs-secondary-color,#6c757d);font-size:1rem;font-weight:400 }
+.eda-stat-label { color:var(--bs-secondary-color,#6c757d);font-size:.68rem;font-weight:600;letter-spacing:.05em;margin-top:.25rem;text-transform:uppercase }
+.eda-divider { background:var(--bs-border-color,#dee2e6);height:2.75rem;width:1px }
+.eda-card { border:1px solid var(--bs-border-color,#dee2e6);border-radius:12px;padding:1rem }
+.eda-section-label { color:var(--bs-secondary-color,#6c757d);font-size:.7rem;font-weight:600;letter-spacing:.06em;margin-bottom:.5rem;text-transform:uppercase }
+.eda-hint { color:var(--bs-secondary-color,#6c757d);font-size:.72rem;margin-bottom:.75rem }
+.eda-chart-wrap { height:200px }
+.eda-card-heading { align-items:center;display:flex;gap:1rem;justify-content:space-between;margin-bottom:.75rem }
+.eda-count { align-items:center;background:var(--bs-primary-bg-subtle,#e8efff);border-radius:999px;color:var(--bs-primary);display:inline-flex;font-size:.8rem;font-weight:700;justify-content:center;min-width:32px;padding:.3rem .65rem }
+.eda-registration-list { display:flex;flex-direction:column }
+.eda-registration-row { align-items:center;border-top:1px solid var(--bs-border-color,#dee2e6);display:flex;gap:1rem;justify-content:space-between;padding:.7rem 0 }
+.eda-phone { align-items:center;display:flex;font-size:.82rem;font-weight:600;gap:.45rem }.eda-phone i{color:var(--bs-success)}
+.eda-registration-row time { color:var(--bs-secondary-color,#6c757d);font-size:.72rem;text-align:right }
+.eda-empty-inline { align-items:center;color:var(--bs-secondary-color,#6c757d);display:flex;font-size:.8rem;gap:.5rem;padding:.75rem 0 }
+.eda-action-row { align-items:center;display:grid;gap:.5rem;grid-template-columns:130px 1fr 32px;margin-bottom:.55rem }
+.eda-action-name { font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.eda-action-bar-wrap { background:var(--bs-border-color,#e9ecef);border-radius:3px;height:6px;overflow:hidden }
+.eda-action-bar { background:#6366f1;border-radius:3px;height:100%;min-width:2px;transition:width .4s ease }
+.eda-action-count { font-size:.75rem;font-variant-numeric:tabular-nums;font-weight:700;text-align:right }
+.spin { animation:spin .8s linear infinite;display:inline-block } @keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:520px){.eda-stats-strip{padding:.85rem .45rem}.eda-stat-value{font-size:1.45rem}.eda-stat-label{font-size:.58rem}.eda-registration-row{align-items:flex-start;flex-direction:column;gap:.2rem}.eda-registration-row time{text-align:left}.eda-action-row{grid-template-columns:100px 1fr 24px}}
 </style>

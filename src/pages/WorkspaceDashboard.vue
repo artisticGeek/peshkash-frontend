@@ -579,21 +579,6 @@
           </div>
         </div>
 
-          <div v-if="selectedEventForItems?.experienceConfig?.enabled" class="panel event-registration-panel">
-            <div class="panel-heading">
-              <div><p class="eyebrow">Standalone event page</p><h3>Registrations</h3><p class="hint">Verified phone registrations from the public event page.</p></div>
-              <div class="registration-actions">
-                <span class="registration-count">{{ eventRegistrations.length }}</span>
-                <a class="btn btn-outline-secondary btn-sm" :href="`/event/${selectedEventForItems.name}`" target="_blank" rel="noreferrer"><i class="bi bi-box-arrow-up-right"></i> Preview page</a>
-                <button class="icon-btn" type="button" title="Refresh registrations" @click="loadEventRegistrations"><i class="bi bi-arrow-clockwise"></i></button>
-              </div>
-            </div>
-            <div v-if="eventRegistrations.length" class="table-wrap">
-              <table class="table table-sm align-middle"><thead><tr><th>Verified phone</th><th>Registered</th></tr></thead><tbody><tr v-for="registration in eventRegistrations" :key="registration.id"><td>{{ registration.phone }}</td><td>{{ formatRegistrationDate(registration.registeredAt) }}</td></tr></tbody></table>
-            </div>
-            <p v-else class="muted">No registrations yet. Reminder and share clicks are available in Analytics.</p>
-          </div>
-
           <!-- ── Event QR ────────────────────────────────────────────────── -->
           <div v-if="selectedEventForItems" class="panel event-qr-panel">
             <div class="event-qr-header">
@@ -2021,7 +2006,7 @@ import { renderBrandedQrSvg, svgDataUri } from '../features/qrStudio/qrRenderer'
 async function makeQrDataUrl(url: string, size = 180): Promise<string> {
   return svgDataUri(renderBrandedQrSvg(url, 'porcelain-cameo', Math.max(384, size * 2)));
 }
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { Bar, Doughnut } from 'vue-chartjs';
 import {
@@ -2414,7 +2399,6 @@ const qrPreview = reactive({ shortQrUrl: '', finalPublicUrl: '' });
 const qrCodeDataUrl = ref('');
 const vendorQrCodeDataUrl = ref('');
 const eventQrDataUrl = ref('');
-const eventRegistrations = ref<Array<{ id: number; phone: string; registeredAt: string; updatedAt: string }>>([]);
 const itemRows = ref<DraftItem[]>([]);
 
 const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
@@ -2784,7 +2768,6 @@ async function loadAll() {
     }
     await loadEventMenuLinks();
     hydrateRouteContext();
-    await loadEventRegistrations();
   } catch (err) {
     setError(err);
   } finally {
@@ -2904,29 +2887,6 @@ function eventChecklist(event: EventRow) {
     { label: 'Content is ready', done: Boolean(event.experienceConfig?.enabled) || linkedItems.length > 0 },
     { label: 'QR has a destination', done: Boolean(event.experienceConfig?.enabled) || linkedMenus.length + linkedItems.length > 0 },
   ];
-}
-
-async function loadEventRegistrations() {
-  const eventId = selectedEventForItems.value?.id;
-  if (!eventId || !selectedEventForItems.value?.experienceConfig?.enabled) { eventRegistrations.value = []; return; }
-  try {
-    const { data } = await axios.get(adminUrl(`/events/${eventId}/registrations`));
-    if (selectedEventForItems.value?.id === eventId) {
-      eventRegistrations.value = Array.isArray(data) ? data : [];
-    }
-  } catch (err) { setError(err); }
-}
-
-function refreshRegistrationsWhenVisible() {
-  if (authStore.isLoggedIn && document.visibilityState === 'visible' && activeSection.value === 'eventWorkspace') {
-    loadEventRegistrations();
-  }
-}
-
-let registrationRefreshTimer: number | undefined;
-
-function formatRegistrationDate(value: string) {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 }
 
 const NON_SCANNABLE_TYPES = new Set(['category', 'serving', 'dishtype', 'modifier', 'addon']);
@@ -4266,12 +4226,6 @@ watch(eventQrMapping, async (mapping) => {
   }
 }, { immediate: true });
 
-watch(
-  () => [selectedEventForItems.value?.id, selectedEventForItems.value?.experienceConfig?.enabled] as const,
-  () => { loadEventRegistrations(); },
-  { immediate: true },
-);
-
 watch(() => route.fullPath, hydrateRouteContext);
 
 // Reset the inline event editor whenever we navigate back to the events list
@@ -4284,9 +4238,6 @@ watch(activeSection, (section) => {
 });
 
 onMounted(async () => {
-  window.addEventListener('focus', refreshRegistrationsWhenVisible);
-  document.addEventListener('visibilitychange', refreshRegistrationsWhenVisible);
-  registrationRefreshTimer = window.setInterval(refreshRegistrationsWhenVisible, 15000);
   // The dashboard shell remains visible behind the sign-in modal, but protected requests must not
   // run until authentication succeeds. Besides being unnecessary, the previous eager load showed
   // a misleading 401 error toast on the login screen.
@@ -4303,12 +4254,6 @@ onMounted(async () => {
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
   hydrateRouteContext(); // must run last so URL params always win
   syncItemRows();
-});
-
-onUnmounted(() => {
-  window.removeEventListener('focus', refreshRegistrationsWhenVisible);
-  document.removeEventListener('visibilitychange', refreshRegistrationsWhenVisible);
-  if (registrationRefreshTimer) window.clearInterval(registrationRefreshTimer);
 });
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
@@ -7582,9 +7527,6 @@ td.row-actions .icon-btn + a {
   .experience-options { align-items: stretch; flex-direction: column; }
   .experience-options .reminder-mode { align-items: stretch; flex-direction: column; margin-left: 0; }
 }
-.event-registration-panel { border-color: rgba(189, 148, 90, 0.38); }
-.registration-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.registration-count { align-items: center; background: #201812; border-radius: 999px; color: #e2bf87; display: inline-flex; font-size: 1.15rem; font-weight: 700; height: 42px; justify-content: center; min-width: 42px; padding: 0 0.75rem; }
 
 /* ── Sidebar vendor persona ──────────────────────────────────────────────── */
 .sidebar-vendor-section {

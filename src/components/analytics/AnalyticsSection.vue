@@ -257,9 +257,14 @@
           </div>
           <i class="bi bi-chevron-right resource-card-arrow"></i>
         </div>
-        <div v-if="!drilldownEvents.length" class="resource-empty">
+        <div v-if="eventsLoadError" class="resource-empty">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span>Events could not be loaded.</span>
+          <button class="btn btn-sm btn-outline-primary" type="button" @click="loadEvents">Retry</button>
+        </div>
+        <div v-else-if="!drilldownEvents.length" class="resource-empty">
           <i class="bi bi-calendar2-x"></i>
-          <span>No events found.</span>
+          <span>No events found for this vendor.</span>
         </div>
       </div>
 
@@ -312,7 +317,7 @@
       </div>
 
       <!-- No inline panel: clicking opens a drawer -->
-      <p v-if="!drilldownEvents.length && !drilldownVendors.length" class="text-muted small text-center py-3">
+      <p v-if="!eventsLoadError && !drilldownEvents.length && !drilldownVendors.length" class="text-muted small text-center py-3">
         No resources found for the selected filter.
       </p>
     </div>
@@ -369,7 +374,7 @@ import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
 interface Vendor { id: number; displayName: string; name: string }
-interface EventResource { id: number; displayName: string; name: string; status: string }
+interface EventResource { id: number; displayName: string; name: string; status: string; vendorId: number }
 interface QrDetail {
   qrHash: string;
   qrType: string;
@@ -426,6 +431,7 @@ const drilldownTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; nam
 const drawerTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
 const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
+const eventsLoadError = ref(false);
 
 interface ItemResource {
   itemId: number; itemName: string; itemType: string;
@@ -435,15 +441,14 @@ interface ItemResource {
 
 const drilldownVendors = computed(() =>
   selectedVendorId.value
-    ? vendors.value.filter(v => v.id === selectedVendorId.value)
+    ? vendors.value.filter(v => Number(v.id) === Number(selectedVendorId.value))
     : vendors.value
 );
 
 const drilldownEvents = computed(() => {
-  const nonDraft = allEvents.value.filter(e => e.status !== 'draft');
   return selectedVendorId.value
-    ? nonDraft.filter(e => (e as any).vendorId === selectedVendorId.value)
-    : nonDraft;
+    ? allEvents.value.filter(e => Number(e.vendorId) === Number(selectedVendorId.value))
+    : allEvents.value;
 });
 
 // Use topItemsDetailed from the already-loaded summary — the /analytics/items
@@ -451,7 +456,7 @@ const drilldownEvents = computed(() => {
 const drilldownItems = computed<ItemResource[]>(() => {
   const items = (summary.value?.topItemsDetailed ?? []) as ItemResource[];
   if (!selectedVendorId.value) return items;
-  const v = vendors.value.find(v => v.id === selectedVendorId.value);
+  const v = vendors.value.find(v => Number(v.id) === Number(selectedVendorId.value));
   return v ? items.filter(i => i.vendorName === v.displayName) : items;
 });
 
@@ -594,18 +599,23 @@ async function load() {
 async function loadVendors() {
   try {
     const res = await axios.get<Vendor[]>(`${API_BASE_URL}/admin/vendors`);
-    vendors.value = res.data ?? [];
+    vendors.value = (res.data ?? []).map(vendor => ({ ...vendor, id: Number(vendor.id) }));
   } catch {
     // vendors list stays empty — non-critical
   }
 }
 
 async function loadEvents() {
+  eventsLoadError.value = false;
   try {
     const res = await axios.get<EventResource[]>(`${API_BASE_URL}/admin/events`);
-    allEvents.value = res.data ?? [];
+    allEvents.value = (res.data ?? []).map(event => ({
+      ...event,
+      id: Number(event.id),
+      vendorId: Number(event.vendorId),
+    }));
   } catch {
-    // Non-critical
+    eventsLoadError.value = true;
   }
 }
 
