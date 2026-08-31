@@ -169,6 +169,12 @@ const filteredTemplates = computed(() => {
 
 const featuredResources = [
   {
+    kind: 'Print-ready brochure · A4 PDF', title: 'Exhibition organiser brochure',
+    description: 'Eight-page organiser pitch with the visitor journey, QR touchpoints, value and illustrative insights.',
+    href: '/resources/brochures/Peshkash-Exhibition-Organiser-Brochure.pdf', preview: '',
+    filename: 'Peshkash-Exhibition-Organiser-Brochure.pdf', download: true, tone: 'gold', icon: 'bi bi-file-earmark-pdf',
+  },
+  {
     kind: 'Complete light collection', title: 'Porcelain Cameo catalogue',
     description: 'All approved light-theme QR formats on one reference board.',
     href: '/brand/qr-templates/Porcelain-Cameo/00-Porcelain-Cameo-Catalog.svg',
