@@ -10,6 +10,11 @@ const routes: Array<RouteRecordRaw> = [
     component: LandingPage
   },
   {
+    path: '/exhibits',
+    name: 'Exhibits',
+    component: () => import('./pages/ExhibitsPage.vue')
+  },
+  {
     path: '/event/:eventName/menu/:menuName',
     component: MenuPage
   },

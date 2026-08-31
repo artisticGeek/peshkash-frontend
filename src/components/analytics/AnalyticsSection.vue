@@ -509,6 +509,9 @@ const ACTION_LABEL: Record<string, string> = {
   landing_contact_form_submit: 'Contact Form Submitted', landing_whatsapp_footer: 'Footer WhatsApp',
   landing_instagram_footer: 'Footer Instagram', landing_email_footer: 'Footer Email',
   landing_whatsapp_floating: 'Floating WhatsApp',
+  exhibit_page_view: 'Exhibit Viewed', exhibit_next: 'Exhibit Next Page',
+  exhibit_previous: 'Exhibit Previous Page', exhibit_whatsapp: 'Exhibit WhatsApp',
+  exhibit_share: 'Exhibit Shared', exhibit_get_started: 'Exhibit Peshkash Link',
 };
 
 const RANGE_LABEL: Record<string, string> = {

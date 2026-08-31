@@ -180,6 +180,7 @@ import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
 import { usePageMeta } from '../composables/usePageMeta'
+import { sharePublicPage } from '../utils/socialShare'
 
 const route = useRoute()
 const vendorName = route.params.vendorName as string
@@ -412,16 +413,11 @@ function downloadVCard() {
 async function shareCard() {
   if (!vendorData.value) return
   analytics.track('share_click', { vendorId: vid() })
-  const shareData = {
-    title: vendorData.value.displayName,
-    text: vendorData.value.description || `Contact information for ${vendorData.value.displayName}`,
-    url: window.location.href,
-  }
-  if (navigator.share) {
-    try { await navigator.share(shareData) } catch { /* user cancelled */ }
-  } else {
-    await navigator.clipboard.writeText(window.location.href)
-  }
+  await sharePublicPage({
+    title: `${vendorData.value.displayName} on Peshkash`,
+    text: vendorData.value.description || `Meet ${vendorData.value.displayName} and save their details on Peshkash.`,
+    previewPath: `vendor/${vendorData.value.name}`,
+  })
 }
 
 // ── Data fetch ────────────────────────────────────────────────────────────────
@@ -437,10 +433,11 @@ onMounted(async () => {
 
     // Dynamic SEO
     const display = vendorData.value?.displayName || vendorName
-    setMeta(
-      `${display} — on Peshkash`,
-      `Contact and connect with ${display} on Peshkash — scan, call, and save their details.`,
-    )
+    setMeta({
+      title: `${display} — on Peshkash`,
+      description: vendorData.value?.description || `Contact and connect with ${display} on Peshkash — scan, call, and save their details.`,
+      type: 'profile',
+    })
 
     // If the vendor requires login and the user isn't logged in, open the modal.
     // We never redirect — just gate the content behind the modal.

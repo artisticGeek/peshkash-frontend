@@ -90,6 +90,12 @@ const LABELS: Record<string, string> = {
   landing_instagram_footer: 'Footer Instagram',
   landing_email_footer: 'Footer Email',
   landing_whatsapp_floating: 'Floating WhatsApp',
+  exhibit_page_view: 'Exhibit View',
+  exhibit_next: 'Next Page',
+  exhibit_previous: 'Previous Page',
+  exhibit_whatsapp: 'Exhibit WhatsApp',
+  exhibit_share: 'Exhibit Share',
+  exhibit_get_started: 'Peshkash Link',
 };
 
 const SCANS_COLOR = '99,102,241';   // indigo — distinct from CTAs
@@ -130,6 +136,12 @@ const CTA_COLORS: Record<string, string> = {
   landing_instagram_footer: '225,48,108',
   landing_email_footer:  '6,182,212',
   landing_whatsapp_floating: '74,222,128',
+  exhibit_page_view: '126,91,61',
+  exhibit_next: '189,148,90',
+  exhibit_previous: '160,124,82',
+  exhibit_whatsapp: '37,211,102',
+  exhibit_share: '249,115,22',
+  exhibit_get_started: '168,85,247',
 };
 const CTA_FALLBACK = '16,185,129';
 

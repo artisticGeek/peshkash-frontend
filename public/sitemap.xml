@@ -5,6 +5,11 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://peshkash.app/exhibits</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://peshkash.app/#picker</loc>
     <priority>0.8</priority>
   </url>

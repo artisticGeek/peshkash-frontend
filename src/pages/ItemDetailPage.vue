@@ -136,6 +136,7 @@ import PublicErrorState from '../components/PublicErrorState.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
+import { sharePublicPage } from '../utils/socialShare';
 
 const route = useRoute()
 const router = useRouter()
@@ -261,25 +262,18 @@ async function shareItem() {
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   });
-  const shareData = { title: itemData.value?.displayName || itemData.value?.name, url: window.location.href }
-
-  if (navigator.share) {
-    try {
-      await navigator.share(shareData)
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('Unable to share item:', err)
-    }
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(window.location.href)
-    feedback.value = 'Link copied'
-    showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 2200)
-  } catch (err) {
-    console.error('Unable to copy item link:', err)
-  }
+  const item = itemData.value?.displayName || itemData.value?.name || itemName
+  const vendor = itemData.value?.event?.vendor?.displayName
+  await sharePublicPage({
+    title: vendor ? `${item} by ${vendor}` : item,
+    text: itemData.value?.description || `Discover ${item} on Peshkash.`,
+    previewPath: `event/${eventName}/menu/${menuName}/item/${itemName}`,
+    onCopied: () => {
+      feedback.value = 'Link copied with its social preview'
+      showFeedback.value = true
+      window.setTimeout(() => { showFeedback.value = false }, 2200)
+    },
+  })
 }
 
 async function loadItem() {
@@ -298,12 +292,14 @@ async function loadItem() {
     // Dynamic SEO
     const itemDisplay  = data?.displayName || data?.name || itemName
     const vendorDisplay = data?.event?.vendor?.displayName || ''
-    setMeta(
-      vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
-      data?.description
+    setMeta({
+      title: vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
+      description: data?.description
         ? `${itemDisplay}: ${data.description.slice(0, 140)}`
         : `Explore ${itemDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash.`,
-    )
+      image: data?.image || undefined,
+      type: 'article',
+    })
 
     analytics.track('item_detail_view', {
       vendorId: data?.event?.vendor?.id,

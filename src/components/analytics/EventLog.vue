@@ -147,6 +147,12 @@ const ACTION_LABELS: Record<string, string> = {
   landing_instagram_footer: 'Footer Instagram opened',
   landing_email_footer: 'Footer email opened',
   landing_whatsapp_floating: 'Floating WhatsApp opened',
+  exhibit_page_view: 'Exhibit opened',
+  exhibit_next: 'Exhibit moved to next page',
+  exhibit_previous: 'Exhibit moved to previous page',
+  exhibit_whatsapp: 'Exhibit WhatsApp opened',
+  exhibit_share: 'Exhibit shared',
+  exhibit_get_started: 'Peshkash link opened from exhibit',
 };
 
 const DOT_COLORS: Record<string, string> = {
@@ -187,6 +193,12 @@ const DOT_COLORS: Record<string, string> = {
   landing_instagram_footer: '#e1306c',
   landing_email_footer: '#06b6d4',
   landing_whatsapp_floating: '#4ade80',
+  exhibit_page_view: '#7e5b3d',
+  exhibit_next: '#bd945a',
+  exhibit_previous: '#a07c52',
+  exhibit_whatsapp: '#25d366',
+  exhibit_share: '#f97316',
+  exhibit_get_started: '#a855f7',
 };
 
 function rowKind(row: EventRow) {

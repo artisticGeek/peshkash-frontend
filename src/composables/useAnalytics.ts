@@ -56,7 +56,13 @@ export type ActionType =
   | 'landing_whatsapp_footer'
   | 'landing_instagram_footer'
   | 'landing_email_footer'
-  | 'landing_whatsapp_floating';
+  | 'landing_whatsapp_floating'
+  | 'exhibit_page_view'
+  | 'exhibit_next'
+  | 'exhibit_previous'
+  | 'exhibit_whatsapp'
+  | 'exhibit_share'
+  | 'exhibit_get_started';
 
 function getStoredPhone(): string | null {
   try {

@@ -59,6 +59,12 @@ const LABEL_MAP: Record<string, string> = {
   landing_instagram_footer: 'Footer Instagram',
   landing_email_footer: 'Footer Email',
   landing_whatsapp_floating: 'Floating WhatsApp',
+  exhibit_page_view: 'Exhibit Viewed',
+  exhibit_next: 'Exhibit Next Page',
+  exhibit_previous: 'Exhibit Previous Page',
+  exhibit_whatsapp: 'Exhibit WhatsApp',
+  exhibit_share: 'Exhibit Shared',
+  exhibit_get_started: 'Exhibit Peshkash Link',
 };
 
 function formatLabel(type: string) {
@@ -73,6 +79,9 @@ const COLOR_MAP: Record<string, string> = {
   share_click: 'bg-secondary',
   save_contact: 'bg-dark',
   item_expand: 'bg-primary',
+  exhibit_page_view: 'bg-dark',
+  exhibit_whatsapp: 'bg-success',
+  exhibit_share: 'bg-warning',
 };
 
 function barClass(type: string) {
