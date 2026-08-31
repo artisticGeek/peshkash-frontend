@@ -13,7 +13,7 @@
       <a class="nav-link-inline" href="/#faq">FAQ</a>
       <a class="nav-link-inline" href="/#contact">Contact</a>
     </div>
-    <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2">
+    <a href="/#contact" class="btn btn-pk-gold d-none d-lg-inline-flex align-items-center gap-2" @click="$emit('track', 'landing_get_started')">
       <i class="bi bi-whatsapp"></i> Get Started
     </a>
 
@@ -66,7 +66,8 @@
         <!-- Bottom CTA in side menu -->
         <div class="offcanvas-footer mt-auto pt-4 border-top border-secondary">
           <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
-            class="btn btn-pk-gold w-100 mb-3 d-flex align-items-center justify-content-center gap-2">
+            class="btn btn-pk-gold w-100 mb-3 d-flex align-items-center justify-content-center gap-2"
+            @click="$emit('track', 'landing_whatsapp_nav')">
             <i class="bi bi-whatsapp"></i> Chat on WhatsApp
           </a>
           <p class="text-muted small text-center mb-0">+91-9115551110 · contact@peshkash.app</p>
@@ -79,6 +80,8 @@
 
 <script setup lang="ts">
 import PeshkashLogo from '@/components/PeshkashLogo.vue'
+
+defineEmits<{ (event: 'track', actionType: string): void }>()
 
 function navigateTo(hash: string) {
   const closeBtn = document.querySelector<HTMLElement>('#offcanvasDarkNavbar .btn-close')

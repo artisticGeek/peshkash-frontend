@@ -94,12 +94,15 @@ import LoginDrawer from '../components/auth/LoginDrawer.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
+import { usePageMeta } from '../composables/usePageMeta';
 import { useAuthStore } from '../stores/auth';
+import { sharePublicPage } from '../utils/socialShare';
 
 type EventPageData = { id: number; name: string; displayName: string; description?: string; startTime?: string; endTime?: string; status: string; preview?: boolean; registrationOpen?: boolean; registered: boolean; organizer?: any; experience: any };
 const route = useRoute();
 const auth = useAuthStore();
 const analytics = useAnalytics();
+const { setMeta, resetMeta } = usePageMeta();
 const event = ref<EventPageData | null>(null);
 const loading = ref(true);
 const error = ref('');
@@ -145,11 +148,17 @@ async function loadEvent() {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/event/${encodeURIComponent(String(route.params.eventName))}`);
     event.value = data;
-    document.title = `${data.displayName} · Peshkash`;
+    const organizer = data.organizer?.displayName;
+    setMeta({
+      title: organizer ? `${data.displayName} by ${organizer} — Peshkash` : `${data.displayName} — Peshkash`,
+      description: data.description || `Discover ${data.displayName}, event details, guests and reminders on Peshkash.`,
+      type: 'article',
+    });
     track('event_page_view');
   } catch (err: any) {
     if (import.meta.env.DEV && route.params.eventName === 'demo-event') {
-      event.value = devEventFixture(); document.title = `${event.value.displayName} · Peshkash`;
+      event.value = devEventFixture();
+      setMeta({ title: `${event.value.displayName} by ${event.value.organizer.displayName} — Peshkash`, description: event.value.description, type: 'article' });
     } else error.value = err.response?.data?.error || 'This event page could not be loaded.';
   }
   finally { loading.value = false; }
@@ -192,12 +201,19 @@ async function setReminder() {
 }
 
 async function shareEvent() {
-  const share = { title: event.value?.displayName || 'Peshkash event', text: event.value?.description || '', url: window.location.href };
-  try { if (navigator.share) await navigator.share(share); else { await navigator.clipboard.writeText(window.location.href); notify('Event link copied.'); } track('event_share_click'); } catch { /* share cancellation */ }
+  if (!event.value) return;
+  const organizer = event.value.organizer?.displayName;
+  const shared = await sharePublicPage({
+    title: organizer ? `${event.value.displayName} by ${organizer}` : event.value.displayName,
+    text: event.value.description || `View event details, guests and timings on Peshkash.`,
+    previewPath: `event/${event.value.name}`,
+    onCopied: () => notify('Event link copied with its social preview.'),
+  });
+  if (shared) track('event_share_click');
 }
 
 onMounted(() => { loadEvent(); timer = window.setInterval(() => { now.value = Date.now(); }, 1000); });
-onUnmounted(() => { if (timer) window.clearInterval(timer); });
+onUnmounted(() => { if (timer) window.clearInterval(timer); resetMeta(); });
 </script>
 
 <style scoped>

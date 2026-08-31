@@ -42,6 +42,9 @@
       <p v-if="menuData?.menu?.description" class="menu-item-description">
         {{ menuData.menu.description }}
       </p>
+      <button class="menu-share-button" type="button" aria-label="Share this collection" title="Share this collection" @click="shareMenu">
+        <i class="bi bi-share"></i>
+      </button>
     </div>
 
     <!-- Event Status Notice -->
@@ -134,6 +137,7 @@ import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
 import { usePageMeta } from '../composables/usePageMeta'
+import { sharePublicPage } from '../utils/socialShare'
 
 const route = useRoute()
 const eventName = route.params.eventName as string
@@ -212,6 +216,22 @@ const clearFilters = () => {
   selectedFilter.value = 'All'
 }
 
+async function shareMenu() {
+  if (!menuData.value) return
+  const menuDisplay = menuData.value.menu?.displayName || menuName
+  const vendorDisplay = menuData.value.vendor?.displayName
+  const shared = await sharePublicPage({
+    title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay}` : menuDisplay,
+    text: menuData.value.menu?.description || `Browse ${menuDisplay} on Peshkash.`,
+    previewPath: `event/${eventName}/menu/${menuName}`,
+  })
+  if (shared) analytics.track('share_click', {
+    vendorId: menuData.value.vendor?.id,
+    eventId: menuData.value.event?.id,
+    menuId: menuData.value.menu?.id,
+  })
+}
+
 // Watch for search query changes to force reactivity
 const forceRenderKey = ref(0)
 watch([searchQuery, selectedFilter], ([newSearch, newFilter], [oldSearch, oldFilter]) => {
@@ -246,10 +266,11 @@ async function loadMenu() {
     // Dynamic SEO
     const menuDisplay  = data?.menu?.displayName  || menuName
     const vendorDisplay = data?.vendor?.displayName || ''
-    setMeta(
-      vendorDisplay ? `${menuDisplay} by ${vendorDisplay} — Peshkash` : `${menuDisplay} — Peshkash`,
-      `Browse ${menuDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash — scan, explore, and enjoy.`,
-    )
+    setMeta({
+      title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay} — Peshkash` : `${menuDisplay} — Peshkash`,
+      description: data?.menu?.description || `Browse ${menuDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash — scan, explore, and enjoy.`,
+      type: 'article',
+    })
 
     // If the vendor requires login and the user isn't logged in, show the modal.
     // No redirect — just gate the content; user stays on this page.
@@ -338,6 +359,22 @@ onMounted(loadMenu)
   line-height: 1.4;
   margin-top: 2px;
 }
+
+.menu-share-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(189, 148, 90, 0.5);
+  border-radius: 999px;
+  color: #9b713c;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  margin-top: 0.85rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  width: 34px;
+}
+
+.menu-share-button:hover { background: #f4e9da; color: #1a1410; transform: translateY(-1px); }
 
 @media (min-width: 768px) {
   .menu-item-description {

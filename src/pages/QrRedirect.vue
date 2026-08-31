@@ -44,7 +44,10 @@ async function resolveQr(qrHash: string) {
 
       if (redirectUrl) {
         gtagEvent('qr_scan', { qr_hash: qrHash });
-        router.push(redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`);
+        const path = redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`;
+        // Preserve the source QR without changing the public destination URL. The landing page
+        // can then connect CTA activity to this exact custom QR asset.
+        router.push({ path, state: { peshkashQrHash: qrHash } });
       } else {
         console.error('[QR] Redirect response did not include a destination.');
         error.value = true;

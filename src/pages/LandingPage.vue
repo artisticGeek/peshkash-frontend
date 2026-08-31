@@ -5,7 +5,7 @@
     <canvas ref="cvs" class="net-canvas" aria-hidden="true"></canvas>
 
     <div class="page">
-      <Navbar />
+      <Navbar @track="trackLanding" />
 
       <!-- ═══════ HERO ═══════════════════════════════════════ -->
       <section class="hero" id="hero">
@@ -26,10 +26,10 @@
 
           <div class="hero-actions scene-in" style="--d:.5s">
             <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
-               class="cta-wa" @mouseenter="onCtaHover" @mouseleave="onCtaLeave">
+               class="cta-wa" @click="trackLanding('landing_whatsapp_hero')" @mouseenter="onCtaHover" @mouseleave="onCtaLeave">
               <i class="bi bi-whatsapp"></i> Chat on WhatsApp
             </a>
-            <a href="#picker" class="cta-soft">See it in action ↓</a>
+            <a href="#picker" class="cta-soft" @click="trackLanding('landing_demo_anchor')">See it in action ↓</a>
           </div>
 
           <div class="biz-tags scene-in" style="--d:.65s">
@@ -137,7 +137,7 @@
               <h3 class="biz-h3">{{ currentBiz.headline }}</h3>
               <p class="biz-p">{{ currentBiz.copy }}</p>
               <a :href="`https://wa.me/+919115551110?text=${encodeURIComponent(currentBiz.id === 'other' ? 'Hi! I want to learn how Peshkash can work for my business.' : 'Hi! I run a ' + currentBiz.label + ' and want to learn about Peshkash.')}`"
-                target="_blank" rel="noopener" class="biz-cta">
+                target="_blank" rel="noopener" class="biz-cta" @click="trackLanding('landing_whatsapp_business')">
                 <i class="bi bi-whatsapp"></i> {{ currentBiz.id === 'other' ? 'Tell us what you sell' : `Start as a ${currentBiz.label}` }}
               </a>
             </div>
@@ -200,7 +200,7 @@
         <div class="faq-head scene-in dir-l" style="--d:0s">
           <p class="lbl">FAQ</p>
           <h2 class="h2">Questions?<br><em>Answered.</em></h2>
-          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-sm">
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-sm" @click="trackLanding('landing_whatsapp_faq')">
             <i class="bi bi-whatsapp"></i> Ask us directly
           </a>
         </div>
@@ -230,19 +230,19 @@
           <h2 class="h2 ct-h2">Your offline business<br>deserves<br><em>the power of technology.</em></h2>
           <p class="ct-p">No pricing tables. Tell us about your business — we'll design the perfect setup.</p>
           <p class="ct-campaign">A QR is the cheapest marketing you'll ever buy.</p>
-          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-big">
+          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-big" @click="trackLanding('landing_whatsapp_contact')">
             <div class="wab-icon"><i class="bi bi-whatsapp"></i></div>
             <div><strong>Chat on WhatsApp</strong><small>Usually replies within an hour</small></div>
           </a>
           <div class="ct-links">
-            <a href="tel:+919115551110"><i class="bi bi-telephone-fill"></i> +91-9115551110</a>
-            <a href="mailto:contact@peshkash.app"><i class="bi bi-envelope-fill"></i> contact@peshkash.app</a>
+            <a href="tel:+919115551110" @click="trackLanding('landing_call')"><i class="bi bi-telephone-fill"></i> +91-9115551110</a>
+            <a href="mailto:contact@peshkash.app" @click="trackLanding('landing_email')"><i class="bi bi-envelope-fill"></i> contact@peshkash.app</a>
           </div>
         </div>
 
         <div class="ct-right scene-in dir-r" style="--d:.12s">
           <h4>Send a message</h4>
-          <form action="https://formsubmit.co/contact@peshkash.app" method="POST">
+          <form action="https://formsubmit.co/contact@peshkash.app" method="POST" @submit="trackLanding('landing_contact_form_submit')">
             <input type="hidden" name="_subject" value="New inquiry from Peshkash website" />
             <input type="hidden" name="_captcha" value="false" />
             <input type="hidden" name="_next" value="https://peshkash.app/?sent=1" />
@@ -279,9 +279,9 @@
             <div class="fb-brand"><PeshkashLogo variant="dark-bg" :height="36" /></div>
             <p>Digital insights from offline experiences.</p>
             <div class="fb-social">
-              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i></a>
-              <a href="https://instagram.com/peshkash.app" target="_blank" rel="noopener"><i class="bi bi-instagram"></i></a>
-              <a href="mailto:contact@peshkash.app"><i class="bi bi-envelope"></i></a>
+              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" @click="trackLanding('landing_whatsapp_footer')"><i class="bi bi-whatsapp"></i></a>
+              <a href="https://instagram.com/peshkash.app" target="_blank" rel="noopener" @click="trackLanding('landing_instagram_footer')"><i class="bi bi-instagram"></i></a>
+              <a href="mailto:contact@peshkash.app" @click="trackLanding('landing_email_footer')"><i class="bi bi-envelope"></i></a>
             </div>
           </div>
           <nav class="ft-nav">
@@ -291,8 +291,8 @@
               <a href="/#faq">FAQ</a>
             </div>
             <div class="fnc"><h6>Contact</h6>
-              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener">WhatsApp</a>
-              <a href="tel:+919115551110">+91-9115551110</a>
+              <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" @click="trackLanding('landing_whatsapp_footer')">WhatsApp</a>
+              <a href="tel:+919115551110" @click="trackLanding('landing_call')">+91-9115551110</a>
             </div>
           </nav>
         </div>
@@ -303,7 +303,7 @@
       </footer>
     </div><!-- /page -->
 
-    <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="fwa"><i class="bi bi-whatsapp"></i></a>
+    <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="fwa" @click="trackLanding('landing_whatsapp_floating')"><i class="bi bi-whatsapp"></i></a>
     <button v-show="topVisible" @click="scrollTop" class="fup"><i class="bi bi-arrow-up"></i></button>
   </div>
 </template>
@@ -312,6 +312,7 @@
 import { onMounted, onBeforeUnmount, ref, computed, reactive } from 'vue';
 import Navbar from '../components/Navbar.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
+import { useAnalytics, type ActionType } from '../composables/useAnalytics';
 import * as THREE from 'three';
 import qrImg     from '../assets/peshkashqrhero.png';
 import menuImg   from '../assets/peshkash-demo-section.png';
@@ -326,6 +327,16 @@ const openFaq   = ref(0);
 const scanned   = ref(false);
 const activeBiz = ref<string | null>(null);
 const stepRefs  = reactive<HTMLElement[]>([]);
+const LANDING_VENDOR_SLUG = 'artisticgeek-studios';
+const LANDING_QR_HASH = 'peshkash-home';
+const analytics = useAnalytics({ vendorSlug: LANDING_VENDOR_SLUG });
+
+function trackLanding(actionType: ActionType | string) {
+  const sourceHash = typeof window.history.state?.peshkashQrHash === 'string'
+    ? window.history.state.peshkashQrHash
+    : LANDING_QR_HASH;
+  analytics.track(actionType, { qrHash: sourceHash });
+}
 
 // ── Three.js accent color (changed by business type) ──────────
 let accentColor = new THREE.Color('#BD945A');
@@ -635,6 +646,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
 let cleanup: (()=>void)|null = null;
 
 onMounted(async () => {
+  trackLanding('landing_page_view');
   // Start Three.js
   if (cvs.value) {
     try { cleanup = initNetwork(cvs.value); }

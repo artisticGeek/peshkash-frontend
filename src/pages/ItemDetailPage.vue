@@ -57,8 +57,8 @@
         </div>
       </div>
 
-      <div v-if="itemData?.isVeg !== undefined || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
-        <span v-if="itemData?.isVeg !== undefined" class="pk-item-chip">
+      <div v-if="showDietaryBadge || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
+        <span v-if="showDietaryBadge" class="pk-item-chip">
           <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
           <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
         </span>
@@ -99,7 +99,14 @@
           </div>
       </section>
 
-      <nav class="pk-action-dock" aria-label="Item actions">
+    </main>
+  </div>
+
+  <!-- Keep the fixed action dock outside the animated item shell. Animate.css leaves
+       a transform on that shell, which otherwise makes position:fixed relative to
+       the content instead of the phone viewport. -->
+  <Teleport to="body">
+    <nav v-if="!error && !isLoading && itemData" class="pk-action-dock" aria-label="Item actions">
         <button class="pk-action-icon" :class="{ active: userReaction === 'like' }" type="button" @click="toggleReaction('like')" aria-label="Like this item" :aria-pressed="userReaction === 'like'" title="Like">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
           <span class="visually-hidden">Like</span>
@@ -116,9 +123,8 @@
           <i class="bi bi-share-fill"></i>
           <span class="visually-hidden">Share</span>
         </button>
-      </nav>
-    </main>
-  </div>
+    </nav>
+  </Teleport>
   </div>
 </template>
 
@@ -130,6 +136,7 @@ import PublicErrorState from '../components/PublicErrorState.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
+import { sharePublicPage } from '../utils/socialShare';
 
 const route = useRoute()
 const router = useRouter()
@@ -162,6 +169,10 @@ const itemSectionLabel = computed(() => {
   if (itemData.value?.menu?.itemStoryHeading) return itemData.value.menu.itemStoryHeading
   const t = (itemData.value?.itemType || itemData.value?.type)?.toLowerCase()
   return ITEM_SECTION_MAP[t]?.label ?? 'The backstory'
+})
+const showDietaryBadge = computed(() => {
+  const type = (itemData.value?.itemType || itemData.value?.type || '').toLowerCase()
+  return type === 'dish' && typeof itemData.value?.isVeg === 'boolean'
 })
 const error = ref<string | null>(null)
 const feedback = ref('')
@@ -251,25 +262,18 @@ async function shareItem() {
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   });
-  const shareData = { title: itemData.value?.displayName || itemData.value?.name, url: window.location.href }
-
-  if (navigator.share) {
-    try {
-      await navigator.share(shareData)
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('Unable to share item:', err)
-    }
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(window.location.href)
-    feedback.value = 'Link copied'
-    showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 2200)
-  } catch (err) {
-    console.error('Unable to copy item link:', err)
-  }
+  const item = itemData.value?.displayName || itemData.value?.name || itemName
+  const vendor = itemData.value?.event?.vendor?.displayName
+  await sharePublicPage({
+    title: vendor ? `${item} by ${vendor}` : item,
+    text: itemData.value?.description || `Discover ${item} on Peshkash.`,
+    previewPath: `event/${eventName}/menu/${menuName}/item/${itemName}`,
+    onCopied: () => {
+      feedback.value = 'Link copied with its social preview'
+      showFeedback.value = true
+      window.setTimeout(() => { showFeedback.value = false }, 2200)
+    },
+  })
 }
 
 async function loadItem() {
@@ -288,12 +292,14 @@ async function loadItem() {
     // Dynamic SEO
     const itemDisplay  = data?.displayName || data?.name || itemName
     const vendorDisplay = data?.event?.vendor?.displayName || ''
-    setMeta(
-      vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
-      data?.description
+    setMeta({
+      title: vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
+      description: data?.description
         ? `${itemDisplay}: ${data.description.slice(0, 140)}`
         : `Explore ${itemDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash.`,
-    )
+      image: data?.image || undefined,
+      type: 'article',
+    })
 
     analytics.track('item_detail_view', {
       vendorId: data?.event?.vendor?.id,
