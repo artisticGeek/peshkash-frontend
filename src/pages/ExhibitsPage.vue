@@ -13,53 +13,53 @@
         <img src="/resources/exhibits/atelier-hero.png" alt="Ivory textile and handcrafted jewellery in a warm editorial setting" />
         <div class="hero-shade"></div>
         <div class="spread-copy hero-copy">
-          <p class="kicker">Peshkash Exhibits · No. 01</p>
-          <h1>The Atelier<br><em>Edit</em></h1>
-          <p class="deck">An interactive shop window for fashion, boutique collections and jewellery—made to travel through a scan or a share.</p>
-          <button type="button" class="text-link" @click="goTo(1, 'exhibit_next')">Open the folio <i class="bi bi-arrow-down"></i></button>
+          <p class="kicker">Peshkash for exhibitions</p>
+          <h1>Every stall.<br><em>Still discoverable.</em></h1>
+          <p class="deck">Turn your exhibition into one connected, measurable visitor experience—before the gates open, across the floor, and long after the crowd leaves.</p>
+          <button type="button" class="text-link" @click="goTo(1, 'exhibit_next')">See what your event gains <i class="bi bi-arrow-down"></i></button>
         </div>
-        <p class="credit">Curated by ArtisticGeek Studios</p>
+        <p class="credit">A digital exhibition format by ArtisticGeek Studios</p>
       </section>
 
       <section class="exhibit-spread fashion-spread" data-page="1">
         <div class="folio-number">01</div>
-        <div class="fashion-image" role="img" aria-label="Close editorial crop of flowing ivory fabric"></div>
+        <div class="fashion-image" role="img" aria-label="A premium exhibitor collection presented as a digital shop window"></div>
         <div class="spread-copy fashion-copy">
-          <p class="kicker">Fashion · Form in motion</p>
-          <h2>Quiet fabric.<br>Strong silhouette.</h2>
-          <p>Collections deserve more than a crowded grid. Give every drop its own pace, story and tactile sense of detail.</p>
+          <p class="kicker">One event · many shop windows</p>
+          <h2>Give every exhibitor<br>room to be found.</h2>
+          <p>Each stall gets a living Peshkash page for its brand, collection, products and contact actions. Your visitors browse with context—not a paper map and a pile of forgotten cards.</p>
           <dl>
-            <div><dt>Edition</dt><dd>Limited atelier</dd></div>
-            <div><dt>Material</dt><dd>Hand-finished silk</dd></div>
-            <div><dt>Made for</dt><dd>Occasion &amp; heirloom</dd></div>
+            <div><dt>Before</dt><dd>Event page, registration, reminders and exhibitor guide</dd></div>
+            <div><dt>On site</dt><dd>QR discovery at the gate, aisles, stalls and products</dd></div>
+            <div><dt>After</dt><dd>Saved vendors, shared products and measurable follow-up</dd></div>
           </dl>
         </div>
-        <span class="edge-word">FASHION</span>
+        <span class="edge-word">DISCOVERY</span>
       </section>
 
       <section class="exhibit-spread jewellery-spread" data-page="2">
         <div class="jewel-intro">
-          <p class="kicker">Jewellery · Object stories</p>
-          <h2>Pieces worth<br><em>remembering.</em></h2>
-          <p>Provenance, craft, care and the maker’s note—kept beside the piece without adding visual noise to the counter.</p>
+          <p class="kicker">The visitor journey · one scan</p>
+          <h2>Interest becomes<br><em>intent.</em></h2>
+          <p>A visitor can move from the event overview to an exhibitor, open a product story, save it, share it and contact the seller—without downloading an app.</p>
         </div>
         <div class="jewel-stage" aria-label="Sculptural jewellery display">
           <div class="necklace-orbit"><span v-for="n in 17" :key="n" :style="{ '--i': n }"></span></div>
           <div class="garnet"></div>
-          <p>Hand formed<br><b>Brushed brass</b></p>
+          <p>From scan to<br><b>meaningful action</b></p>
         </div>
-        <div class="jewel-notes"><span>Certificate</span><span>Material</span><span>Care</span><span>Maker</span></div>
+        <div class="jewel-notes"><span>Discover</span><span>Explore</span><span>Save</span><span>Connect</span></div>
       </section>
 
       <section class="exhibit-spread closing-spread" data-page="3">
         <div class="closing-mark">P</div>
         <div class="spread-copy closing-copy">
-          <p class="kicker">Your collection, presented</p>
-          <h2>From counter<br>to conversation.</h2>
-          <p>One living brochure for your boutique, exhibition or jewellery line. Share it online, place it behind a QR, and see what your audience keeps exploring.</p>
+          <p class="kicker">What the organiser finally sees</p>
+          <h2>Footfall becomes<br>evidence.</h2>
+          <p>See which QRs were scanned, which exhibitors and items drew attention, and which actions followed—shares, saves, calls, registrations and WhatsApp enquiries. Give exhibitors value they can take home.</p>
           <div class="closing-actions">
-            <a :href="whatsappUrl" target="_blank" rel="noopener" @click="track('exhibit_whatsapp')"><i class="bi bi-whatsapp"></i> Build my exhibit</a>
-            <button type="button" @click="shareExhibit"><i class="bi bi-share"></i> Share this folio</button>
+            <a :href="whatsappUrl" target="_blank" rel="noopener" @click="track('exhibit_whatsapp')"><i class="bi bi-whatsapp"></i> Digitise my exhibition</a>
+            <button type="button" @click="shareExhibit"><i class="bi bi-share"></i> Share this proposal</button>
           </div>
           <p class="studio-credit">A Peshkash format by ArtisticGeek Studios</p>
         </div>
@@ -86,14 +86,14 @@ import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
 import { sharePublicPage } from '../utils/socialShare';
 
-const pages = ['Cover', 'Fashion', 'Jewellery', 'Present yours'];
+const pages = ['The proposition', 'Exhibitor value', 'Visitor journey', 'Measurable value'];
 const current = ref(0);
 const book = ref<HTMLElement | null>(null);
 const touchStart = ref({ x: 0, y: 0 });
 const { setMeta, resetMeta } = usePageMeta();
 const analytics = useAnalytics({ vendorSlug: 'artisticgeek-studios', qrHash: 'peshkash-home' });
 const pageLabel = computed(() => pages[current.value]);
-const whatsappUrl = 'https://wa.me/919115551110?text=I%20would%20like%20a%20Peshkash%20interactive%20exhibit%20for%20my%20collection.';
+const whatsappUrl = 'https://wa.me/919115551110?text=I%20would%20like%20to%20explore%20Peshkash%20for%20my%20exhibition.';
 
 function track(action: string) { analytics.track(action); }
 
@@ -128,8 +128,8 @@ function onKeydown(event: KeyboardEvent) {
 
 async function shareExhibit() {
   const shared = await sharePublicPage({
-    title: 'The Atelier Edit — Peshkash Exhibits',
-    text: 'An interactive brochure for fashion, boutique collections and jewellery by ArtisticGeek Studios.',
+    title: 'Peshkash for Exhibitions — Every stall, still discoverable',
+    text: 'A short interactive proposal for exhibition organisers: connect every exhibitor, visitor scan and follow-up action with Peshkash.',
     previewPath: 'exhibits',
   });
   if (shared) track('exhibit_share');
@@ -137,8 +137,8 @@ async function shareExhibit() {
 
 onMounted(() => {
   setMeta({
-    title: 'The Atelier Edit — Peshkash Exhibits',
-    description: 'Swipe through an interactive Peshkash brochure for fashion, boutique collections and jewellery, presented by ArtisticGeek Studios.',
+    title: 'Peshkash for Exhibitions — Interactive organiser brochure',
+    description: 'A short interactive proposal showing exhibition organisers how Peshkash connects exhibitors, visitor discovery, QR engagement and measurable follow-up.',
     type: 'article',
   });
   track('exhibit_page_view');
@@ -160,6 +160,6 @@ onUnmounted(() => { resetMeta(); window.removeEventListener('keydown', onKeydown
 .jewellery-spread{background:var(--paper);display:grid;grid-template-columns:1fr 1.1fr;padding-inline:clamp(2rem,7vw,7rem)}.jewel-intro{align-self:center;max-width:620px}.jewel-intro h2{font-size:clamp(3rem,6.5vw,7rem)}.jewel-intro>p:last-child{color:#655b53;line-height:1.7;margin-top:2rem;max-width:520px}.jewel-stage{align-self:center;aspect-ratio:1;position:relative}.necklace-orbit{border:1px solid rgba(189,148,90,.34);border-radius:50%;inset:12%;position:absolute}.necklace-orbit:after{border:1px solid rgba(189,148,90,.18);border-radius:50%;content:'';inset:12%;position:absolute}.necklace-orbit span{--a:calc(var(--i) * 21deg);background:#b98a4d;border-radius:40% 60% 45% 55%;height:28px;left:calc(50% + cos(var(--a))*44%);position:absolute;top:calc(50% + sin(var(--a))*44%);transform:translate(-50%,-50%) rotate(var(--a));width:11px}.garnet{background:radial-gradient(circle at 35% 30%,#d7858f 0 5%,#842e3b 20%,#3d1017 62%,#17090b);border:12px solid #b98a4d;box-shadow:0 20px 40px rgba(35,12,15,.25);height:74px;left:30%;position:absolute;top:54%;transform:rotate(-14deg);width:66px}.jewel-stage p{bottom:13%;color:#77695e;font-size:.65rem;letter-spacing:.16em;position:absolute;right:12%;text-transform:uppercase}.jewel-stage p b{color:#1a1410;display:block;font-family:'Rufina',serif;font-size:1.2rem;letter-spacing:0;margin-top:.4rem;text-transform:none}.jewel-notes{bottom:2rem;display:flex;gap:2rem;left:clamp(2rem,7vw,7rem);position:absolute}.jewel-notes span{border-top:1px solid #bd945a;color:#8b765f;font-size:.62rem;letter-spacing:.18em;padding-top:.65rem;text-transform:uppercase;width:90px}
 .closing-spread{align-items:center;background:#201813;color:#f5efe6;display:flex;justify-content:center}.closing-spread:before{background:radial-gradient(circle at 50% 50%,rgba(189,148,90,.13),transparent 55%);content:'';inset:0;position:absolute}.closing-mark{color:rgba(189,148,90,.06);font-family:'Rufina',serif;font-size:min(82vw,80vh);line-height:1;position:absolute}.closing-copy{max-width:780px;padding:3rem;text-align:center}.closing-copy .kicker{color:#d0a267}.closing-copy h2{font-size:clamp(3.2rem,7vw,7.5rem)}.closing-copy>p:not(.kicker):not(.studio-credit){color:#c8baad;line-height:1.65;margin:2rem auto;max-width:620px}.closing-actions{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:center;margin-top:2.5rem}.closing-actions a,.closing-actions button{align-items:center;border:1px solid #bd945a;display:inline-flex;font-size:.72rem;gap:.6rem;letter-spacing:.1em;padding:.9rem 1.25rem;text-decoration:none;text-transform:uppercase}.closing-actions a{background:#bd945a;color:#1a1410}.closing-actions button{background:transparent;color:#f5efe6}.studio-credit{color:#8e7c6e;font-size:.62rem;letter-spacing:.18em;margin-top:3rem;text-transform:uppercase}
 .page-rail{display:flex;flex-direction:column;gap:.7rem;position:fixed;right:1.2rem;top:50%;transform:translateY(-50%);z-index:12}.page-rail button{background:none;border:0;color:rgba(245,239,230,.48);font-size:.56rem;padding:.2rem}.page-rail button:after{background:currentColor;content:'';display:block;height:1px;margin-top:.3rem;transition:width .2s;width:13px}.page-rail button.active{color:#d4a76a}.page-rail button.active:after{width:28px}.page-controls{align-items:center;background:rgba(26,20,16,.9);border:1px solid rgba(189,148,90,.28);border-radius:99px;bottom:1rem;color:#e8d7c1;display:flex;gap:.7rem;left:50%;padding:.35rem;position:fixed;transform:translateX(-50%);z-index:15}.page-controls button{background:none;border:0;border-radius:50%;color:#e8d7c1;height:34px;width:34px}.page-controls button:disabled{opacity:.25}.page-controls span{font-size:.6rem;letter-spacing:.13em;min-width:54px;text-align:center}
-@media(max-width:760px){.exhibit-header{grid-template-columns:1fr auto}.header-edition{display:none}.hero-shade{background:linear-gradient(0deg,rgba(245,239,230,.98) 0%,rgba(245,239,230,.86) 50%,rgba(245,239,230,.1) 100%)}.hero-spread>img{object-position:68% center}.hero-copy{justify-content:flex-end;padding:2rem 1.5rem 7rem}.hero-copy h1{font-size:3.7rem}.deck{font-size:.95rem}.credit{bottom:4.7rem;left:1.5rem}.fashion-spread{display:block}.fashion-image{clip-path:polygon(0 0,100% 0,100% 78%,0 100%);height:46vh}.fashion-copy{padding:2.2rem 1.5rem 6rem}.fashion-copy h2{font-size:2.8rem}.fashion-copy>p:not(.kicker){margin:1.2rem 0}.fashion-copy dl{margin-top:1.3rem}.jewellery-spread{display:block;padding:6.2rem 1.5rem 5rem}.jewel-intro h2{font-size:3rem}.jewel-stage{margin:-1.5rem auto 0;max-width:390px}.jewel-notes{bottom:4.5rem;gap:.6rem;left:1.5rem;right:1.5rem}.jewel-notes span{width:auto;flex:1}.closing-copy{padding:2rem 1.5rem}.closing-copy h2{font-size:3.4rem}.page-rail{display:none}}
+@media(max-width:760px){.exhibit-header{grid-template-columns:1fr auto}.header-edition{display:none}.hero-shade{background:linear-gradient(0deg,rgba(245,239,230,.98) 0%,rgba(245,239,230,.86) 50%,rgba(245,239,230,.1) 100%)}.hero-spread>img{object-position:68% center}.hero-copy{justify-content:flex-end;padding:2rem 1.5rem 7rem}.hero-copy h1{font-size:3.7rem}.deck{font-size:.95rem}.credit{bottom:4.7rem;left:1.5rem}.fashion-spread{display:block}.fashion-image{clip-path:polygon(0 0,100% 0,100% 74%,0 100%);height:32vh}.fashion-copy{padding:1.2rem 1.5rem 4rem}.fashion-copy .kicker{margin-bottom:.8rem}.fashion-copy h2{font-size:2.3rem;line-height:.95}.fashion-copy>p:not(.kicker){font-size:.84rem;line-height:1.45;margin:.75rem 0}.fashion-copy dl{margin-top:.75rem}.fashion-copy dl>div{font-size:.7rem;grid-template-columns:76px 1fr;padding:.5rem 0}.jewellery-spread{display:block;padding:6.2rem 1.5rem 5rem}.jewel-intro h2{font-size:3rem}.jewel-stage{margin:-1.5rem auto 0;max-width:390px}.jewel-notes{bottom:4.5rem;gap:.6rem;left:1.5rem;right:1.5rem}.jewel-notes span{width:auto;flex:1}.closing-copy{padding:2rem 1.5rem}.closing-copy h2{font-size:3.4rem}.page-rail{display:none}}
 @media(prefers-reduced-motion:reduce){.exhibit-book{scroll-behavior:auto}}
 </style>
