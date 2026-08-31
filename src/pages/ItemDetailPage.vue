@@ -57,8 +57,8 @@
         </div>
       </div>
 
-      <div v-if="itemData?.isVeg !== undefined || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
-        <span v-if="itemData?.isVeg !== undefined" class="pk-item-chip">
+      <div v-if="showDietaryBadge || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
+        <span v-if="showDietaryBadge" class="pk-item-chip">
           <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
           <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
         </span>
@@ -99,7 +99,14 @@
           </div>
       </section>
 
-      <nav class="pk-action-dock" aria-label="Item actions">
+    </main>
+  </div>
+
+  <!-- Keep the fixed action dock outside the animated item shell. Animate.css leaves
+       a transform on that shell, which otherwise makes position:fixed relative to
+       the content instead of the phone viewport. -->
+  <Teleport to="body">
+    <nav v-if="!error && !isLoading && itemData" class="pk-action-dock" aria-label="Item actions">
         <button class="pk-action-icon" :class="{ active: userReaction === 'like' }" type="button" @click="toggleReaction('like')" aria-label="Like this item" :aria-pressed="userReaction === 'like'" title="Like">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
           <span class="visually-hidden">Like</span>
@@ -116,9 +123,8 @@
           <i class="bi bi-share-fill"></i>
           <span class="visually-hidden">Share</span>
         </button>
-      </nav>
-    </main>
-  </div>
+    </nav>
+  </Teleport>
   </div>
 </template>
 
@@ -162,6 +168,10 @@ const itemSectionLabel = computed(() => {
   if (itemData.value?.menu?.itemStoryHeading) return itemData.value.menu.itemStoryHeading
   const t = (itemData.value?.itemType || itemData.value?.type)?.toLowerCase()
   return ITEM_SECTION_MAP[t]?.label ?? 'The backstory'
+})
+const showDietaryBadge = computed(() => {
+  const type = (itemData.value?.itemType || itemData.value?.type || '').toLowerCase()
+  return type === 'dish' && typeof itemData.value?.isVeg === 'boolean'
 })
 const error = ref<string | null>(null)
 const feedback = ref('')

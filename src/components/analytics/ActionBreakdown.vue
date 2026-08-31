@@ -44,6 +44,21 @@ const LABEL_MAP: Record<string, string> = {
   vendor_contact_view: 'Contact Page',
   menu_view: 'Menu View',
   item_detail_view: 'Item Detail',
+  landing_page_view: 'Landing Page View',
+  landing_whatsapp_hero: 'Hero WhatsApp',
+  landing_demo_anchor: 'See It in Action',
+  landing_whatsapp_business: 'Business WhatsApp',
+  landing_whatsapp_faq: 'FAQ WhatsApp',
+  landing_whatsapp_contact: 'Contact WhatsApp',
+  landing_get_started: 'Get Started',
+  landing_whatsapp_nav: 'Navigation WhatsApp',
+  landing_call: 'Landing Phone Call',
+  landing_email: 'Landing Email',
+  landing_contact_form_submit: 'Contact Form Submitted',
+  landing_whatsapp_footer: 'Footer WhatsApp',
+  landing_instagram_footer: 'Footer Instagram',
+  landing_email_footer: 'Footer Email',
+  landing_whatsapp_floating: 'Floating WhatsApp',
 };
 
 function formatLabel(type: string) {

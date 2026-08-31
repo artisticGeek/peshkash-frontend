@@ -4116,6 +4116,10 @@ function qrTypeBadge(mapping: QrMapping): { label: string; css: string } {
 }
 
 function qrVendorLabel(mapping: QrMapping) {
+  if (mapping.vendorId) {
+    const explicitVendor = vendors.value.find((vendor) => Number(vendor.id) === Number(mapping.vendorId));
+    if (explicitVendor) return explicitVendor.displayName;
+  }
   if (mapping.url?.startsWith('/vendor/')) {
     const slug = mapping.url.split('/').pop();
     return vendors.value.find((vendor) => vendor.name === slug)?.displayName || 'Vendor card';

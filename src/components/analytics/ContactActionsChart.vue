@@ -75,6 +75,21 @@ const LABELS: Record<string, string> = {
   event_directions_click: 'Directions',
   event_livestream_click: 'Live Stream',
   event_organizer_profile_click: 'Organizer',
+  landing_page_view: 'Landing Page',
+  landing_whatsapp_hero: 'Hero WhatsApp',
+  landing_demo_anchor: 'See It in Action',
+  landing_whatsapp_business: 'Business WhatsApp',
+  landing_whatsapp_faq: 'FAQ WhatsApp',
+  landing_whatsapp_contact: 'Contact WhatsApp',
+  landing_get_started: 'Get Started',
+  landing_whatsapp_nav: 'Nav WhatsApp',
+  landing_call: 'Landing Call',
+  landing_email: 'Landing Email',
+  landing_contact_form_submit: 'Contact Form',
+  landing_whatsapp_footer: 'Footer WhatsApp',
+  landing_instagram_footer: 'Footer Instagram',
+  landing_email_footer: 'Footer Email',
+  landing_whatsapp_floating: 'Floating WhatsApp',
 };
 
 const SCANS_COLOR = '99,102,241';   // indigo — distinct from CTAs
@@ -100,6 +115,21 @@ const CTA_COLORS: Record<string, string> = {
   event_directions_click: '234,179,8',
   event_livestream_click: '220,38,38',
   event_organizer_profile_click: '168,85,247',
+  landing_page_view:     '139,92,246',
+  landing_whatsapp_hero: '37,211,102',
+  landing_demo_anchor:   '189,148,90',
+  landing_whatsapp_business: '22,163,74',
+  landing_whatsapp_faq:  '74,222,128',
+  landing_whatsapp_contact: '21,128,61',
+  landing_get_started:   '189,148,90',
+  landing_whatsapp_nav:  '34,197,94',
+  landing_call:          '59,130,246',
+  landing_email:         '14,165,233',
+  landing_contact_form_submit: '168,85,247',
+  landing_whatsapp_footer: '22,163,74',
+  landing_instagram_footer: '225,48,108',
+  landing_email_footer:  '6,182,212',
+  landing_whatsapp_floating: '74,222,128',
 };
 const CTA_FALLBACK = '16,185,129';
 

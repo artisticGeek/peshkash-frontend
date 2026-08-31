@@ -18,6 +18,8 @@ import { gtagEvent } from '../utils/ga';
 
 export interface AnalyticsContext {
   vendorId?: number;
+  /** Stable server-resolved vendor identity for public pages that cannot safely hardcode a DB id. */
+  vendorSlug?: string;
   eventId?: number;
   menuId?: number;
   itemId?: number;
@@ -39,7 +41,22 @@ export type ActionType =
   | 'vendor_contact_view'
   | 'menu_view'
   | 'item_detail_view'
-  | 'item_bookmark';
+  | 'item_bookmark'
+  | 'landing_page_view'
+  | 'landing_whatsapp_hero'
+  | 'landing_demo_anchor'
+  | 'landing_whatsapp_business'
+  | 'landing_whatsapp_faq'
+  | 'landing_whatsapp_contact'
+  | 'landing_get_started'
+  | 'landing_whatsapp_nav'
+  | 'landing_call'
+  | 'landing_email'
+  | 'landing_contact_form_submit'
+  | 'landing_whatsapp_footer'
+  | 'landing_instagram_footer'
+  | 'landing_email_footer'
+  | 'landing_whatsapp_floating';
 
 function getStoredPhone(): string | null {
   try {
@@ -74,6 +91,7 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
     // ── 2. Google Analytics 4 (no-op if VITE_GA_MEASUREMENT_ID not set) ─
     gtagEvent(actionType, {
       vendor_id: merged.vendorId,
+      vendor_slug: merged.vendorSlug,
       event_id: merged.eventId,
       menu_id: merged.menuId,
       item_id: merged.itemId,

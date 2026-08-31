@@ -132,14 +132,6 @@ import DateRangePicker, { type DateRange } from './DateRangePicker.vue';
 import EventLog from './EventLog.vue';
 import { useAnalyticsExport } from '../../composables/useAnalyticsExport';
 
-const CONTACT_ACTIONS = [
-  { key: 'whatsapp_click'   },
-  { key: 'call_click'       },
-  { key: 'directions_click' },
-  { key: 'save_contact'     },
-  { key: 'share_click'      },
-];
-
 const props = defineProps<{ vendorId: number; vendorName: string }>();
 defineEmits<{ (e: 'close'): void }>();
 
@@ -191,13 +183,9 @@ const actionsPerPeriodByType = computed(() =>
 
 const chartGranularity = computed(() => summary.value?.granularity ?? 'day');
 
-function actionCount(key: string): number {
-  return summary.value?.actionBreakdown.find(a => a.actionType === key)?.count ?? 0;
-}
-
-const totalContactActions = computed(() =>
-  CONTACT_ACTIONS.reduce((sum, a) => sum + actionCount(a.key), 0)
-);
+// Vendor analytics includes every vendor-owned interaction. This covers contact-card
+// actions as well as custom destinations such as the Peshkash landing page.
+const totalContactActions = computed(() => summary.value?.totalActions ?? 0);
 const hasActions    = computed(() => totalContactActions.value > 0);
 const engagementRate = computed(() => {
   const s = summary.value?.totalScans ?? 0;

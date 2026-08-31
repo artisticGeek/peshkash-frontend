@@ -132,6 +132,21 @@ const ACTION_LABELS: Record<string, string> = {
   event_directions_click: 'Event directions opened',
   event_livestream_click: 'Live stream opened',
   event_organizer_profile_click: 'Organizer profile opened',
+  landing_page_view: 'Landing page opened',
+  landing_whatsapp_hero: 'Hero WhatsApp opened',
+  landing_demo_anchor: 'See it in action selected',
+  landing_whatsapp_business: 'Business WhatsApp opened',
+  landing_whatsapp_faq: 'FAQ WhatsApp opened',
+  landing_whatsapp_contact: 'Contact WhatsApp opened',
+  landing_get_started: 'Get started selected',
+  landing_whatsapp_nav: 'Navigation WhatsApp opened',
+  landing_call: 'Landing phone call started',
+  landing_email: 'Landing email opened',
+  landing_contact_form_submit: 'Contact form submitted',
+  landing_whatsapp_footer: 'Footer WhatsApp opened',
+  landing_instagram_footer: 'Footer Instagram opened',
+  landing_email_footer: 'Footer email opened',
+  landing_whatsapp_floating: 'Floating WhatsApp opened',
 };
 
 const DOT_COLORS: Record<string, string> = {
@@ -157,6 +172,21 @@ const DOT_COLORS: Record<string, string> = {
   event_directions_click: '#eab308',
   event_livestream_click: '#dc2626',
   event_organizer_profile_click: '#a855f7',
+  landing_page_view: '#8b5cf6',
+  landing_whatsapp_hero: '#25d366',
+  landing_demo_anchor: '#bd945a',
+  landing_whatsapp_business: '#16a34a',
+  landing_whatsapp_faq: '#4ade80',
+  landing_whatsapp_contact: '#15803d',
+  landing_get_started: '#bd945a',
+  landing_whatsapp_nav: '#22c55e',
+  landing_call: '#3b82f6',
+  landing_email: '#0ea5e9',
+  landing_contact_form_submit: '#a855f7',
+  landing_whatsapp_footer: '#16a34a',
+  landing_instagram_footer: '#e1306c',
+  landing_email_footer: '#06b6d4',
+  landing_whatsapp_floating: '#4ade80',
 };
 
 function rowKind(row: EventRow) {
