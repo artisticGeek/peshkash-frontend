@@ -125,6 +125,12 @@ const routes: Array<RouteRecordRaw> = [
     name: 'DashboardQrTemplates',
     component: () => import('./pages/WorkspaceDashboard.vue'),
   },
+  {
+    path: '/dashboard/resources',
+    name: 'DashboardPrintResources',
+    component: () => import('./pages/WorkspaceDashboard.vue'),
+    meta: { adminOnly: true },
+  },
   ...(import.meta.env.DEV || import.meta.env.VITE_STUDIO_PREVIEW === 'true' ? [{
     path: '/dev/qr-studio',
     name: 'DevQrStudio',
@@ -189,6 +195,7 @@ router.beforeEach((to) => {
     const { role, vendorId } = decoded;
     // Customers have no dashboard access — send them home
     if (role === 'customer') return '/';
+    if (to.meta.adminOnly && role !== 'admin') return '/dashboard/home';
     // Vendor users are locked to their own workspace
     if (role === 'vendor' && vendorId) {
       const path = to.path;

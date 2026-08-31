@@ -1552,6 +1552,10 @@
         <QrTemplatePage :embedded="true" :vendor-id="selectedVendorId || undefined" :vendor-name="selectedVendor?.displayName" />
       </section>
 
+      <section v-if="activeSection === 'resources'" class="resources-embedded-section">
+        <PrintResourcesPanel />
+      </section>
+
       <!-- ── Session Management ──────────────────────────────────────────── -->
       <section v-if="activeSection === 'sessions'" class="stack-layout">
         <!-- Force logout a specific user -->
@@ -2020,6 +2024,7 @@ import MenuTree from '../components/MenuTree.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
+import PrintResourcesPanel from '../components/admin/PrintResourcesPanel.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import AnalyticsDrawer from '../components/analytics/AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
@@ -2031,7 +2036,7 @@ import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventP
 
 const authStore = useAuthStore();
 
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'menus' | 'items' | 'sessions';
+type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'resources' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
@@ -2059,13 +2064,14 @@ const sections = [
   { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
   { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
+  { key: 'resources',     label: 'Print Resources',   icon: 'bi bi-printer' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
 // Some sections are only visible to admins
 const visibleSections = computed(() =>
-  authStore.isAdmin ? sections : sections.filter(s => s.key !== 'vendors' && s.key !== 'sessions')
+  authStore.isAdmin ? sections : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
 );
 
 const route = useRoute();
@@ -2084,6 +2090,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   publish:        '/dashboard/events',
   qr:             '/dashboard/qr',
   'qr-templates': '/dashboard/qr-templates',
+  resources:      '/dashboard/resources',
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
   insights:       '/dashboard/analytics',
@@ -2103,6 +2110,7 @@ function sectionFromPath(path: string): SectionKey {
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
   if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
+  if (path.startsWith('/dashboard/resources')) return 'resources';
   if (path.startsWith('/dashboard/qr')) return 'qr';
   if (path.startsWith('/dashboard/analytics')) return 'insights';
   if (path.startsWith('/dashboard/sessions')) return 'sessions';
@@ -2611,6 +2619,7 @@ const activeSubtitle = computed(() => {
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
+    resources:      'Download approved vector masters, catalogues and field-ready print collateral.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
