@@ -414,7 +414,7 @@ async function shareCard() {
   if (!vendorData.value) return
   analytics.track('share_click', { vendorId: vid() })
   await sharePublicPage({
-    title: `${vendorData.value.displayName} on Peshkash`,
+    title: `${vendorData.value.displayName} @ Peshkash`,
     text: vendorData.value.description || `Meet ${vendorData.value.displayName} and save their details on Peshkash.`,
     previewPath: `vendor/${vendorData.value.name}`,
   })
@@ -434,7 +434,7 @@ onMounted(async () => {
     // Dynamic SEO
     const display = vendorData.value?.displayName || vendorName
     setMeta({
-      title: `${display} — on Peshkash`,
+      title: `${display} @ Peshkash`,
       description: vendorData.value?.description || `Contact and connect with ${display} on Peshkash — scan, call, and save their details.`,
       type: 'profile',
     })

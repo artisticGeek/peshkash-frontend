@@ -221,7 +221,7 @@ async function shareMenu() {
   const menuDisplay = menuData.value.menu?.displayName || menuName
   const vendorDisplay = menuData.value.vendor?.displayName
   const shared = await sharePublicPage({
-    title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay}` : menuDisplay,
+    title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay} @ Peshkash` : `${menuDisplay} @ Peshkash`,
     text: menuData.value.menu?.description || `Browse ${menuDisplay} on Peshkash.`,
     previewPath: `event/${eventName}/menu/${menuName}`,
   })
@@ -267,7 +267,7 @@ async function loadMenu() {
     const menuDisplay  = data?.menu?.displayName  || menuName
     const vendorDisplay = data?.vendor?.displayName || ''
     setMeta({
-      title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay} — Peshkash` : `${menuDisplay} — Peshkash`,
+      title: vendorDisplay ? `${menuDisplay} by ${vendorDisplay} @ Peshkash` : `${menuDisplay} @ Peshkash`,
       description: data?.menu?.description || `Browse ${menuDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash — scan, explore, and enjoy.`,
       type: 'article',
     })
