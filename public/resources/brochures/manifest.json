@@ -1,0 +1,179 @@
+{
+  "version": "1.0.0",
+  "dpi": 600,
+  "brochures": [
+    {
+      "id": "field-guide",
+      "number": "01",
+      "title": "Field Guide",
+      "subtitle": "Your shop window just became the internet.",
+      "use": "A compact sales explainer for counters, meetings and introductions.",
+      "format": "A4 landscape / three-panel",
+      "finish": "297 x 210 mm trim / 3 mm bleed",
+      "stem": "Peshkash-Field-Guide",
+      "tags": [
+        "counter",
+        "sales",
+        "analytics"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Field-Guide.pdf",
+      "html": "/resources/brochures/Peshkash-Field-Guide.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Field-Guide-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Field-Guide-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Field-Guide-preview.jpg"
+    },
+    {
+      "id": "gate-invitation",
+      "number": "02",
+      "title": "Gate Invitation",
+      "subtitle": "Two gates. One clear invitation.",
+      "use": "A premium square leave-behind for partners, events and hospitality.",
+      "format": "Square / four-panel",
+      "finish": "210 x 210 mm trim / 3 mm bleed",
+      "stem": "Peshkash-Gate-Invitation",
+      "tags": [
+        "event",
+        "hospitality",
+        "share"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Gate-Invitation.pdf",
+      "html": "/resources/brochures/Peshkash-Gate-Invitation.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Gate-Invitation-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Gate-Invitation-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Gate-Invitation-preview.jpg"
+    },
+    {
+      "id": "editorial-guide",
+      "number": "03",
+      "title": "Editorial Guide",
+      "subtitle": "A small scan. A bigger presence.",
+      "use": "An editorial handout for broad use-case and product storytelling.",
+      "format": "A5 booklet",
+      "finish": "297 x 210 mm open trim / 3 mm bleed",
+      "stem": "Peshkash-Editorial-Guide",
+      "tags": [
+        "overview",
+        "portfolio",
+        "contact"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Editorial-Guide.pdf",
+      "html": "/resources/brochures/Peshkash-Editorial-Guide.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Editorial-Guide-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Editorial-Guide-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Editorial-Guide-preview.jpg"
+    },
+    {
+      "id": "peshkash-keepsake",
+      "number": "04",
+      "title": "Peshkash Keepsake",
+      "subtitle": "An offering designed to stay close.",
+      "use": "A memorable P-shaped piece that finishes as a usable bookmark.",
+      "format": "P-shaped keepsake",
+      "finish": "216 x 303 mm production page",
+      "stem": "Peshkash-Keepsake",
+      "dielineSource": "04_peshkash_keepsake_dieline.html",
+      "dielineStem": "Peshkash-Keepsake-Dieline",
+      "tags": [
+        "bookmark",
+        "keepsake",
+        "share"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Keepsake.pdf",
+      "html": "/resources/brochures/Peshkash-Keepsake.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Keepsake-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Keepsake-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Keepsake-preview.jpg",
+      "dielinePdf": "/resources/brochures/Peshkash-Keepsake-Dieline.pdf",
+      "dielineHtml": "/resources/brochures/Peshkash-Keepsake-Dieline.html"
+    },
+    {
+      "id": "product-neck-tag",
+      "number": "05",
+      "title": "Product Story Tag",
+      "subtitle": "Let the product keep talking.",
+      "use": "A product tag for story, care, authenticity, reorder and scan analytics.",
+      "format": "Product tag",
+      "finish": "180 x 120 mm trim / 3 mm bleed",
+      "stem": "Peshkash-Product-Story-Tag",
+      "dielineSource": "05_product_neck_tag_dieline.html",
+      "dielineStem": "Peshkash-Product-Story-Tag-Dieline",
+      "tags": [
+        "product",
+        "tag",
+        "reorder",
+        "analytics"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Product-Story-Tag.pdf",
+      "html": "/resources/brochures/Peshkash-Product-Story-Tag.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Product-Story-Tag-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Product-Story-Tag-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Product-Story-Tag-preview.jpg",
+      "dielinePdf": "/resources/brochures/Peshkash-Product-Story-Tag-Dieline.pdf",
+      "dielineHtml": "/resources/brochures/Peshkash-Product-Story-Tag-Dieline.html"
+    },
+    {
+      "id": "keep-and-share",
+      "number": "06",
+      "title": "Keep-and-Share Cards",
+      "subtitle": "Offline is not the opposite of intelligent.",
+      "use": "A three-panel guide with detachable contact, bookmark and share cards.",
+      "format": "A4 landscape / three-panel + detachable cards",
+      "finish": "297 x 210 mm trim / 3 mm bleed",
+      "stem": "Peshkash-Keep-and-Share",
+      "dielineSource": "06_keep_and_share_dieline.html",
+      "dielineStem": "Peshkash-Keep-and-Share-Dieline",
+      "tags": [
+        "contact",
+        "bookmark",
+        "share",
+        "AI-ready"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Keep-and-Share.pdf",
+      "html": "/resources/brochures/Peshkash-Keep-and-Share.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Keep-and-Share-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Keep-and-Share-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Keep-and-Share-preview.jpg",
+      "dielinePdf": "/resources/brochures/Peshkash-Keep-and-Share-Dieline.pdf",
+      "dielineHtml": "/resources/brochures/Peshkash-Keep-and-Share-Dieline.html"
+    },
+    {
+      "id": "offline-orbit",
+      "number": "07",
+      "title": "Offline Orbit",
+      "subtitle": "Stay offline. Move at today's speed.",
+      "use": "A circular conversation piece mapping tag, contact, bookmark, share, update and measurement.",
+      "format": "180 mm circular piece",
+      "finish": "186 x 186 mm production page",
+      "stem": "Peshkash-Offline-Orbit",
+      "dielineSource": "07_offline_orbit_disc_dieline.html",
+      "dielineStem": "Peshkash-Offline-Orbit-Dieline",
+      "tags": [
+        "analytics",
+        "AI-ready",
+        "circular",
+        "overview"
+      ],
+      "pdf": "/resources/brochures/Peshkash-Offline-Orbit.pdf",
+      "html": "/resources/brochures/Peshkash-Offline-Orbit.html",
+      "pngs": [
+        "/resources/brochures/Peshkash-Offline-Orbit-side-01-600dpi.png",
+        "/resources/brochures/Peshkash-Offline-Orbit-side-02-600dpi.png"
+      ],
+      "preview": "/resources/brochures/Peshkash-Offline-Orbit-preview.jpg",
+      "dielinePdf": "/resources/brochures/Peshkash-Offline-Orbit-Dieline.pdf",
+      "dielineHtml": "/resources/brochures/Peshkash-Offline-Orbit-Dieline.html"
+    }
+  ]
+}
