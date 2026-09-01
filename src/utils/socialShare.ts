@@ -1,6 +1,7 @@
 export type SocialShareOptions = {
   title: string;
   text: string;
+  details?: string;
   previewPath?: string;
   url?: string;
   onCopied?: () => void;
@@ -11,8 +12,24 @@ export function sharePreviewUrl(previewPath: string, origin = typeof window !== 
   return new URL(`/${normalized}`, origin).toString();
 }
 
-export function formattedShareText(title: string, description: string) {
-  return [title.trim(), description.trim()].filter(Boolean).join('\n\n');
+export function limitedShareDescription(description: string, limit = 50) {
+  const normalized = description.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= limit) return normalized;
+  const candidate = normalized.slice(0, Math.max(1, limit - 1));
+  const wordBoundary = candidate.lastIndexOf(' ');
+  const shortened = wordBoundary >= Math.floor(limit * 0.6) ? candidate.slice(0, wordBoundary) : candidate;
+  return `${shortened.replace(/[\s.,;:!?-]+$/, '')}…`;
+}
+
+export function formattedShareText(resource: string, description: string, url: string, details?: string) {
+  const cleanResource = resource.replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  const sections = [
+    `See ${cleanResource} on Peshkash.`,
+    limitedShareDescription(description),
+    details?.replace(/\s+/g, ' ').trim(),
+    `Find out more: ${url}`,
+  ];
+  return sections.filter(Boolean).join('\n\n');
 }
 
 /** Shares the canonical public page. The production edge serves crawler-facing
@@ -23,8 +40,8 @@ export async function sharePublicPage(options: SocialShareOptions) {
   }
 
   const url = options.url || sharePreviewUrl(options.previewPath!);
-  const message = formattedShareText(options.title, options.text);
-  const payload = { title: options.title, text: message, url };
+  const message = formattedShareText(options.title, options.text, url, options.details);
+  const payload = { title: options.title, text: message };
 
   if (navigator.share) {
     try {
@@ -35,7 +52,7 @@ export async function sharePublicPage(options: SocialShareOptions) {
     }
   }
 
-  await navigator.clipboard.writeText(`${message}\n\n${url}`);
+  await navigator.clipboard.writeText(message);
   options.onCopied?.();
   return true;
 }

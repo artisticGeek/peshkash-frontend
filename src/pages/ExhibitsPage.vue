@@ -204,7 +204,7 @@ function onKeydown(event: KeyboardEvent) {
 
 async function shareExhibit() {
   const shared = await sharePublicPage({
-    title: 'Peshkash for Exhibitions — Every stall, still discoverable',
+    title: 'Peshkash for Exhibitions',
     text: 'A short interactive proposal for exhibition organisers: connect every exhibitor, visitor scan and follow-up action with Peshkash.',
     previewPath: 'exhibits',
   });
