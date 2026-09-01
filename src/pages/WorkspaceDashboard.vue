@@ -2064,7 +2064,7 @@ const sections = [
   { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
   { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
-  { key: 'resources',     label: 'Print Resources',   icon: 'bi bi-printer' },
+  { key: 'resources',     label: 'Brochures',         icon: 'bi bi-file-earmark-richtext' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
@@ -2619,7 +2619,7 @@ const activeSubtitle = computed(() => {
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
-    resources:      'Download approved vector masters, catalogues and field-ready print collateral.',
+    resources:      'Preview, share and download the approved Peshkash brochure collection.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
