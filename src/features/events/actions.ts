@@ -16,8 +16,10 @@ function calendarDay(date: Date) {
   return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function publicEventUrl(eventName: string, origin: string) {
-  return new URL(`/event/${encodeURIComponent(eventName)}`, origin).toString();
+export function publicEventUrl(eventName: string, origin: string, previewVersion?: number) {
+  const url = new URL(`/event/${encodeURIComponent(eventName)}`, origin);
+  if (previewVersion) url.searchParams.set('spv', String(Math.max(1, Math.floor(previewVersion))));
+  return url.toString();
 }
 
 export function googleCalendarReminderUrl(input: CalendarReminderInput) {

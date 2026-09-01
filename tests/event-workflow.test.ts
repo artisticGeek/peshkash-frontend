@@ -27,6 +27,7 @@ test('standalone readiness trusts only an explicit persisted true value', () => 
 
 test('event sharing uses the public event URL', () => {
   assert.equal(publicEventUrl('chapter her', 'https://peshkash.app'), 'https://peshkash.app/event/chapter%20her');
+  assert.equal(publicEventUrl('chapter-her-sept', 'https://peshkash.app', 3), 'https://peshkash.app/event/chapter-her-sept?spv=3');
 });
 
 test('calendar reminders open with the event details pre-filled', () => {

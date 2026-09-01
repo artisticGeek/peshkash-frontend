@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && npm run sass",
-    "test:studio": "tsc -p tests/tsconfig.json && node --experimental-specifier-resolution=node --test .studio-test-dist/tests/design-studio.test.js .studio-test-dist/tests/event-workflow.test.js",
+    "test:studio": "tsc -p tests/tsconfig.json && node --experimental-specifier-resolution=node --test .studio-test-dist/tests/design-studio.test.js .studio-test-dist/tests/event-workflow.test.js .studio-test-dist/tests/social-share.test.js tests/social-preview-edge.test.mjs",
     "preview": "vite preview",
     "sass": "sass src/styles.scss dist/css/styles.css"
   },

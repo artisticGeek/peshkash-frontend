@@ -149,9 +149,8 @@ async function loadEvent() {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/event/${encodeURIComponent(String(route.params.eventName))}`);
     event.value = data;
-    const organizer = data.organizer?.displayName;
     const socialPreview = data.experience?.socialPreview || {};
-    const metaTitle = socialPreview.titleOverride || (organizer ? `${data.displayName} by ${organizer} — Peshkash` : `${data.displayName} — Peshkash`);
+    const metaTitle = socialPreview.titleOverride || `${data.displayName} @ Peshkash`;
     const metaDescription = socialPreview.descriptionOverride || data.description || `Discover ${data.displayName}, event details, guests and reminders on Peshkash.`;
     const metaImage = socialPreview.imageUrl || socialPreview.generatedImageUrl || data.experience?.heroImageUrl;
     setMeta({
@@ -165,7 +164,7 @@ async function loadEvent() {
   } catch (err: any) {
     if (import.meta.env.DEV && route.params.eventName === 'demo-event') {
       event.value = devEventFixture();
-      setMeta({ title: `${event.value.displayName} by ${event.value.organizer.displayName} — Peshkash`, description: event.value.description, type: 'article' });
+      setMeta({ title: `${event.value.displayName} @ Peshkash`, description: event.value.description, type: 'article' });
     } else error.value = err.response?.data?.error || 'This event page could not be loaded.';
   }
   finally { loading.value = false; }
@@ -203,10 +202,9 @@ function setReminder() {
 
 async function shareEvent() {
   if (!event.value) return;
-  const organizer = event.value.organizer?.displayName;
-  const eventUrl = publicEventUrl(event.value.name, window.location.origin);
+  const eventUrl = publicEventUrl(event.value.name, window.location.origin, Number(event.value.experience?.socialPreview?.version) || 1);
   const shared = await sharePublicPage({
-    title: organizer ? `${event.value.displayName} by ${organizer}` : event.value.displayName,
+    title: `${event.value.displayName} @ Peshkash`,
     text: event.value.description || `View event details, guests and timings on Peshkash.`,
     url: eventUrl,
     onCopied: () => notify('Event link copied.'),

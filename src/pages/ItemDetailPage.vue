@@ -265,7 +265,7 @@ async function shareItem() {
   const item = itemData.value?.displayName || itemData.value?.name || itemName
   const vendor = itemData.value?.event?.vendor?.displayName
   await sharePublicPage({
-    title: vendor ? `${item} by ${vendor}` : item,
+    title: vendor ? `${item} by ${vendor} @ Peshkash` : `${item} @ Peshkash`,
     text: itemData.value?.description || `Discover ${item} on Peshkash.`,
     previewPath: `event/${eventName}/menu/${menuName}/item/${itemName}`,
     onCopied: () => {
@@ -293,7 +293,7 @@ async function loadItem() {
     const itemDisplay  = data?.displayName || data?.name || itemName
     const vendorDisplay = data?.event?.vendor?.displayName || ''
     setMeta({
-      title: vendorDisplay ? `${itemDisplay} by ${vendorDisplay} — Peshkash` : `${itemDisplay} — Peshkash`,
+      title: vendorDisplay ? `${itemDisplay} by ${vendorDisplay} @ Peshkash` : `${itemDisplay} @ Peshkash`,
       description: data?.description
         ? `${itemDisplay}: ${data.description.slice(0, 140)}`
         : `Explore ${itemDisplay}${vendorDisplay ? ` by ${vendorDisplay}` : ''} on Peshkash.`,

@@ -1,5 +1,3 @@
-import { API_BASE_URL } from '../config';
-
 export type SocialShareOptions = {
   title: string;
   text: string;
@@ -8,20 +6,25 @@ export type SocialShareOptions = {
   onCopied?: () => void;
 };
 
-export function sharePreviewUrl(previewPath: string) {
+export function sharePreviewUrl(previewPath: string, origin = typeof window !== 'undefined' ? window.location.origin : 'https://peshkash.app') {
   const normalized = previewPath.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  return `${API_BASE_URL}/share/${normalized}`;
+  return new URL(`/${normalized}`, origin).toString();
 }
 
-/** Shares an explicit public URL when supplied, otherwise the crawler-friendly
- * server-rendered preview URL for rich social cards. */
+export function formattedShareText(title: string, description: string) {
+  return [title.trim(), description.trim()].filter(Boolean).join('\n\n');
+}
+
+/** Shares the canonical public page. The production edge serves crawler-facing
+ * metadata for this same URL, so recipients never see the backend API address. */
 export async function sharePublicPage(options: SocialShareOptions) {
   if (!options.url && !options.previewPath) {
     throw new Error('A public URL or preview path is required.');
   }
 
   const url = options.url || sharePreviewUrl(options.previewPath!);
-  const payload = { title: options.title, text: options.text, url };
+  const message = formattedShareText(options.title, options.text);
+  const payload = { title: options.title, text: message, url };
 
   if (navigator.share) {
     try {
@@ -32,7 +35,7 @@ export async function sharePublicPage(options: SocialShareOptions) {
     }
   }
 
-  await navigator.clipboard.writeText(url);
+  await navigator.clipboard.writeText(`${message}\n\n${url}`);
   options.onCopied?.();
   return true;
 }
