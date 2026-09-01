@@ -30,6 +30,12 @@ export function eventExperienceWasPersisted(requested: EventExperienceLike, pers
   if (urlKeys.some((key) => normalizedUrl(requested[key]) !== normalizedUrl(persisted?.[key]))) return false;
   if (booleanKeys.some((key) => Boolean(requested[key]) !== Boolean(persisted?.[key]))) return false;
 
+  const requestedPreview = requested.socialPreview ?? {};
+  const persistedPreview = persisted?.socialPreview ?? {};
+  if (['imageAlt', 'titleOverride', 'descriptionOverride', 'generatedAt', 'source'].some((key) => normalizedText(requestedPreview[key]) !== normalizedText(persistedPreview[key]))) return false;
+  if (['imageUrl', 'generatedImageUrl'].some((key) => normalizedUrl(requestedPreview[key]) !== normalizedUrl(persistedPreview[key]))) return false;
+  if (Math.max(1, Number(requestedPreview.version) || 1) !== Math.max(1, Number(persistedPreview.version) || 1)) return false;
+
   const requestedGuests = Array.isArray(requested.guests) ? requested.guests : [];
   const persistedGuests = Array.isArray(persisted?.guests) ? persisted.guests : [];
   if (requestedGuests.length !== persistedGuests.length) return false;

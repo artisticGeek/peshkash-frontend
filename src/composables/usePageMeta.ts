@@ -9,7 +9,7 @@ export type PageMetaOptions = {
 
 const DEFAULT_TITLE = 'Peshkash — Your Shop Window, Digitally';
 const DEFAULT_DESC = 'Peshkash is the digital presence platform for restaurants, vendors, and events.';
-const DEFAULT_IMAGE = 'https://peshkash.app/brand/social/peshkash-whatsapp-dp.png';
+const DEFAULT_IMAGE = 'https://peshkash.app/brand/social/peshkash-home-preview.jpg';
 const PUBLIC_ORIGIN = 'https://peshkash.app';
 
 function setNamedMeta(selector: string, attribute: 'name' | 'property', key: string, content: string) {
@@ -41,6 +41,13 @@ function absoluteImage(image: string) {
   return `${PUBLIC_ORIGIN}/${image.replace(/^\//, '')}`;
 }
 
+function imageMimeType(image: string) {
+  const pathname = new URL(image).pathname.toLowerCase();
+  if (pathname.endsWith('.png')) return 'image/png';
+  if (pathname.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
 /**
  * Keeps browser, Open Graph, Twitter and canonical metadata in one convention.
  * The string signature remains supported for older call sites.
@@ -60,6 +67,10 @@ export function usePageMeta() {
     setNamedMeta('meta[property="og:title"]', 'property', 'og:title', meta.title);
     setNamedMeta('meta[property="og:description"]', 'property', 'og:description', description);
     setNamedMeta('meta[property="og:image"]', 'property', 'og:image', image);
+    setNamedMeta('meta[property="og:image:secure_url"]', 'property', 'og:image:secure_url', image);
+    setNamedMeta('meta[property="og:image:type"]', 'property', 'og:image:type', imageMimeType(image));
+    setNamedMeta('meta[property="og:image:width"]', 'property', 'og:image:width', '1200');
+    setNamedMeta('meta[property="og:image:height"]', 'property', 'og:image:height', '630');
     setNamedMeta('meta[property="og:image:alt"]', 'property', 'og:image:alt', imageAlt);
     setNamedMeta('meta[property="og:url"]', 'property', 'og:url', url);
     setNamedMeta('meta[property="og:type"]', 'property', 'og:type', meta.type || 'website');

@@ -3,7 +3,8 @@ import { API_BASE_URL } from '../config';
 export type SocialShareOptions = {
   title: string;
   text: string;
-  previewPath: string;
+  previewPath?: string;
+  url?: string;
   onCopied?: () => void;
 };
 
@@ -12,10 +13,14 @@ export function sharePreviewUrl(previewPath: string) {
   return `${API_BASE_URL}/share/${normalized}`;
 }
 
-/** Shares a crawler-friendly URL so WhatsApp, LinkedIn, Facebook and X receive
- * server-rendered Peshkash metadata before the visitor is redirected to the page. */
+/** Shares an explicit public URL when supplied, otherwise the crawler-friendly
+ * server-rendered preview URL for rich social cards. */
 export async function sharePublicPage(options: SocialShareOptions) {
-  const url = sharePreviewUrl(options.previewPath);
+  if (!options.url && !options.previewPath) {
+    throw new Error('A public URL or preview path is required.');
+  }
+
+  const url = options.url || sharePreviewUrl(options.previewPath!);
   const payload = { title: options.title, text: options.text, url };
 
   if (navigator.share) {
