@@ -95,6 +95,7 @@ import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
+import { googleCalendarReminderUrl, publicEventUrl } from '../features/events/actions';
 import { useAuthStore } from '../stores/auth';
 import { sharePublicPage } from '../utils/socialShare';
 
@@ -149,9 +150,15 @@ async function loadEvent() {
     const { data } = await axios.get(`${API_BASE_URL}/event/${encodeURIComponent(String(route.params.eventName))}`);
     event.value = data;
     const organizer = data.organizer?.displayName;
+    const socialPreview = data.experience?.socialPreview || {};
+    const metaTitle = socialPreview.titleOverride || (organizer ? `${data.displayName} by ${organizer} — Peshkash` : `${data.displayName} — Peshkash`);
+    const metaDescription = socialPreview.descriptionOverride || data.description || `Discover ${data.displayName}, event details, guests and reminders on Peshkash.`;
+    const metaImage = socialPreview.imageUrl || socialPreview.generatedImageUrl || data.experience?.heroImageUrl;
     setMeta({
-      title: organizer ? `${data.displayName} by ${organizer} — Peshkash` : `${data.displayName} — Peshkash`,
-      description: data.description || `Discover ${data.displayName}, event details, guests and reminders on Peshkash.`,
+      title: metaTitle,
+      description: metaDescription,
+      image: metaImage,
+      imageAlt: socialPreview.imageAlt || `${data.displayName} event preview`,
       type: 'article',
     });
     track('event_page_view');
@@ -177,37 +184,32 @@ async function completeRegistration() {
   } catch (err: any) { notify(err.response?.data?.error || 'Registration could not be completed.'); }
 }
 
-function icsDate(date: Date) { return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z'); }
-function icsDay(date: Date) { return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`; }
-function escapeIcs(value: string) { return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;'); }
-async function setReminder() {
+function setReminder() {
   if (!event.value || !event.value.startTime) { notify('Add event timings before setting a reminder.'); return; }
-  const start = new Date(event.value.startTime); const end = new Date(event.value.endTime || start.getTime() + 3600000);
-  const allDay = event.value.experience.reminderMode === 'all_day';
-  const nextDay = new Date(start); nextDay.setDate(nextDay.getDate() + 1);
-  const dateLines = allDay ? `DTSTART;VALUE=DATE:${icsDay(start)}\r\nDTEND;VALUE=DATE:${icsDay(nextDay)}` : `DTSTART:${icsDate(start)}\r\nDTEND:${icsDate(end)}`;
   const location = [event.value.experience.venueName, event.value.experience.venueAddress].filter(Boolean).join(', ');
-  const body = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Peshkash//Event Reminder//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:${event.value.id}-${start.getTime()}@peshkash.app`,`DTSTAMP:${icsDate(new Date())}`,dateLines,`SUMMARY:${escapeIcs(event.value.displayName)}`,`DESCRIPTION:${escapeIcs(`${event.value.description || ''}\n${window.location.href}`)}`,`LOCATION:${escapeIcs(location)}`,'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY',`DESCRIPTION:${escapeIcs(event.value.displayName)}`,'END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
-  const calendarFile = new File([body], `${event.value.name}.ics`, { type: 'text/calendar;charset=utf-8' });
-  if (navigator.canShare?.({ files: [calendarFile] })) {
-    try {
-      await navigator.share({ title: event.value.displayName, files: [calendarFile] });
-      track('event_reminder_click'); return;
-    } catch (err: any) { if (err?.name === 'AbortError') return; }
-  }
-  const url = URL.createObjectURL(calendarFile);
-  const link = document.createElement('a'); link.href = url; link.download = `${event.value.name}.ics`; link.click(); URL.revokeObjectURL(url);
-  track('event_reminder_click'); notify('Calendar reminder ready.');
+  const eventUrl = publicEventUrl(event.value.name, window.location.origin);
+  const reminderUrl = googleCalendarReminderUrl({
+    title: event.value.displayName,
+    startTime: event.value.startTime,
+    endTime: event.value.endTime,
+    allDay: event.value.experience.reminderMode === 'all_day',
+    description: event.value.description,
+    location,
+    eventUrl,
+  });
+  track('event_reminder_click');
+  window.location.assign(reminderUrl);
 }
 
 async function shareEvent() {
   if (!event.value) return;
   const organizer = event.value.organizer?.displayName;
+  const eventUrl = publicEventUrl(event.value.name, window.location.origin);
   const shared = await sharePublicPage({
     title: organizer ? `${event.value.displayName} by ${organizer}` : event.value.displayName,
     text: event.value.description || `View event details, guests and timings on Peshkash.`,
-    previewPath: `event/${event.value.name}`,
-    onCopied: () => notify('Event link copied with its social preview.'),
+    url: eventUrl,
+    onCopied: () => notify('Event link copied.'),
   });
   if (shared) track('event_share_click');
 }

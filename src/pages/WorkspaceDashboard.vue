@@ -477,6 +477,15 @@
                     </select>
                   </label>
                 </div>
+                <SocialPreviewEditor
+                  v-model="eventForm.experienceConfig.socialPreview"
+                  :event-name="eventForm.name"
+                  :event-title="eventForm.displayName"
+                  :event-description="eventForm.eventDescription"
+                  :hero-image-url="eventForm.experienceConfig.heroImageUrl"
+                  :vendor-name="selectedVendor?.name"
+                  @validation="socialPreviewValid = $event"
+                />
                 <div class="guest-editor">
                   <div class="guest-editor-heading">
                     <div><h5>Guests, speakers & performers</h5><p class="hint">Optional profiles; no Peshkash account required.</p></div>
@@ -2025,6 +2034,7 @@ import PeshkashLogo from '../components/PeshkashLogo.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
 import PrintResourcesPanel from '../components/admin/PrintResourcesPanel.vue';
+import SocialPreviewEditor, { type SocialPreviewConfig } from '../components/admin/SocialPreviewEditor.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
 import AnalyticsDrawer from '../components/analytics/AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
@@ -2038,7 +2048,7 @@ const authStore = useAuthStore();
 
 type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'resources' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
-type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; guests: any[] };
+type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; socialPreview: SocialPreviewConfig; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
 type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
@@ -2411,9 +2421,10 @@ const itemRows = ref<DraftItem[]>([]);
 
 const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
 function defaultEventExperience(): EventExperience {
-  return { enabled: false, eyebrow: '', heroImageUrl: '', venueName: '', venueAddress: '', mapUrl: '', registrationEnabled: true, reminderEnabled: true, reminderMode: 'timed', countdownEnabled: true, organizerVisible: true, contactVisible: false, livestreamUrl: '', livestreamLabel: 'Watch live', guests: [] };
+  return { enabled: false, eyebrow: '', heroImageUrl: '', venueName: '', venueAddress: '', mapUrl: '', registrationEnabled: true, reminderEnabled: true, reminderMode: 'timed', countdownEnabled: true, organizerVisible: true, contactVisible: false, livestreamUrl: '', livestreamLabel: 'Watch live', socialPreview: { imageUrl: '', imageAlt: '', titleOverride: '', descriptionOverride: '', version: 1, generatedImageUrl: '', generatedAt: '' }, guests: [] };
 }
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
+const socialPreviewValid = ref(true);
 const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
@@ -3188,11 +3199,14 @@ async function saveVendorQrMapping() {
 }
 
 function resetEvent() {
+  socialPreviewValid.value = true;
   Object.assign(eventForm, { id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
 }
 
 function editEvent(event: EventRow) {
-  Object.assign(eventForm, { ...event, startTime: toDateTimeLocal(event.startTime), endTime: toDateTimeLocal(event.endTime), experienceConfig: { ...defaultEventExperience(), ...(event.experienceConfig || {}), guests: (event.experienceConfig?.guests || []).map((guest: any) => ({ ...guest })) } });
+  socialPreviewValid.value = true;
+  const defaults = defaultEventExperience();
+  Object.assign(eventForm, { ...event, startTime: toDateTimeLocal(event.startTime), endTime: toDateTimeLocal(event.endTime), experienceConfig: { ...defaults, ...(event.experienceConfig || {}), socialPreview: { ...defaults.socialPreview, ...(event.experienceConfig?.socialPreview || {}) }, guests: (event.experienceConfig?.guests || []).map((guest: any) => ({ ...guest })) } });
 }
 
 function addEventGuest() {
@@ -3238,6 +3252,9 @@ async function saveEvent() {
     requireSlug(eventForm.name, 'Event slug');
     if (eventForm.experienceConfig?.enabled && eventForm.experienceConfig.guests.some((guest: any) => !guest.name?.trim())) {
       throw new Error('Give every guest a name, or remove the unfinished guest card before saving.');
+    }
+    if (eventForm.experienceConfig?.enabled && !socialPreviewValid.value) {
+      throw new Error('Resolve the social preview warnings before publishing this event.');
     }
     const payload = {
       ...eventForm,
