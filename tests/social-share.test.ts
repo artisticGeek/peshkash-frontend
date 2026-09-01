@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formattedShareText, sharePreviewUrl } from '../src/utils/socialShare.js';
+import { formattedShareText, limitedShareDescription, sharePreviewUrl } from '../src/utils/socialShare.js';
 
 test('all crawler-backed shares expose canonical public page URLs', () => {
   const origin = 'https://peshkash.app';
@@ -11,9 +11,15 @@ test('all crawler-backed shares expose canonical public page URLs', () => {
   assert.equal(sharePreviewUrl('exhibits', origin), 'https://peshkash.app/exhibits');
 });
 
-test('share copy leads with the Peshkash title and follows with the description', () => {
+test('share copy is personal, concise, detailed and contains one public link', () => {
   assert.equal(
-    formattedShareText('Chapter Her @ Peshkash', 'An evening of stories and meaningful connections.'),
-    'Chapter Her @ Peshkash\n\nAn evening of stories and meaningful connections.',
+    formattedShareText(
+      'Chapter Her',
+      'An evening of stories and meaningful connections celebrating women.',
+      'https://peshkash.app/event/chapter-her',
+      'Wednesday, 9 September 2026',
+    ),
+    'See Chapter Her on Peshkash.\n\nAn evening of stories and meaningful connections…\n\nWednesday, 9 September 2026\n\nFind out more: https://peshkash.app/event/chapter-her',
   );
+  assert.ok(limitedShareDescription('An evening of stories and meaningful connections celebrating women.').length <= 50);
 });

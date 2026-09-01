@@ -150,7 +150,7 @@ async function loadEvent() {
     const { data } = await axios.get(`${API_BASE_URL}/event/${encodeURIComponent(String(route.params.eventName))}`);
     event.value = data;
     const socialPreview = data.experience?.socialPreview || {};
-    const metaTitle = socialPreview.titleOverride || `${data.displayName} @ Peshkash`;
+    const metaTitle = socialPreview.titleOverride || data.displayName;
     const metaDescription = socialPreview.descriptionOverride || data.description || `Discover ${data.displayName}, event details, guests and reminders on Peshkash.`;
     const metaImage = socialPreview.imageUrl || socialPreview.generatedImageUrl || data.experience?.heroImageUrl;
     setMeta({
@@ -164,7 +164,7 @@ async function loadEvent() {
   } catch (err: any) {
     if (import.meta.env.DEV && route.params.eventName === 'demo-event') {
       event.value = devEventFixture();
-      setMeta({ title: `${event.value.displayName} @ Peshkash`, description: event.value.description, type: 'article' });
+      setMeta({ title: event.value.displayName, description: event.value.description, type: 'article' });
     } else error.value = err.response?.data?.error || 'This event page could not be loaded.';
   }
   finally { loading.value = false; }
@@ -204,8 +204,9 @@ async function shareEvent() {
   if (!event.value) return;
   const eventUrl = publicEventUrl(event.value.name, window.location.origin, Number(event.value.experience?.socialPreview?.version) || 1);
   const shared = await sharePublicPage({
-    title: `${event.value.displayName} @ Peshkash`,
+    title: event.value.displayName,
     text: event.value.description || `View event details, guests and timings on Peshkash.`,
+    details: eventDate.value || undefined,
     url: eventUrl,
     onCopied: () => notify('Event link copied.'),
   });
