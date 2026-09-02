@@ -57,7 +57,9 @@
         </div>
         <div ref="guestCarousel" class="guest-carousel" role="region" aria-roledescription="carousel" aria-label="Event guests" @scroll.passive="syncGuestCarousel">
           <article v-for="(guest, index) in visibleGuests" :key="guest.id || guest.name" class="guest-card" :class="{ 'has-portrait': Boolean(guestPortrait(guest)) }" :aria-label="`${index + 1} of ${visibleGuests.length}: ${guest.name}`">
-            <img v-if="guestPortrait(guest)" :src="guestPortrait(guest)" :alt="`${guest.name} portrait`" loading="lazy" @error="markGuestPortraitFailed(guest)" />
+            <div v-if="guestPortrait(guest)" class="guest-portrait" :class="{ 'is-instagram-thumbnail': portraitUsesInstagramThumbnail(guest) }">
+              <img :src="guestPortrait(guest)" :alt="`${guest.name} portrait`" loading="lazy" decoding="async" @error="markGuestPortraitFailed(guest)" />
+            </div>
             <div v-else class="guest-monogram" aria-hidden="true">{{ guestInitials(guest.name) }}</div>
             <div class="guest-card-copy"><p class="guest-role">{{ guest.role || 'Guest' }}</p><h3>{{ guest.name }}</h3><p v-if="guest.bio" class="guest-bio">{{ guest.bio }}</p>
               <div class="guest-links">
@@ -106,8 +108,8 @@ import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
-import { publicEventUrl } from '../features/events/actions';
-import { guestInitials, guestPortraitUrl } from '../features/events/guestPresentation';
+import { googleCalendarReminderUrl, publicEventUrl } from '../features/events/actions';
+import { guestInitials, guestPortraitUrl, instagramUsername } from '../features/events/guestPresentation';
 import { useAuthStore } from '../stores/auth';
 import { calendarResource, openNativeResource } from '../utils/nativeResource';
 import { sharePublicPage } from '../utils/socialShare';
@@ -147,6 +149,9 @@ const visibleGuests = computed(() => [...(event.value?.experience?.guests || [])
 function guestKey(guest: any) { return String(guest.id || guest.name || 'guest'); }
 function guestPortrait(guest: any) {
   return failedGuestPortraits.value.has(guestKey(guest)) ? '' : guestPortraitUrl(guest, API_BASE_URL);
+}
+function portraitUsesInstagramThumbnail(guest: any) {
+  return !guest.imageUrl?.trim() && Boolean(instagramUsername(guest.instagram));
 }
 function markGuestPortraitFailed(guest: any) {
   failedGuestPortraits.value = new Set([...failedGuestPortraits.value, guestKey(guest)]);
@@ -238,7 +243,7 @@ async function setReminder() {
   if (!event.value || !event.value.startTime) { notify('Add event timings before setting a reminder.'); return; }
   const location = [event.value.experience.venueName, event.value.experience.venueAddress].filter(Boolean).join(', ');
   const eventUrl = publicEventUrl(event.value.name, window.location.origin);
-  const reminder = calendarResource({
+  const reminderInput = {
     title: event.value.displayName,
     startTime: event.value.startTime,
     endTime: event.value.endTime,
@@ -246,10 +251,23 @@ async function setReminder() {
     description: event.value.description,
     location,
     eventUrl,
-  });
+  };
   track('event_reminder_click');
-  const result = await openNativeResource(reminder.file, reminder.androidIntent, `Add ${event.value.displayName} to calendar`);
-  if (result === 'shared') notify('Choose your calendar app to finish adding the reminder.');
+  try {
+    // Android browser support for Calendar insertion intents is inconsistent.
+    // A pre-filled Google Calendar page works in Chrome, PWAs and in-app browsers.
+    if (/Android/i.test(navigator.userAgent)) {
+      window.location.assign(googleCalendarReminderUrl(reminderInput));
+      return;
+    }
+
+    const reminder = calendarResource(reminderInput);
+    const result = await openNativeResource(reminder.file, reminder.androidIntent, `Add ${event.value.displayName} to calendar`);
+    if (result === 'shared') notify('Choose your calendar app to finish adding the reminder.');
+    if (result === 'opened') notify('Calendar file ready. Open it to add the reminder.');
+  } catch {
+    window.location.assign(googleCalendarReminderUrl(reminderInput));
+  }
 }
 
 async function shareEvent() {
@@ -417,6 +435,30 @@ onUnmounted(() => { if (timer) window.clearInterval(timer); if (guestScrollFrame
   border-radius: 18px;
   box-shadow: 0 12px 35px rgba(47, 40, 34, .035);
 }
+.guest-portrait {
+  height: 240px;
+  overflow: hidden;
+}
+.guest-portrait img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+.guest-portrait.is-instagram-thumbnail {
+  align-items: center;
+  background: linear-gradient(145deg, #eeeae4, #e3ddd5);
+  display: flex;
+  height: 190px;
+  justify-content: center;
+}
+.guest-portrait.is-instagram-thumbnail img {
+  border: 5px solid rgba(255, 255, 255, .92);
+  border-radius: 50%;
+  box-shadow: 0 12px 30px rgba(44, 35, 28, .16);
+  height: 132px;
+  object-fit: cover;
+  width: 132px;
+}
 .guest-monogram {
   background: linear-gradient(145deg, #eeeae4, #e5dfd7);
   color: #776653;
@@ -433,23 +475,23 @@ onUnmounted(() => { if (timer) window.clearInterval(timer); if (guestScrollFrame
 
 .event-cta-dock {
   backdrop-filter: blur(18px);
-  background: rgba(251, 250, 248, .94);
-  border-color: rgba(56, 48, 41, .16);
-  box-shadow: 0 14px 40px rgba(47, 40, 34, .14);
+  background: rgba(7, 7, 7, .97);
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .34), 0 0 0 1px rgba(0, 0, 0, .08);
 }
 .event-cta-dock button,
-.event-cta-dock a { color: var(--muted); }
+.event-cta-dock a { color: rgba(255, 255, 255, .82); }
 .event-cta-dock button + button,
 .event-cta-dock button + a,
 .event-cta-dock a + button { border-left: 0; }
 .event-cta-dock button:hover,
-.event-cta-dock a:hover { background: #eeeae4; color: var(--ink); }
+.event-cta-dock a:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .event-cta-dock button i,
-.event-cta-dock a i { color: var(--accent); }
-.event-cta-dock .complete { color: #667466; }
-.event-cta-dock .live-cta { background: #756157; color: #fff; }
+.event-cta-dock a i { color: #d9b77f; }
+.event-cta-dock .complete { color: #d8c595; }
+.event-cta-dock .live-cta { background: #8f2d25; color: #fff; }
 .event-cta-dock .live-cta i { color: inherit; }
-.event-cta-dock button.unavailable { color: var(--soft); }
+.event-cta-dock button.unavailable { color: rgba(255, 255, 255, .42); }
 
 @media (max-width: 760px) {
   .event-page { padding-bottom: 6.75rem; }
@@ -483,6 +525,9 @@ onUnmounted(() => { if (timer) window.clearInterval(timer); if (guestScrollFrame
   .guest-section-heading h2 { font-size: 2rem; }
   .guest-carousel { grid-auto-columns: min(82vw, 326px); }
   .guest-card { border-radius: 16px; min-height: 372px; }
+  .guest-portrait { height: 210px; }
+  .guest-portrait.is-instagram-thumbnail { height: 170px; }
+  .guest-portrait.is-instagram-thumbnail img { height: 116px; width: 116px; }
   .guest-monogram { font-size: 2.7rem; height: 156px; }
   .guest-card h3 { font-size: 1.55rem; }
   .organizer-card h2 { font-size: 1.75rem; }
