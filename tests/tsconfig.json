@@ -18,6 +18,8 @@
     "event-workflow.test.ts",
     "social-share.test.ts",
     "../src/features/events/workflow.ts",
+    "../src/features/events/guestPresentation.ts",
+    "../src/utils/nativeResource.ts",
     "../src/utils/socialShare.ts",
     "../src/features/designStudio/document/types.ts",
     "../src/features/designStudio/document/migrations.ts",
