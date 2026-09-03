@@ -4,6 +4,7 @@ const BACKEND_SHARE_ORIGIN = 'https://peshkash-backend.onrender.com/api/share';
 export function socialPreviewPath(pathname) {
   if (pathname === '/') return '';
   if (pathname === '/exhibits') return '/exhibits';
+  if (pathname === '/showrooms') return '/showrooms';
   if (/^\/vendor\/[^/]+\/?$/.test(pathname)) return pathname.replace(/\/$/, '');
   if (/^\/event\/[^/]+(?:\/menu\/[^/]+(?:\/item\/[^/]+)?)?\/?$/.test(pathname)) return pathname.replace(/\/$/, '');
   return null;
