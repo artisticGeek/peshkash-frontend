@@ -88,7 +88,11 @@
         </div>
       </section>
 
-      <section class="showroom-spread closing-spread" data-page="6">
+      <section class="showroom-spread difference-spread" data-page="6" @touchstart.stop @touchend.stop>
+        <ProviderDifference audience="showroom" promise="Send us your product photos and details. We help with the rest." :rows="providerDifferences" />
+      </section>
+
+      <section class="showroom-spread closing-spread" data-page="7">
         <div class="closing-grid" aria-hidden="true"></div><div class="closing-mark">P</div>
         <div class="spread-copy closing-copy"><p class="kicker">Build a showroom that compounds</p><h2>Do not just sell.<br><em>Learn.</em></h2><p>Your team should not have to start from zero with every visitor, every shift or every new location. Make products discoverable, interest measurable and follow-up informed.</p><div class="closing-actions"><a :href="whatsappUrl" target="_blank" rel="noopener" @click="track('showroom_whatsapp')"><i class="bi bi-whatsapp"></i> Digitise my showroom</a><button type="button" @click="shareShowroom"><i class="bi bi-share"></i> Share this proposal</button></div><p class="studio-credit">A Peshkash format by ArtisticGeek Studios</p></div>
       </section>
@@ -103,11 +107,18 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
+import ProviderDifference from '../components/ProviderDifference.vue';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
 import { sharePublicPage } from '../utils/socialShare';
 
-const pages = ['The proposition', 'People and scale', 'Digital touchpoints', 'Interest to data', 'The customer journey', 'Showroom insights', 'A compounding system'];
+const pages = ['The proposition', 'People and scale', 'Digital touchpoints', 'Interest to data', 'The customer journey', 'Showroom insights', 'The Peshkash difference', 'A compounding system'];
+const providerDifferences = [
+  { title: 'Show your products', standalone: 'A page of links sends people to your website or Instagram.', connected: 'Give each product its own page with photos and details, linked to your collection.' },
+  { title: 'Put the QR in your shop', standalone: 'You download a QR code, then arrange the design and printing.', connected: 'We help prepare QR tags for your products and cards for your counter.' },
+  { title: 'See what people do', standalone: 'A scan count tells you how many times people scanned.', connected: 'See page visits and actions such as saves, shares and contact button taps.' },
+  { title: 'Get help setting up', standalone: 'You put the photos, pages and printed cards together yourself.', connected: 'Send us your photos and details. We help prepare the pages and QR cards.' },
+];
 const current = ref(0);
 const book = ref<HTMLElement | null>(null);
 const touchStart = ref({ x: 0, y: 0 });
@@ -156,6 +167,7 @@ onUnmounted(() => { resetMeta(); window.removeEventListener('keydown', onKeydown
 </script>
 
 <style scoped>
+.showroom-spread.difference-spread{overflow-y:auto;overscroll-behavior-y:contain;padding:64px 0 0;scrollbar-width:thin}
 .showrooms-page{--ink:#101713;--paper:#f3eee5;--brass:#b6945c;background:var(--ink);color:var(--ink);height:100dvh;overflow:hidden}.showroom-header{align-items:center;background:rgba(16,23,19,.94);border-bottom:1px solid rgba(182,148,92,.28);color:#f3eee5;display:grid;grid-template-columns:1fr auto 1fr;height:64px;left:0;padding:0 clamp(1rem,3vw,2.5rem);position:fixed;right:0;top:0;z-index:20;backdrop-filter:blur(14px)}.showroom-header>a{justify-self:start}.showroom-header button{background:none;border:1px solid rgba(182,148,92,.4);border-radius:50%;color:#eadcc8;height:36px;justify-self:end;width:36px}.header-edition{align-items:center;display:flex;gap:.7rem;font-size:.66rem;letter-spacing:.16em;text-transform:uppercase}.header-edition span{color:#c4a36d}.header-edition b{font-weight:500}.showroom-book{height:100dvh;overflow-x:hidden;overflow-y:auto;scroll-behavior:smooth;scroll-snap-type:y mandatory;scrollbar-width:none}.showroom-book::-webkit-scrollbar{display:none}.showroom-spread{box-sizing:border-box;height:100dvh;min-height:100dvh;overflow:hidden;padding-top:64px;position:relative;scroll-snap-align:start;scroll-snap-stop:always}.spread-copy{position:relative;z-index:2}.kicker{color:#89663a;font-size:.68rem;font-weight:700;letter-spacing:.24em;margin:0 0 1.5rem;text-transform:uppercase}
 .hero-spread{background:#d5c8b7}.hero-spread>img{height:100%;inset:0;object-fit:cover;object-position:68% center;position:absolute;width:100%}.hero-shade{background:linear-gradient(90deg,rgba(243,238,229,.98),rgba(243,238,229,.88) 36%,rgba(16,23,19,.08) 72%),linear-gradient(0deg,rgba(16,23,19,.2),transparent 38%);inset:0;position:absolute}.hero-copy{align-items:flex-start;display:flex;flex-direction:column;height:calc(100dvh - 64px);justify-content:center;max-width:700px;padding:clamp(2rem,7vw,7rem)}.hero-copy h1,.people-copy h2,.touchpoints-heading h2,.memory-heading h2,.journey-copy h2,.insights-copy h2,.closing-copy h2{font-family:'Rufina',Georgia,serif;font-weight:400;letter-spacing:-.05em;line-height:.91;margin:0}.hero-copy h1{font-size:clamp(3.6rem,8.5vw,8.4rem)}.hero-copy h1 em,.touchpoints-heading h2 em,.memory-heading h2 em,.journey-copy h2 em,.closing-copy h2 em{color:#98713f;font-weight:400}.deck{font-size:clamp(1rem,1.6vw,1.25rem);line-height:1.55;margin:2rem 0;max-width:575px}.text-link{background:none;border:0;border-bottom:1px solid #8b673c;color:#101713;font-size:.78rem;font-weight:700;letter-spacing:.13em;padding:.5rem 0;text-transform:uppercase}.text-link i{margin-left:.7rem}.credit{bottom:2rem;color:#655e57;font-size:.68rem;left:clamp(2rem,7vw,7rem);letter-spacing:.13em;margin:0;position:absolute;text-transform:uppercase;z-index:2}
 .people-spread{background:#111914;color:#f3eee5;display:grid;grid-template-columns:minmax(280px,.78fr) minmax(420px,1.22fr)}.people-photo{background:linear-gradient(0deg,rgba(16,23,19,.22),rgba(16,23,19,.02)),url('/resources/showrooms/showroom-consultation.webp') center/cover;clip-path:polygon(0 0,86% 0,100% 100%,0 100%)}.people-copy{align-self:center;padding:clamp(3rem,7vw,7rem)}.people-copy .kicker{color:#c4a36d}.people-copy h2{font-size:clamp(2.8rem,5.8vw,6.2rem)}.people-copy .lead{color:#c5bdb3;line-height:1.65;margin:1.6rem 0;max-width:650px}.truth-grid{border-top:1px solid rgba(182,148,92,.3);display:grid;grid-template-columns:repeat(3,1fr);margin-top:2rem}.truth-grid article{border-right:1px solid rgba(182,148,92,.2);padding:1rem 1.2rem 1rem 0}.truth-grid article+article{padding-left:1.2rem}.truth-grid article:last-child{border-right:0}.truth-grid span{color:#9e8d7b;display:block;font-size:.58rem;letter-spacing:.12em;margin-bottom:.5rem;text-transform:uppercase}.truth-grid b{font-family:'Rufina',serif;font-size:1rem;font-weight:400;line-height:1.4}.emphasis{color:#c5bdb3;font-size:.9rem;margin-top:2rem}.emphasis em{color:#d0ad72;font-family:'Rufina',serif;font-size:1.2rem}.edge-word{bottom:2rem;color:#b6945c;font-size:.6rem;letter-spacing:.4em;position:absolute;right:2rem;writing-mode:vertical-rl}

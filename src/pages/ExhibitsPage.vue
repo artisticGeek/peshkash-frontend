@@ -121,7 +121,11 @@
         </div>
       </section>
 
-      <section class="exhibit-spread closing-spread" data-page="6">
+      <section class="exhibit-spread difference-spread" data-page="6" @touchstart.stop @touchend.stop>
+        <ProviderDifference audience="exhibition" promise="Send us your event details. We help get your pages and QR cards ready." :rows="providerDifferences" />
+      </section>
+
+      <section class="exhibit-spread closing-spread" data-page="7">
         <div class="closing-mark">P</div>
         <div class="spread-copy closing-copy">
           <p class="kicker">What the organiser finally sees</p>
@@ -152,11 +156,18 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
+import ProviderDifference from '../components/ProviderDifference.vue';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
 import { sharePublicPage } from '../utils/socialShare';
 
-const pages = ['The proposition', 'Exhibitor value', 'QR touchpoints', 'Offline to data', 'Visitor journey', 'Insights', 'Measurable value'];
+const pages = ['The proposition', 'Exhibitor value', 'QR touchpoints', 'Offline to data', 'Visitor journey', 'Insights', 'The Peshkash difference', 'Measurable value'];
+const providerDifferences = [
+  { title: 'Help visitors plan', standalone: 'A poster tells people when and where the event is.', connected: 'Visitors can see the brands taking part, sign up and save a reminder on one page.' },
+  { title: 'Help visitors explore', standalone: 'You arrange the QR codes and signs for each stall separately.', connected: 'We help prepare QR cards for the entrance, stalls and products in a matching style.' },
+  { title: 'See what people do', standalone: 'A guest list tells you who signed up.', connected: 'Also see how often people opened your event page, shared it or saved a reminder.' },
+  { title: 'Get help setting up', standalone: 'You arrange the event page, QR codes and printing separately.', connected: 'Send us the event and stall details. We help prepare the pages and QR cards.' },
+];
 const current = ref(0);
 const book = ref<HTMLElement | null>(null);
 const touchStart = ref({ x: 0, y: 0 });
@@ -225,6 +236,7 @@ onUnmounted(() => { resetMeta(); window.removeEventListener('keydown', onKeydown
 </script>
 
 <style scoped>
+.exhibit-spread.difference-spread{overflow-y:auto;overscroll-behavior-y:contain;padding:64px 0 0;scrollbar-width:thin}
 .exhibits-page { --ink:#1a1410; --paper:#f5efe6; --gold:#bd945a; --garnet:#7b2734; background:var(--ink); color:var(--ink); height:100dvh; overflow:hidden; }
 .exhibit-header { align-items:center; background:rgba(26,20,16,.94); border-bottom:1px solid rgba(189,148,90,.28); color:#f5efe6; display:grid; grid-template-columns:1fr auto 1fr; height:64px; left:0; padding:0 clamp(1rem,3vw,2.5rem); position:fixed; right:0; top:0; z-index:20; backdrop-filter:blur(14px); }
 .exhibit-header>a { justify-self:start; }.exhibit-header button { background:none;border:1px solid rgba(189,148,90,.4);border-radius:50%;color:#eadcc8;height:36px;justify-self:end;width:36px}.header-edition { align-items:center;display:flex;gap:.7rem;font-size:.66rem;letter-spacing:.16em;text-transform:uppercase}.header-edition span{color:#bd945a}.header-edition b{font-weight:500}
