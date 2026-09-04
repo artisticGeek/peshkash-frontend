@@ -1,6 +1,9 @@
 <template>
   <div class="site">
 
+    <!-- THREE.JS NETWORK — fixed, full viewport, z:0 -->
+    <canvas ref="cvs" class="net-canvas" aria-hidden="true"></canvas>
+
     <div class="page">
       <Navbar @track="trackLanding" />
 
@@ -23,22 +26,42 @@
 
           <div class="hero-actions scene-in" style="--d:.5s">
             <a href="https://wa.me/+919115551110" target="_blank" rel="noopener"
-               class="cta-wa" @click="trackLanding('landing_whatsapp_hero')">
+               class="cta-wa" @click="trackLanding('landing_whatsapp_hero')" @mouseenter="onCtaHover" @mouseleave="onCtaLeave">
               <i class="bi bi-whatsapp"></i> Chat on WhatsApp
             </a>
             <a href="#picker" class="cta-soft" @click="trackLanding('landing_demo_anchor')">See it in action ↓</a>
           </div>
 
           <div class="biz-tags scene-in" style="--d:.65s">
-            <span v-for="t in bizTags" :key="t.label" class="btag"><i class="bi" :class="t.icon"></i> {{ t.label }}</span>
+            <span v-for="t in bizTags" :key="t.label"
+                  class="btag"
+                  @mouseenter="setHoverColor(t.label)"
+                  @mouseleave="clearHoverColor"><i class="bi" :class="t.icon"></i> {{ t.label }}</span>
           </div>
         </div>
 
-        <div class="hero-visual scene-in dir-r" style="--d:.3s">
-          <div class="hero-image-frame">
-            <img :src="heroImg" alt="An elegant retail display with a brass QR card beside handcrafted products" class="hero-image" />
+        <!-- QR scan demo — 3D perspective, with its own parallax layer -->
+        <div class="hero-demo scene-in dir-r" style="--d:.3s" aria-hidden="true">
+          <div class="hero-demo-inner" ref="heroDemoInnerRef">
+            <div class="demo-wrap" @click="scanned = !scanned">
+              <div class="demo-qr-card" :class="{ scanned }">
+                <img :src="qrImg" alt="" class="demo-qr-img" />
+              </div>
+              <div class="demo-connector" :class="{ show: scanned }"></div>
+              <Transition name="phone-reveal">
+                <div v-if="scanned" class="demo-phone">
+                  <div class="dph-shell">
+                    <div class="dph-notch"></div>
+                    <img :src="menuImg" alt="" class="dph-screen" />
+                    <div class="dph-insights">
+                      <div><i class="bi bi-eye-fill"></i> <span class="count-num" data-to="47">0</span> scans</div>
+                      <div><i class="bi bi-graph-up-arrow"></i> <span class="count-num" data-to="23">0</span>% growth</div>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </div>
           </div>
-          <span class="hero-image-rule" aria-hidden="true"></span>
         </div>
 
       </section>
@@ -92,13 +115,14 @@
             jewellery, anything — if customers come to you, this is for you too.</p>
         </div>
 
-        <!-- Business type choices -->
+        <!-- Pills as network nodes -->
         <div class="node-pills scene-in dir-d" style="--d:.1s">
           <button
             v-for="b in businesses" :key="b.id"
             class="node-pill"
             :class="{ active: activeBiz === b.id }"
-            @click="activeBiz = b.id"
+            @click="activeBiz = b.id; setParticleAccent(b.color)"
+            @mouseenter="pulseNode(b.id)"
           >
             <span class="np-glow"></span>
             <i class="bi np-icon" :class="b.icon"></i>
@@ -153,7 +177,7 @@
       <!-- ═══════ DEMO ════════════════════════════════════════ -->
       <section class="section demo-section" id="demo">
         <div class="demo-img-wrap scene-in dir-l" style="--d:0s">
-          <div class="demo-img-inner">
+          <div class="demo-img-inner" ref="demoImgInnerRef">
             <img :src="placedImg" alt="QR in real life" class="demo-big-img" />
             <div class="demo-overlay-tag dot-a"><i class="bi bi-qr-code-scan"></i> Scan</div>
             <div class="demo-overlay-tag dot-b"><i class="bi bi-graph-up-arrow"></i> Insight</div>
@@ -273,14 +297,20 @@ import { onMounted, onBeforeUnmount, ref, computed, reactive } from 'vue';
 import Navbar from '../components/Navbar.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { useAnalytics, type ActionType } from '../composables/useAnalytics';
-import heroImg   from '../assets/peshkash-landing-hero-elegant.jpg';
+import * as THREE from 'three';
+import qrImg     from '../assets/peshkashqrhero.png';
+import menuImg   from '../assets/peshkash-demo-section.png';
 import placedImg from '../assets/peshkash-demo-section-placed.png';
 
 // ── refs ───────────────────────────────────────────────────────
+const cvs       = ref<HTMLCanvasElement | null>(null);
+const heroDemoInnerRef = ref<HTMLElement | null>(null);
+const demoImgInnerRef  = ref<HTMLElement | null>(null);
 const contactSectionRef = ref<HTMLElement | null>(null);
 const topVisible = ref(false);
 const contactInView = ref(false);
 const openFaq   = ref(0);
+const scanned   = ref(false);
 const activeBiz = ref<string | null>(null);
 const stepRefs  = reactive<HTMLElement[]>([]);
 const whatsappForm = reactive({
@@ -320,6 +350,9 @@ function openWhatsAppEnquiry() {
   trackLanding('landing_whatsapp_contact');
   window.open(`https://wa.me/919115551110?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
 }
+
+// ── Three.js accent color (changed by business type) ──────────
+let accentColor = new THREE.Color('#BD945A');
 
 // ── content data ───────────────────────────────────────────────
 const bizTags = [
@@ -387,6 +420,15 @@ const faqs = [
 ];
 
 // ── interactions ───────────────────────────────────────────────
+function setParticleAccent(color: string) {
+  accentColor = new THREE.Color(color);
+}
+function clearHoverColor() { /* mouse left biz tag */ }
+function setHoverColor(_t: string) { /* subtle accent on hover */ }
+function onCtaHover() { /* attract particles toward CTA */ }
+function onCtaLeave() { /* release particles */ }
+function pulseNode(_id: string) { /* node pulse effect */ }
+
 function tilt(e: MouseEvent, i: number) {
   const el = stepRefs[i]; if (!el) return;
   const r = el.getBoundingClientRect();
@@ -404,11 +446,227 @@ function dirClass(i: number) {
 }
 
 
+// ── THREE.JS PARTICLE NETWORK ─────────────────────────────────
+let animId = 0;
+let renderer: THREE.WebGLRenderer | null = null;
+
+function initNetwork(canvas: HTMLCanvasElement) {
+  const W = window.innerWidth, H = window.innerHeight;
+
+  renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  // Opaque warm cream — canvas IS the page background
+  renderer.setClearColor(new THREE.Color('#F5F2EE'), 1);
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 100);
+  camera.position.z = 5;
+
+  // ── Particles ────────────────────────────────────────────
+  const N = W < 768 ? 70 : 120;
+  const pPos = new Float32Array(N * 3);
+  const pCol = new Float32Array(N * 3);
+  const pVel = new Float32Array(N * 3);
+  const pOrig = new Float32Array(N * 3);
+
+  // Darker particles so they're visible on the cream background
+  const gold  = new THREE.Color('#9A7240'); // dark amber
+  const gold2 = new THREE.Color('#BD945A'); // medium gold
+  const cream = new THREE.Color('#7A5A30'); // dark warm brown
+
+  for (let i = 0; i < N; i++) {
+    // Distribute in a disc — particles fill the viewport plane
+    const ang = Math.random() * Math.PI * 2;
+    const r   = Math.sqrt(Math.random()) * 6;
+    const x   = Math.cos(ang) * r;
+    const y   = Math.sin(ang) * r * 0.65;
+    const z   = (Math.random() - 0.5) * 3;
+
+    pPos[i*3]=x; pPos[i*3+1]=y; pPos[i*3+2]=z;
+    pOrig[i*3]=x; pOrig[i*3+1]=y; pOrig[i*3+2]=z;
+
+    const rnd = Math.random();
+    const c   = rnd < 0.6 ? gold : rnd < 0.85 ? gold2 : cream;
+    pCol[i*3]=c.r; pCol[i*3+1]=c.g; pCol[i*3+2]=c.b;
+  }
+
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  pGeo.setAttribute('color',    new THREE.BufferAttribute(pCol, 3));
+  // Soft, low-contrast points keep the network behind the page content.
+  const pMat = new THREE.PointsMaterial({
+    size: 0.045, vertexColors: true,
+    transparent: true, opacity: 0.5,
+    sizeAttenuation: true, depthWrite: false,
+  });
+  const points = new THREE.Points(pGeo, pMat);
+  scene.add(points);
+
+  // ── Line connections (pre-allocated buffer) ────────────────
+  const MAX_LINES = N * 4;
+  const linePos = new Float32Array(MAX_LINES * 2 * 3);
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  // Dimmer, sparser lines — delicate constellation threads, not a dense mesh
+  const lineMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color('#BD945A'),
+    transparent: true, opacity: 0.045,
+    depthWrite: false,
+  });
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  scene.add(lines);
+
+  // ── State ──────────────────────────────────────────────────
+  const mouse = { x: 0, y: 0, wx: 0, wy: 0 }; // screen + world coords
+  const camLerp = { x: 0, y: 0 };
+  let scrollY = 0;
+  const CONNECT_DIST = 0.85;
+  const REPEL_DIST   = 1.2; // mouse repulsion radius
+
+  const onMM = (e: MouseEvent) => {
+    const nx = e.clientX / window.innerWidth  - 0.5;
+    const ny = e.clientY / window.innerHeight - 0.5;
+    mouse.x = nx; mouse.y = ny;
+    // Convert to rough world coords (at z=0 plane, camera at z=5)
+    mouse.wx = nx * 10;
+    mouse.wy = -ny * 6.5;
+  };
+  const onSc = () => { scrollY = window.scrollY; };
+  const onRz = () => {
+    const W2 = window.innerWidth, H2 = window.innerHeight;
+    camera.aspect = W2/H2; camera.updateProjectionMatrix();
+    renderer!.setSize(W2, H2);
+  };
+  window.addEventListener('mousemove', onMM, { passive: true });
+  window.addEventListener('scroll',    onSc, { passive: true });
+  window.addEventListener('resize',    onRz, { passive: true });
+
+  // ── Animate ────────────────────────────────────────────────
+  let tick = 0;
+  function animate() {
+    animId = requestAnimationFrame(animate);
+    tick++;
+    const t    = tick * 0.0007;
+    const prog = scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight);
+
+    // Camera parallax — subtle, follows mouse
+    camLerp.x += (mouse.x * 0.8 - camLerp.x) * 0.04;
+    camLerp.y += (-mouse.y * 0.5 - camLerp.y) * 0.04;
+    camera.position.x = camLerp.x;
+    camera.position.y = camLerp.y;
+    camera.position.z = 5 - prog * 2; // camera moves in on scroll
+    camera.lookAt(0, 0, 0);
+
+    // ── Particle physics ──────────────────────────────────
+    const pos = pGeo.attributes.position.array as Float32Array;
+    const col = pGeo.attributes.color.array as Float32Array;
+
+    for (let i = 0; i < N; i++) {
+      const ix = i*3, iy = i*3+1, iz = i*3+2;
+
+      // Gentle drift — each particle has unique phase
+      const phase = i * 0.37;
+      const drift_x = Math.sin(t * 0.8 + phase) * 0.0008;
+      const drift_y = Math.cos(t * 0.6 + phase * 1.3) * 0.0006;
+
+      // Spring back toward origin
+      const ox = pOrig[ix], oy = pOrig[iy];
+      pVel[ix] += (ox - pos[ix]) * 0.004 + drift_x;
+      pVel[iy] += (oy - pos[iy]) * 0.004 + drift_y;
+
+      // Mouse repulsion
+      const dx = pos[ix] - mouse.wx;
+      const dy = pos[iy] - mouse.wy;
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      if (d < REPEL_DIST && d > 0.01) {
+        const f = (REPEL_DIST - d) / REPEL_DIST * 0.025;
+        pVel[ix] += (dx/d) * f;
+        pVel[iy] += (dy/d) * f;
+      }
+
+      // Damping
+      pVel[ix] *= 0.88;
+      pVel[iy] *= 0.88;
+
+      pos[ix] += pVel[ix];
+      pos[iy] += pVel[iy];
+
+      // Subtle color shift toward accent on hover
+      const distToAccent = d < 2 ? (2-d)/2 : 0;
+      col[ix] += (accentColor.r - col[ix]) * distToAccent * 0.02;
+      col[iy] += (accentColor.g - col[iy]) * distToAccent * 0.02;
+      col[iz] += (accentColor.b - col[iz]) * distToAccent * 0.02;
+    }
+    pGeo.attributes.position.needsUpdate = true;
+    pGeo.attributes.color.needsUpdate = true;
+
+    // ── Connection lines ──────────────────────────────────
+    // Build line segments for nearby particle pairs
+    let lineCount = 0;
+    for (let i = 0; i < N && lineCount < MAX_LINES - 2; i++) {
+      for (let j = i+1; j < N && lineCount < MAX_LINES - 2; j++) {
+        const dx = pos[i*3]   - pos[j*3];
+        const dy = pos[i*3+1] - pos[j*3+1];
+        const dz = pos[i*3+2] - pos[j*3+2];
+        const d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 < CONNECT_DIST * CONNECT_DIST) {
+          const base = lineCount * 6;
+          linePos[base]   = pos[i*3];
+          linePos[base+1] = pos[i*3+1];
+          linePos[base+2] = pos[i*3+2];
+          linePos[base+3] = pos[j*3];
+          linePos[base+4] = pos[j*3+1];
+          linePos[base+5] = pos[j*3+2];
+          lineCount++;
+        }
+      }
+    }
+    lineGeo.attributes.position.needsUpdate = true;
+    lineGeo.setDrawRange(0, lineCount * 2);
+
+    // Line opacity pulses very subtly — dots stay the focal point
+    lineMat.opacity = 0.035 + Math.sin(t * 1.5) * 0.01;
+
+
+    // Continuous scroll parallax on hero QR demo + main demo image —
+    // separate inner elements so this doesn't fight the CSS entrance transition
+    if (heroDemoInnerRef.value) {
+      heroDemoInnerRef.value.style.setProperty('--py', `${Math.min(scrollY * 0.05, 40)}px`);
+    }
+    if (demoImgInnerRef.value) {
+      const r = demoImgInnerRef.value.getBoundingClientRect();
+      const center = r.top + r.height / 2 - window.innerHeight / 2;
+      demoImgInnerRef.value.style.setProperty('--py', `${(-center * 0.05).toFixed(1)}px`);
+    }
+
+    renderer!.render(scene, camera);
+  }
+  animate();
+
+  return () => {
+    cancelAnimationFrame(animId);
+    window.removeEventListener('mousemove', onMM);
+    window.removeEventListener('scroll',    onSc);
+    window.removeEventListener('resize',    onRz);
+    pGeo.dispose(); pMat.dispose();
+    lineGeo.dispose(); lineMat.dispose();
+    renderer?.dispose();
+  };
+}
+
 // ── lifecycle ──────────────────────────────────────────────────
+let cleanup: (()=>void)|null = null;
 let contactObserver: IntersectionObserver | null = null;
 
 onMounted(async () => {
   trackLanding('landing_page_view');
+  // Start Three.js
+  if (cvs.value) {
+    try { cleanup = initNetwork(cvs.value); }
+    catch(e) { console.warn('WebGL unavailable', e); }
+  }
+
   // Observe all .scene-in elements — hero ones fire immediately since they're in viewport,
   // below-fold ones animate in as the user scrolls to them
   const io = new IntersectionObserver(es => {
@@ -432,6 +690,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  cleanup?.();
   contactObserver?.disconnect();
 });
 const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -446,7 +705,8 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   --cr:  #F5F2EE;  /* warm cream */
   --p:   #EBE7E1;  /* slightly darker cream */
   --dk:  #1a1410;  /* warm dark text (product's text colour) */
-  --sub: #564c40;  /* muted text */
+  --sub: #564c40;  /* muted text — darkened from product's #6c6560 for contrast
+                       against the busy particle/QR background */
   --div: #e6ddd2;  /* dividers */
   --w:   #ffffff;
   /* WhatsApp accent re-toned to a warm olive so it sits inside the gold/
@@ -456,9 +716,9 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   color: var(--dk);
   font-family: 'Urbanist', sans-serif;
   overflow-x: hidden;
-  background: var(--cr);
 }
 
+/* Cream fallback — matches canvas clearColor so no flash if WebGL is slow */
 :global(html), :global(body) {
   background: #F5F2EE;
   scroll-behavior: smooth;
@@ -467,8 +727,24 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   overflow-x: hidden;
 }
 
+/* ── CANVAS: z-index 0 — sits above html/body bg ─────────── */
+.net-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(1.25px);
+  opacity: 0.64;
+  transform: scale(1.01);
+  transform-origin: center;
+}
+
+/* ── PAGE: above canvas ──────────────────────────────────── */
 .page {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
 }
 
@@ -486,13 +762,20 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .scene-in.dir-l { transform: perspective(1100px) translateX(-100px) rotateY(16deg); }
 /* Pans in from the right */
 .scene-in.dir-r { transform: perspective(1100px) translateX(100px) rotateY(-16deg); }
-/* Emerges from depth — scales up out of a blur */
+/* Emerges from the depth of the particle field — scales up out of a blur */
 .scene-in.dir-d { transform: perspective(1100px) scale(0.78) translateY(55px); filter: blur(10px); }
 /* .in always wins regardless of which dir-* variant set the "from" state */
 .scene-in.in {
   opacity: 1 !important;
   transform: perspective(1100px) translateX(0) translateY(0) rotateX(0) rotateY(0) scale(1) !important;
   filter: none !important;
+}
+
+/* Continuous scroll-driven parallax layer — separate element from .scene-in
+   so the one-shot entrance transition and the per-frame JS transform never fight */
+.hero-demo-inner, .demo-img-inner {
+  transform: translateY(var(--py, 0px));
+  will-change: transform;
 }
 
 /* ── KICKER / LABELS ─────────────────────────────────────── */
@@ -545,26 +828,35 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .sec-sub { font-size: 0.95rem; color: var(--sub); margin-bottom: 2.5rem; }
 
 /* ═══════════════════════════════════════════════════════════
-   HERO
+   HERO — full viewport, transparent bg
 ═══════════════════════════════════════════════════════════ */
 .hero {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, .95fr) minmax(380px, 1.05fr);
-  gap: clamp(2.5rem, 5vw, 6rem);
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
   align-items: center;
   padding: 8rem max(1.5rem, 5vw) 3rem;
 }
 @media (max-width: 860px) {
-  .hero { grid-template-columns: 1fr; gap: 2.5rem; padding: 6rem max(1.5rem,5vw) 3rem; }
+  .hero { grid-template-columns: 1fr; padding: 6rem max(1.5rem,5vw) 3rem; }
 }
 
+/* Readability scrim — text needs a soft backdrop to stay legible over
+   the particle network on every screen size, not just mobile */
 .hero-content {
-  position: relative;
-  z-index: 1;
-  max-width: 650px;
+  background: rgba(245,242,238,.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+  /* No negative margin — that was the source of the horizontal
+     overflow on mobile (a bleed effect isn't worth a broken viewport) */
 }
 .hero-logo { margin-bottom: 1.5rem; }
+@media (max-width: 860px) {
+  .hero-content { padding: 1.5rem 1.25rem; }
+}
 
 .hero-p {
   font-size: 1rem;
@@ -599,43 +891,43 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .btag:hover { background: rgba(189,148,90,.18); color: var(--g); }
 .btag i { color: var(--g); margin-right: 2px; }
 
-.hero-visual {
-  position: relative;
-  width: 100%;
-  max-width: 720px;
-  justify-self: end;
-  padding: 0 1rem 1rem 0;
+/* QR scan demo — 3D card */
+.hero-demo { display: flex; align-items: center; justify-content: center; }
+@media (max-width: 860px) { .hero-demo { display: none; } }
+
+.demo-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.demo-qr-card {
+  background: var(--cr); border: 2px solid var(--g);
+  border-radius: 16px; padding: 1rem; width: 158px;
+  cursor: pointer; position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6);
+  transition: transform 0.3s;
+  animation: float3d 5s ease-in-out infinite;
 }
-.hero-image-frame {
-  position: relative;
-  aspect-ratio: 5 / 6;
-  overflow: hidden;
-  border-radius: 48% 48% 28px 28px;
-  border: 1px solid rgba(189,148,90,.3);
-  background: var(--p);
-  box-shadow: 0 30px 80px rgba(86,76,64,.18);
+.demo-qr-card:hover { animation-play-state: paused; transform: scale(1.04) rotate(-1.5deg); }
+@keyframes float3d {
+  0%, 100% { transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateY(0px); }
+  50%      { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) translateY(-9px); }
 }
-.hero-image {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-  object-position: 68% center;
-  filter: contrast(1.06) saturate(1.04);
+.demo-qr-img { width: 100%; display: block; border-radius: 6px; }
+.demo-connector { width: 1.5px; height: 0; background: var(--g); transition: height 0.4s; opacity: 0; }
+.demo-connector.show { height: 60px; opacity: 1; }
+
+.demo-phone {}
+.dph-shell {
+  width: 148px; background: #1c1c1c;
+  border-radius: 26px; border: 7px solid #2a2a2a; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.7);
 }
-.hero-image-rule {
-  position: absolute;
-  inset: 1.25rem 0 0 1.25rem;
-  border: 1px solid rgba(189,148,90,.55);
-  border-radius: 48% 48% 28px 28px;
-  z-index: -1;
-}
-@media (max-width: 860px) {
-  .hero-visual { max-width: none; padding: 0 .65rem .65rem 0; }
-  .hero-image-frame { aspect-ratio: 16 / 10; border-radius: 22px; }
-  .hero-image { object-position: 70% 58%; transform: scale(1.16); }
-  .hero-image-rule { inset: .75rem 0 0 .75rem; border-radius: 22px; }
-}
+.dph-notch { height: 12px; background: #111; position: relative; }
+.dph-notch::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:36px; height:6px; border-radius:3px; background:#222; }
+.dph-screen { width: 100%; height: 110px; object-fit: cover; object-position: top; display: block; }
+.dph-insights { background: #EBE7E1; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.dph-insights div { font-size: 0.58rem; font-weight: 700; color: #1a1410; display: flex; align-items: center; gap: 5px; }
+.dph-insights i { color: var(--g); font-size: 0.65rem; }
+
+.phone-reveal-enter-active { transition: all 0.45s cubic-bezier(.16,1,.3,1); }
+.phone-reveal-enter-from { opacity: 0; transform: translateY(-15px) scale(0.94); }
 
 /* ═══════════════════════════════════════════════════════════
    SECTIONS — mostly transparent, content floats in 3D space
