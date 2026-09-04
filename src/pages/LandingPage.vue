@@ -10,7 +10,6 @@
       <!-- ═══════ HERO ═══════════════════════════════════════ -->
       <section class="hero" id="hero">
         <div class="hero-content">
-          <PeshkashLogo class="hero-logo scene-in" variant="light-bg" :height="46" style="--d:0s" />
           <p class="kicker scene-in" style="--d:0s">
             <span class="kdot"></span> The QR revolution · For every offline business
           </p>
@@ -41,10 +40,14 @@
         </div>
 
         <div class="hero-visual scene-in dir-r" style="--d:.3s">
-          <div class="hero-image-frame">
-            <img :src="heroImg" alt="An elegant retail display with a brass QR card beside handcrafted products" class="hero-image" />
+          <div class="hero-brand-card">
+            <span class="hero-brand-orbit orbit-one" aria-hidden="true"></span>
+            <span class="hero-brand-orbit orbit-two" aria-hidden="true"></span>
+            <span class="hero-brand-kicker">Your business · beautifully presented</span>
+            <PeshkashLogo class="hero-brand-logo" variant="light-bg" :height="104" />
+            <span class="hero-brand-rule" aria-hidden="true"></span>
+            <p>Show your Peshkash to the world.</p>
           </div>
-          <span class="hero-image-rule" aria-hidden="true"></span>
         </div>
 
       </section>
@@ -281,7 +284,6 @@ import Navbar from '../components/Navbar.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { useAnalytics, type ActionType } from '../composables/useAnalytics';
 import * as THREE from 'three';
-import heroImg   from '../assets/peshkash-landing-hero-elegant.jpg';
 import placedImg from '../assets/peshkash-demo-section-placed.png';
 
 // ── refs ───────────────────────────────────────────────────────
@@ -809,7 +811,7 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .hero {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, .95fr) minmax(380px, 1.05fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
   gap: clamp(2.5rem, 5vw, 6rem);
   align-items: center;
   padding: 8rem max(1.5rem, 5vw) 3rem;
@@ -829,7 +831,6 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   /* No negative margin — that was the source of the horizontal
      overflow on mobile (a bleed effect isn't worth a broken viewport) */
 }
-.hero-logo { margin-bottom: 1.5rem; }
 @media (max-width: 860px) {
   .hero-content { padding: 1.5rem 1.25rem; }
 }
@@ -870,39 +871,84 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .hero-visual {
   position: relative;
   width: 100%;
-  max-width: 720px;
+  max-width: 500px;
   justify-self: end;
-  padding: 0 1rem 1rem 0;
+  padding: 0 .9rem .9rem 0;
 }
-.hero-image-frame {
+.hero-brand-card {
   position: relative;
-  aspect-ratio: 5 / 6;
+  min-height: 430px;
   overflow: hidden;
-  border-radius: 48% 48% 28px 28px;
-  border: 1px solid rgba(189,148,90,.3);
-  background: var(--p);
-  box-shadow: 0 30px 80px rgba(86,76,64,.18);
+  border: 1px solid rgba(189,148,90,.38);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(189,148,90,.17), transparent 42%),
+    rgba(245,242,238,.76);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 28px 70px rgba(86,76,64,.14);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 2rem;
 }
-.hero-image {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-  object-position: 68% center;
-  filter: contrast(1.06) saturate(1.04);
-}
-.hero-image-rule {
+.hero-brand-card::after {
+  content: '';
   position: absolute;
-  inset: 1.25rem 0 0 1.25rem;
-  border: 1px solid rgba(189,148,90,.55);
-  border-radius: 48% 48% 28px 28px;
+  inset: .9rem 0 0 .9rem;
+  border: 1px solid rgba(189,148,90,.52);
+  border-radius: 30px;
   z-index: -1;
 }
+.hero-brand-kicker {
+  position: relative;
+  z-index: 1;
+  color: var(--g);
+  font-size: .64rem;
+  font-weight: 900;
+  letter-spacing: .19em;
+  text-transform: uppercase;
+  margin-bottom: 2.25rem;
+}
+.hero-brand-logo {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 330px);
+  height: auto;
+}
+.hero-brand-rule {
+  position: relative;
+  z-index: 1;
+  width: 44px;
+  height: 1px;
+  background: var(--g);
+  margin: 2.15rem 0 1.15rem;
+}
+.hero-brand-card p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--sub);
+  font-family: 'Rufina', serif;
+  font-size: 1.05rem;
+}
+.hero-brand-orbit {
+  position: absolute;
+  border: 1px solid rgba(189,148,90,.16);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.orbit-one { width: 300px; height: 300px; top: -155px; right: -120px; }
+.orbit-two { width: 220px; height: 220px; bottom: -125px; left: -85px; }
 @media (max-width: 860px) {
-  .hero-visual { max-width: none; padding: 0 .65rem .65rem 0; }
-  .hero-image-frame { aspect-ratio: 16 / 10; border-radius: 22px; }
-  .hero-image { object-position: 70% 58%; transform: scale(1.16); }
-  .hero-image-rule { inset: .75rem 0 0 .75rem; border-radius: 22px; }
+  .hero-visual { max-width: none; justify-self: stretch; padding: 0 .65rem .65rem 0; }
+  .hero-brand-card { min-height: 270px; border-radius: 22px; padding: 2.25rem 1.5rem; }
+  .hero-brand-card::after { inset: .65rem 0 0 .65rem; border-radius: 22px; }
+  .hero-brand-kicker { margin-bottom: 1.5rem; }
+  .hero-brand-logo { width: min(78%, 290px); }
+  .hero-brand-rule { margin: 1.5rem 0 .9rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════
