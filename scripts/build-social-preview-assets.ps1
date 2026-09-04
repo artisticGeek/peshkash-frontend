@@ -60,28 +60,31 @@ $graphics.DrawString('Open. Save. Share.', [System.Drawing.Font]::new($sans, 25,
 Save-Jpeg $bitmap (Join-Path $outputDir 'peshkash-home-preview.jpg')
 $gold.Dispose(); $paper.Dispose(); $muted.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 
-# Exhibitions proposition fallback.
-$canvas = New-Canvas '#F2ECE3'
+# Exhibitions preview.
+$canvas = New-Canvas '#18130F'
 $bitmap = $canvas[0]
 $graphics = $canvas[1]
-$ink = New-Brush '#211812'
+$photoPath = Join-Path $PSScriptRoot '..\public\resources\exhibits\atelier-hero.png'
+$photo = [System.Drawing.Bitmap]::FromFile([System.IO.Path]::GetFullPath($photoPath))
+$photoSource = [System.Drawing.Rectangle]::new(691, 0, 845, 1024)
+$photoDestination = [System.Drawing.Rectangle]::new(680, 0, 520, 630)
+$graphics.DrawImage($photo, $photoDestination, $photoSource, [System.Drawing.GraphicsUnit]::Pixel)
+$photo.Dispose()
+
+$ink = New-Brush '#18130F'
 $gold = New-Brush '#A87B45'
-$soft = New-Brush '#DCCBB7'
-$graphics.FillRectangle($ink, 0, 0, 430, 630)
-for ($i = 0; $i -lt 4; $i++) {
-  $x = 500 + ($i * 150)
-  $graphics.FillRectangle($soft, $x, 82, 110, 378)
-  $graphics.FillRectangle($gold, $x + 16, 105, 78, 7)
-  $graphics.DrawRectangle([System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#BFA98E'), 2), $x, 82, 110, 378)
-}
+$muted = New-Brush '#C8B6A3'
+$graphics.FillRectangle($ink, 0, 0, 680, 630)
+$graphics.FillRectangle($gold, 678, 0, 3, 630)
 $paper = New-Brush '#F8F2E9'
-Draw-PeshkashLogo $graphics 58 62 220
-$graphics.DrawString('for', [System.Drawing.Font]::new($serif, 42, [System.Drawing.FontStyle]::Italic), $paper, 58, 164)
-$graphics.DrawString('exhibitions', [System.Drawing.Font]::new($serif, 48, [System.Drawing.FontStyle]::Regular), $paper, 58, 218)
-$graphics.DrawString('Every stall.', [System.Drawing.Font]::new($serif, 29, [System.Drawing.FontStyle]::Regular), $paper, 61, 372)
-$graphics.DrawString('Still discoverable.', [System.Drawing.Font]::new($serif, 29, [System.Drawing.FontStyle]::Regular), $paper, 61, 414)
-$graphics.DrawString('One scan connects the whole floor.', [System.Drawing.Font]::new($sans, 21, [System.Drawing.FontStyle]::Regular), $ink, 501, 510)
+Draw-PeshkashLogo $graphics 72 54 235
+$graphics.DrawString('Peshkash for', [System.Drawing.Font]::new($serif, 55, [System.Drawing.FontStyle]::Regular), $paper, 69, 176)
+$graphics.DrawString('exhibitions', [System.Drawing.Font]::new($serif, 72, [System.Drawing.FontStyle]::Italic), $paper, 69, 240)
+$graphics.FillRectangle($gold, 75, 382, 76, 4)
+$graphics.DrawString('Every stall.', [System.Drawing.Font]::new($serif, 32, [System.Drawing.FontStyle]::Regular), $paper, 72, 410)
+$graphics.DrawString('Still discoverable.', [System.Drawing.Font]::new($serif, 32, [System.Drawing.FontStyle]::Regular), $paper, 72, 454)
+$graphics.DrawString('One scan connects the whole floor.', [System.Drawing.Font]::new($sans, 19, [System.Drawing.FontStyle]::Regular), $muted, 76, 552)
 Save-Jpeg $bitmap (Join-Path $outputDir 'peshkash-exhibits-preview.jpg')
-$ink.Dispose(); $gold.Dispose(); $soft.Dispose(); $paper.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+$ink.Dispose(); $gold.Dispose(); $muted.Dispose(); $paper.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 
 Get-ChildItem -LiteralPath $outputDir -Filter 'peshkash-*-preview.jpg' | Select-Object Name, Length
