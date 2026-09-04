@@ -40,28 +40,11 @@
           </div>
         </div>
 
-        <!-- QR scan demo — 3D perspective, with its own parallax layer -->
-        <div class="hero-demo scene-in dir-r" style="--d:.3s" aria-hidden="true">
-          <div class="hero-demo-inner" ref="heroDemoInnerRef">
-            <div class="demo-wrap" @click="scanned = !scanned">
-              <div class="demo-qr-card" :class="{ scanned }">
-                <img :src="qrImg" alt="" class="demo-qr-img" />
-              </div>
-              <div class="demo-connector" :class="{ show: scanned }"></div>
-              <Transition name="phone-reveal">
-                <div v-if="scanned" class="demo-phone">
-                  <div class="dph-shell">
-                    <div class="dph-notch"></div>
-                    <img :src="menuImg" alt="" class="dph-screen" />
-                    <div class="dph-insights">
-                      <div><i class="bi bi-eye-fill"></i> <span class="count-num" data-to="47">0</span> scans</div>
-                      <div><i class="bi bi-graph-up-arrow"></i> <span class="count-num" data-to="23">0</span>% growth</div>
-                    </div>
-                  </div>
-                </div>
-              </Transition>
-            </div>
+        <div class="hero-visual scene-in dir-r" style="--d:.3s">
+          <div class="hero-image-frame">
+            <img :src="heroImg" alt="An elegant retail display with a brass QR card beside handcrafted products" class="hero-image" />
           </div>
+          <span class="hero-image-rule" aria-hidden="true"></span>
         </div>
 
       </section>
@@ -298,19 +281,16 @@ import Navbar from '../components/Navbar.vue';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import { useAnalytics, type ActionType } from '../composables/useAnalytics';
 import * as THREE from 'three';
-import qrImg     from '../assets/peshkashqrhero.png';
-import menuImg   from '../assets/peshkash-demo-section.png';
+import heroImg   from '../assets/peshkash-landing-hero-elegant.jpg';
 import placedImg from '../assets/peshkash-demo-section-placed.png';
 
 // ── refs ───────────────────────────────────────────────────────
 const cvs       = ref<HTMLCanvasElement | null>(null);
-const heroDemoInnerRef = ref<HTMLElement | null>(null);
 const demoImgInnerRef  = ref<HTMLElement | null>(null);
 const contactSectionRef = ref<HTMLElement | null>(null);
 const topVisible = ref(false);
 const contactInView = ref(false);
 const openFaq   = ref(0);
-const scanned   = ref(false);
 const activeBiz = ref<string | null>(null);
 const stepRefs  = reactive<HTMLElement[]>([]);
 const whatsappForm = reactive({
@@ -629,11 +609,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
     lineMat.opacity = 0.035 + Math.sin(t * 1.5) * 0.01;
 
 
-    // Continuous scroll parallax on hero QR demo + main demo image —
-    // separate inner elements so this doesn't fight the CSS entrance transition
-    if (heroDemoInnerRef.value) {
-      heroDemoInnerRef.value.style.setProperty('--py', `${Math.min(scrollY * 0.05, 40)}px`);
-    }
+    // Continuous scroll parallax on the supporting demo image.
     if (demoImgInnerRef.value) {
       const r = demoImgInnerRef.value.getBoundingClientRect();
       const center = r.top + r.height / 2 - window.innerHeight / 2;
@@ -773,7 +749,7 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
 /* Continuous scroll-driven parallax layer — separate element from .scene-in
    so the one-shot entrance transition and the per-frame JS transform never fight */
-.hero-demo-inner, .demo-img-inner {
+.demo-img-inner {
   transform: translateY(var(--py, 0px));
   will-change: transform;
 }
@@ -833,8 +809,8 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .hero {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
+  grid-template-columns: minmax(0, .95fr) minmax(380px, 1.05fr);
+  gap: clamp(2.5rem, 5vw, 6rem);
   align-items: center;
   padding: 8rem max(1.5rem, 5vw) 3rem;
 }
@@ -891,43 +867,43 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .btag:hover { background: rgba(189,148,90,.18); color: var(--g); }
 .btag i { color: var(--g); margin-right: 2px; }
 
-/* QR scan demo — 3D card */
-.hero-demo { display: flex; align-items: center; justify-content: center; }
-@media (max-width: 860px) { .hero-demo { display: none; } }
-
-.demo-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.demo-qr-card {
-  background: var(--cr); border: 2px solid var(--g);
-  border-radius: 16px; padding: 1rem; width: 158px;
-  cursor: pointer; position: relative;
-  box-shadow: 0 24px 60px rgba(0,0,0,.6);
-  transition: transform 0.3s;
-  animation: float3d 5s ease-in-out infinite;
+.hero-visual {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  justify-self: end;
+  padding: 0 1rem 1rem 0;
 }
-.demo-qr-card:hover { animation-play-state: paused; transform: scale(1.04) rotate(-1.5deg); }
-@keyframes float3d {
-  0%, 100% { transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateY(0px); }
-  50%      { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) translateY(-9px); }
+.hero-image-frame {
+  position: relative;
+  aspect-ratio: 5 / 6;
+  overflow: hidden;
+  border-radius: 48% 48% 28px 28px;
+  border: 1px solid rgba(189,148,90,.3);
+  background: var(--p);
+  box-shadow: 0 30px 80px rgba(86,76,64,.18);
 }
-.demo-qr-img { width: 100%; display: block; border-radius: 6px; }
-.demo-connector { width: 1.5px; height: 0; background: var(--g); transition: height 0.4s; opacity: 0; }
-.demo-connector.show { height: 60px; opacity: 1; }
-
-.demo-phone {}
-.dph-shell {
-  width: 148px; background: #1c1c1c;
-  border-radius: 26px; border: 7px solid #2a2a2a; overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0,0,0,.7);
+.hero-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 68% center;
+  filter: contrast(1.06) saturate(1.04);
 }
-.dph-notch { height: 12px; background: #111; position: relative; }
-.dph-notch::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:36px; height:6px; border-radius:3px; background:#222; }
-.dph-screen { width: 100%; height: 110px; object-fit: cover; object-position: top; display: block; }
-.dph-insights { background: #EBE7E1; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
-.dph-insights div { font-size: 0.58rem; font-weight: 700; color: #1a1410; display: flex; align-items: center; gap: 5px; }
-.dph-insights i { color: var(--g); font-size: 0.65rem; }
-
-.phone-reveal-enter-active { transition: all 0.45s cubic-bezier(.16,1,.3,1); }
-.phone-reveal-enter-from { opacity: 0; transform: translateY(-15px) scale(0.94); }
+.hero-image-rule {
+  position: absolute;
+  inset: 1.25rem 0 0 1.25rem;
+  border: 1px solid rgba(189,148,90,.55);
+  border-radius: 48% 48% 28px 28px;
+  z-index: -1;
+}
+@media (max-width: 860px) {
+  .hero-visual { max-width: none; padding: 0 .65rem .65rem 0; }
+  .hero-image-frame { aspect-ratio: 16 / 10; border-radius: 22px; }
+  .hero-image { object-position: 70% 58%; transform: scale(1.16); }
+  .hero-image-rule { inset: .75rem 0 0 .75rem; border-radius: 22px; }
+}
 
 /* ═══════════════════════════════════════════════════════════
    SECTIONS — mostly transparent, content floats in 3D space
