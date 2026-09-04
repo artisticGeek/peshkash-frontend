@@ -224,50 +224,34 @@
       </section>
 
       <!-- ═══════ CONTACT ══════════════════════════════════════ -->
-      <section class="section contact-sec" id="contact">
+      <section ref="contactSectionRef" class="section contact-sec" id="contact">
         <div class="ct-left scene-in dir-l" style="--d:0s">
           <p class="lbl">Let's talk</p>
           <h2 class="h2 ct-h2">Your offline business<br>deserves<br><em>the power of technology.</em></h2>
-          <p class="ct-p">No pricing tables. Tell us about your business — we'll design the perfect setup.</p>
+          <p class="ct-p">Tell us what you sell and what you need. We’ll continue the conversation on WhatsApp.</p>
           <p class="ct-campaign">A QR is the cheapest marketing you'll ever buy.</p>
-          <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="wa-big" @click="trackLanding('landing_whatsapp_contact')">
-            <div class="wab-icon"><i class="bi bi-whatsapp"></i></div>
-            <div><strong>Chat on WhatsApp</strong><small>Usually replies within an hour</small></div>
-          </a>
-          <div class="ct-links">
-            <a href="tel:+919115551110" @click="trackLanding('landing_call')"><i class="bi bi-telephone-fill"></i> +91-9115551110</a>
-            <a href="mailto:contact@peshkash.app" @click="trackLanding('landing_email')"><i class="bi bi-envelope-fill"></i> contact@peshkash.app</a>
-          </div>
+          <div class="ct-whatsapp-note"><i class="bi bi-whatsapp"></i><span>Every field is optional.<br><small>Share only what you are comfortable sharing.</small></span></div>
         </div>
 
         <div class="ct-right scene-in dir-r" style="--d:.12s">
-          <h4>Send a message</h4>
-          <form action="https://formsubmit.co/contact@peshkash.app" method="POST" @submit="trackLanding('landing_contact_form_submit')">
-            <input type="hidden" name="_subject" value="New inquiry from Peshkash website" />
-            <input type="hidden" name="_captcha" value="false" />
-            <input type="hidden" name="_next" value="https://peshkash.app/?sent=1" />
+          <h4>Start on WhatsApp</h4>
+          <p class="ct-form-intro">Add any details you want. We’ll place them in a WhatsApp message for you.</p>
+          <form class="wa-form" @submit.prevent="openWhatsAppEnquiry">
             <div class="f2">
-              <label><span>Name</span><input name="name" type="text" placeholder="Your name" required /></label>
-              <label><span>Phone</span><input name="phone" type="tel" placeholder="+91 90000 00000" /></label>
+              <label><span>Name <small>Optional</small></span><input v-model.trim="whatsappForm.name" type="text" autocomplete="name" placeholder="Your name" /></label>
+              <label><span>Business name <small>Optional</small></span><input v-model.trim="whatsappForm.businessName" type="text" autocomplete="organization" placeholder="Your business" /></label>
             </div>
-            <label><span>Email</span><input name="email" type="email" placeholder="you@example.com" required /></label>
-            <label><span>I run a…</span>
-              <select name="type">
-                <option value="">Select</option>
-                <option>Food / Bakery / Restaurant</option>
-                <option>Art / Gallery / Studio</option>
-                <option>Fashion / Furniture / Retail</option>
-                <option>Wine & Spirits</option>
-                <option>Catering / Hotel / Venue</option>
-                <option>Exhibition / Market Stall</option>
-                <option>Services (repairs, tuition, fitness…)</option>
-                <option>Something else entirely</option>
+            <label><span>Business type <small>Optional</small></span>
+              <select v-model="whatsappForm.businessType">
+                <option value="">Choose a type</option>
+                <option v-for="type in whatsappBusinessTypes" :key="type">{{ type }}</option>
               </select>
             </label>
-            <label><span>Message</span>
-              <textarea name="message" rows="3" placeholder="Tell us about your business…"></textarea>
+            <label><span>Message <small>Optional</small></span>
+              <textarea v-model.trim="whatsappForm.message" rows="4" placeholder="What would you like Peshkash to help with?"></textarea>
             </label>
-            <button type="submit"><i class="bi bi-send-fill"></i> Send Message</button>
+            <button type="submit"><i class="bi bi-whatsapp"></i> Continue on WhatsApp</button>
+            <p class="wa-form-note">This opens WhatsApp with your message ready to send.</p>
           </form>
         </div>
       </section>
@@ -303,8 +287,8 @@
       </footer>
     </div><!-- /page -->
 
-    <a href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="fwa" @click="trackLanding('landing_whatsapp_floating')"><i class="bi bi-whatsapp"></i></a>
-    <button v-show="topVisible" @click="scrollTop" class="fup"><i class="bi bi-arrow-up"></i></button>
+    <a v-show="!contactInView" href="https://wa.me/+919115551110" target="_blank" rel="noopener" class="fwa" @click="trackLanding('landing_whatsapp_floating')"><i class="bi bi-whatsapp"></i></a>
+    <button v-show="topVisible && !contactInView" @click="scrollTop" class="fup"><i class="bi bi-arrow-up"></i></button>
   </div>
 </template>
 
@@ -322,11 +306,28 @@ import placedImg from '../assets/peshkash-demo-section-placed.png';
 const cvs       = ref<HTMLCanvasElement | null>(null);
 const heroDemoInnerRef = ref<HTMLElement | null>(null);
 const demoImgInnerRef  = ref<HTMLElement | null>(null);
+const contactSectionRef = ref<HTMLElement | null>(null);
 const topVisible = ref(false);
+const contactInView = ref(false);
 const openFaq   = ref(0);
 const scanned   = ref(false);
 const activeBiz = ref<string | null>(null);
 const stepRefs  = reactive<HTMLElement[]>([]);
+const whatsappForm = reactive({
+  name: '',
+  businessName: '',
+  businessType: '',
+  message: '',
+});
+const whatsappBusinessTypes = [
+  'Food, bakery or restaurant',
+  'Art, gallery or studio',
+  'Fashion, furniture or retail',
+  'Hotel, venue or catering',
+  'Exhibition or market stall',
+  'Professional services',
+  'Something else',
+];
 const LANDING_VENDOR_SLUG = 'artisticgeek-studios';
 const LANDING_QR_HASH = 'peshkash-home';
 const analytics = useAnalytics({ vendorSlug: LANDING_VENDOR_SLUG });
@@ -336,6 +337,18 @@ function trackLanding(actionType: ActionType | string) {
     ? window.history.state.peshkashQrHash
     : LANDING_QR_HASH;
   analytics.track(actionType, { qrHash: sourceHash });
+}
+
+function openWhatsAppEnquiry() {
+  const details = [
+    whatsappForm.name && `Name: ${whatsappForm.name}`,
+    whatsappForm.businessName && `Business: ${whatsappForm.businessName}`,
+    whatsappForm.businessType && `Business type: ${whatsappForm.businessType}`,
+    whatsappForm.message && `Message: ${whatsappForm.message}`,
+  ].filter(Boolean);
+  const message = ['Hi Peshkash, I’d like to know more.', ...details].join('\n');
+  trackLanding('landing_whatsapp_contact');
+  window.open(`https://wa.me/919115551110?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
 }
 
 // ── Three.js accent color (changed by business type) ──────────
@@ -451,7 +464,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
   camera.position.z = 5;
 
   // ── Particles ────────────────────────────────────────────
-  const N = W < 768 ? 200 : 350; // kept low so O(n²) line-checks stay under 16ms
+  const N = W < 768 ? 70 : 120;
   const pPos = new Float32Array(N * 3);
   const pCol = new Float32Array(N * 3);
   const pVel = new Float32Array(N * 3);
@@ -481,24 +494,24 @@ function initNetwork(canvas: HTMLCanvasElement) {
   const pGeo = new THREE.BufferGeometry();
   pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
   pGeo.setAttribute('color',    new THREE.BufferAttribute(pCol, 3));
-  // Bolder, more prominent dots — they're the focal point now, not the lines
+  // Soft, low-contrast points keep the network behind the page content.
   const pMat = new THREE.PointsMaterial({
-    size: 0.052, vertexColors: true,
-    transparent: true, opacity: 0.95,
+    size: 0.045, vertexColors: true,
+    transparent: true, opacity: 0.5,
     sizeAttenuation: true, depthWrite: false,
   });
   const points = new THREE.Points(pGeo, pMat);
   scene.add(points);
 
   // ── Line connections (pre-allocated buffer) ────────────────
-  const MAX_LINES = N * 6; // max connections
+  const MAX_LINES = N * 4;
   const linePos = new Float32Array(MAX_LINES * 2 * 3);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
   // Dimmer, sparser lines — delicate constellation threads, not a dense mesh
   const lineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color('#BD945A'),
-    transparent: true, opacity: 0.09,
+    transparent: true, opacity: 0.045,
     depthWrite: false,
   });
   const lines = new THREE.LineSegments(lineGeo, lineMat);
@@ -508,7 +521,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
   const mouse = { x: 0, y: 0, wx: 0, wy: 0 }; // screen + world coords
   const camLerp = { x: 0, y: 0 };
   let scrollY = 0;
-  const CONNECT_DIST = 1.0; // smaller = sparser, more delicate constellation lines
+  const CONNECT_DIST = 0.85;
   const REPEL_DIST   = 1.2; // mouse repulsion radius
 
   const onMM = (e: MouseEvent) => {
@@ -613,7 +626,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
     lineGeo.setDrawRange(0, lineCount * 2);
 
     // Line opacity pulses very subtly — dots stay the focal point
-    lineMat.opacity = 0.07 + Math.sin(t * 1.5) * 0.02;
+    lineMat.opacity = 0.035 + Math.sin(t * 1.5) * 0.01;
 
 
     // Continuous scroll parallax on hero QR demo + main demo image —
@@ -644,6 +657,7 @@ function initNetwork(canvas: HTMLCanvasElement) {
 
 // ── lifecycle ──────────────────────────────────────────────────
 let cleanup: (()=>void)|null = null;
+let contactObserver: IntersectionObserver | null = null;
 
 onMounted(async () => {
   trackLanding('landing_page_view');
@@ -665,10 +679,20 @@ onMounted(async () => {
   }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll<HTMLElement>('.scene-in').forEach(el => io.observe(el));
 
+  if (contactSectionRef.value) {
+    contactObserver = new IntersectionObserver(([entry]) => {
+      contactInView.value = entry.isIntersecting;
+    }, { threshold: 0.08 });
+    contactObserver.observe(contactSectionRef.value);
+  }
+
   window.addEventListener('scroll', () => { topVisible.value = window.scrollY > 500; }, { passive: true });
 });
 
-onBeforeUnmount(() => cleanup?.());
+onBeforeUnmount(() => {
+  cleanup?.();
+  contactObserver?.disconnect();
+});
 const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 </script>
 
@@ -711,6 +735,10 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   height: 100%;
   z-index: 0;
   pointer-events: none;
+  filter: blur(1.25px);
+  opacity: 0.64;
+  transform: scale(1.01);
+  transform-origin: center;
 }
 
 /* ── PAGE: above canvas ──────────────────────────────────── */
@@ -1193,20 +1221,14 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   font-family: 'Rufina', serif; font-style: italic;
   font-size: 1.05rem; color: var(--g); margin-bottom: 2rem;
 }
-.wa-big {
-  display: flex; align-items: center; gap: 1rem;
-  background: rgba(111,140,79,.08); border: 1px solid rgba(111,140,79,.3);
-  border-radius: 12px; padding: 0.9rem 1.2rem;
-  text-decoration: none; transition: all 0.22s; margin-bottom: 1.5rem;
+.ct-whatsapp-note {
+  display: flex; align-items: center; gap: 0.85rem; max-width: 360px;
+  padding: 0.9rem 1rem; border: 1px solid rgba(111,140,79,.28);
+  border-radius: 12px; background: rgba(111,140,79,.07);
+  color: var(--dk); font-size: 0.86rem; font-weight: 700; line-height: 1.35;
 }
-.wa-big:hover { background: rgba(111,140,79,.15); border-color: rgba(111,140,79,.5); transform: translateX(4px); }
-.wab-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--wa); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
-.wa-big strong { display: block; font-size: 0.92rem; font-weight: 800; color: var(--dk); }
-.wa-big small  { font-size: 0.72rem; color: var(--sub); }
-.ct-links { display: flex; flex-direction: column; gap: 0.55rem; }
-.ct-links a { display: inline-flex; align-items: center; gap: 8px; color: var(--sub); font-size: 0.86rem; text-decoration: none; transition: color 0.2s; }
-.ct-links a:hover { color: var(--g); }
-.ct-links a i { color: var(--g); }
+.ct-whatsapp-note i { color: var(--wa); font-size: 1.4rem; }
+.ct-whatsapp-note small { color: var(--sub); font-size: 0.72rem; font-weight: 500; }
 
 .ct-right {
   background: rgba(255,255,255,.82); border: 1.5px solid var(--div);
@@ -1214,11 +1236,13 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 28px rgba(189,148,90,.1);
 }
-.ct-right h4 { font-family: 'Rufina', serif; font-size: 1.4rem; font-weight: 700; color: var(--dk); margin-bottom: 1.5rem; }
+.ct-right h4 { font-family: 'Rufina', serif; font-size: 1.4rem; font-weight: 700; color: var(--dk); margin-bottom: 0.45rem; }
+.ct-form-intro { color: var(--sub); font-size: 0.84rem; line-height: 1.55; margin: 0 0 1.5rem; }
 .f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 540px) { .f2 { grid-template-columns: 1fr; } }
 .ct-right label { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
 .ct-right label span { font-size: 0.64rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sub); }
+.ct-right label span small { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.04em; opacity: 0.68; }
 .ct-right input, .ct-right select, .ct-right textarea {
   background: #fff; border: 1.5px solid var(--div);
   border-radius: 8px; padding: 0.68rem 0.9rem; color: var(--dk);
@@ -1230,12 +1254,13 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 .ct-right select option { background: #fff; color: var(--dk); }
 .ct-right button {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
-  background: linear-gradient(135deg, var(--g), var(--g2));
-  color: #0a0908; font-weight: 800; font-size: 0.95rem;
+  background: linear-gradient(135deg, var(--wa), var(--wad));
+  color: #fff; font-weight: 800; font-size: 0.95rem;
   padding: 0.88rem; border: none; border-radius: 100px;
   cursor: pointer; transition: all 0.22s; margin-top: 0.5rem; font-family: inherit;
 }
-.ct-right button:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(189,148,90,.38); }
+.ct-right button:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(92,118,64,.28); }
+.wa-form-note { margin: 0.75rem 0 0; color: var(--sub); font-size: 0.72rem; text-align: center; }
 
 /* ── FOOTER ──────────────────────────────────────────────── */
 .footer { background: #1A1410; border-top: 1px solid rgba(189,148,90,.12); padding: 3rem max(1.5rem,5vw) 0; }
