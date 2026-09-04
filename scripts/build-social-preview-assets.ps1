@@ -29,8 +29,8 @@ function New-Canvas([string]$background) {
   return @($bitmap, $graphics)
 }
 
-function Draw-PeshkashLogo([System.Drawing.Graphics]$graphics, [int]$x, [int]$y, [int]$width) {
-  $logoPath = Join-Path $PSScriptRoot 'assets\Peshkash-Primary-For-Dark-2000px.png'
+function Draw-PeshkashLogo([System.Drawing.Graphics]$graphics, [int]$x, [int]$y, [int]$width, [string]$surface = 'Dark') {
+  $logoPath = Join-Path $PSScriptRoot "assets\Peshkash-Primary-For-$surface-2000px.png"
   $logo = [System.Drawing.Bitmap]::FromFile([System.IO.Path]::GetFullPath($logoPath))
   # Exact visible bounds of the approved Primary-For-Dark brand-kit lockup.
   $source = [System.Drawing.Rectangle]::new(332, 155, 1377, 437)
@@ -43,22 +43,29 @@ function Draw-PeshkashLogo([System.Drawing.Graphics]$graphics, [int]$x, [int]$y,
 $serif = 'Georgia'
 $sans = 'Arial'
 
-# Global and unavailable fallback.
-$canvas = New-Canvas '#1B1511'
+# Generic Peshkash preview.
+$canvas = New-Canvas '#F5F2EE'
 $bitmap = $canvas[0]
 $graphics = $canvas[1]
 $gold = New-Brush '#BD945A'
-$paper = New-Brush '#F4EEE5'
-$muted = New-Brush '#C8B6A3'
+$bone = New-Brush '#E8DBCE'
+$stone = New-Brush '#C5AF9D'
+$paper = New-Brush '#1A1410'
+$muted = New-Brush '#564C40'
 $graphics.FillRectangle($gold, 60, 60, 8, 510)
-$graphics.DrawEllipse([System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#5C4936'), 2), 895, 72, 235, 235)
-$graphics.DrawEllipse([System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#8A6A48'), 2), 945, 122, 235, 235)
-Draw-PeshkashLogo $graphics 100 70 240
+$graphics.FillRectangle($bone, 930, 0, 270, 630)
+$graphics.FillEllipse($stone, 785, -105, 475, 475)
+$graphics.FillEllipse($bone, 860, -30, 350, 350)
+$ring = [System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#8C7667'), 3)
+$graphics.DrawEllipse($ring, 910, 20, 350, 350)
+$ring.Dispose()
+$graphics.FillRectangle($gold, 930, 568, 270, 62)
+Draw-PeshkashLogo $graphics 100 70 240 'Light'
 $graphics.DrawString('Show your peshkash', [System.Drawing.Font]::new($serif, 62, [System.Drawing.FontStyle]::Regular), $paper, 105, 206)
-$graphics.DrawString('to the world.', [System.Drawing.Font]::new($serif, 84, [System.Drawing.FontStyle]::Italic), $paper, 105, 292)
+$graphics.DrawString('to the world.', [System.Drawing.Font]::new($serif, 84, [System.Drawing.FontStyle]::Italic), $gold, 105, 292)
 $graphics.DrawString('Open. Save. Share.', [System.Drawing.Font]::new($sans, 25, [System.Drawing.FontStyle]::Regular), $muted, 111, 464)
 Save-Jpeg $bitmap (Join-Path $outputDir 'peshkash-home-preview.jpg')
-$gold.Dispose(); $paper.Dispose(); $muted.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+$gold.Dispose(); $bone.Dispose(); $stone.Dispose(); $paper.Dispose(); $muted.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 
 # Exhibitions preview.
 $canvas = New-Canvas '#18130F'
