@@ -340,9 +340,10 @@ const getEnumClass = (enumType: string): string => {
   gap: 8px;
   padding: 11px 12px;
   margin-bottom: 5px;
-  background: var(--pk-cream);
+  background: #fffaf5;
+  border: 1px solid rgba(189, 148, 90, 0.12);
   border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(26, 20, 16, 0.08);
+  box-shadow: 0 4px 18px rgba(86, 76, 64, 0.045);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -359,7 +360,8 @@ const getEnumClass = (enumType: string): string => {
 
 .tree-category:hover {
   transform: translateX(2px);
-  box-shadow: 0 2px 6px rgba(189, 148, 90, 0.2);
+  background: #fff7ee;
+  box-shadow: 0 7px 24px rgba(189, 148, 90, 0.1);
 }
 
 .tree-chevron {
@@ -398,9 +400,10 @@ const getEnumClass = (enumType: string): string => {
   gap: 8px;
   padding: 11px 12px;
   margin-bottom: 5px;
-  background: var(--pk-cream);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(189, 148, 90, 0.1);
   border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(26, 20, 16, 0.06);
+  box-shadow: 0 4px 16px rgba(86, 76, 64, 0.035);
   transition: all 0.2s ease;
   border-left: 2px solid rgba(189, 148, 90, 0.4);
   cursor: default;
@@ -409,7 +412,8 @@ const getEnumClass = (enumType: string): string => {
   cursor: pointer;
 }
 .menu-item.is-drillable:hover {
-  box-shadow: 0 2px 8px rgba(189, 148, 90, 0.22);
+  background: #fffaf4;
+  box-shadow: 0 7px 22px rgba(189, 148, 90, 0.1);
   border-left-color: #bd945a;
 }
 
@@ -611,7 +615,7 @@ const getEnumClass = (enumType: string): string => {
   border-radius: 3px;
   border: 1.5px solid;
   flex-shrink: 0;
-  background-color: var(--pk-cream);
+  background-color: #fff;
 }
 
 .enum-indicator-square .enum-icon {
