@@ -27,59 +27,57 @@
       </button>
       <header class="pk-item-header">
         <p class="pk-item-overline">{{ itemData?.menu?.displayName || 'Peshkash selection' }}</p>
+        <p v-if="categoryLabel" class="pk-item-category">{{ categoryLabel }}</p>
         <h1>{{ itemData?.displayName || itemData?.name }}</h1>
-         <small class="d-block">
-        <RouterLink
-          v-if="itemData?.event?.vendor?.hasContactPage"
-          :to="`/vendor/${itemData.event.vendor.name}`"
-          class="vendor-name vendor-link"
-        >{{ itemData.event.vendor.displayName }}</RouterLink>
-        <span v-else class="vendor-name">{{ itemData?.event?.vendor?.displayName }}</span>
-        <template v-if="itemData?.menu?.type === 'personalized'">
-          <span class="mx-1 text-muted">@</span>
-          <span class="event-name">{{ itemData.event.displayName }}</span>
-        </template>
-      </small>
-        <small v-if="itemData?.price" class="pk-item-price">{{ itemData.price }}</small>
+        <p v-if="itemData?.event?.vendor?.displayName" class="pk-item-byline">
+          by
+          <RouterLink
+            v-if="itemData?.event?.vendor?.hasContactPage"
+            :to="`/vendor/${itemData.event.vendor.name}`"
+            class="vendor-name vendor-link"
+          >{{ itemData.event.vendor.displayName }}</RouterLink>
+          <span v-else class="vendor-name">{{ itemData.event.vendor.displayName }}</span>
+          <template v-if="itemData?.menu?.type === 'personalized'">
+            <span class="mx-1 text-muted">@</span>
+            <span class="event-name">{{ itemData.event.displayName }}</span>
+          </template>
+        </p>
       </header>
 
-      <div v-if="itemData?.image && !imageFailed" class="pk-item-media-wrap">
-        <div class="pk-item-media">
-          <div class="ratio ratio-16x9">
+      <section class="pk-story">
+        <p class="pk-story-kicker">Discover</p>
+        <h2>{{ itemSectionLabel }}</h2>
+        <p v-if="descriptionParts.first" class="pk-story-copy">{{ descriptionParts.first }}</p>
+
+        <div v-if="itemData?.image && !imageFailed" class="pk-item-media-wrap">
+          <div class="pk-item-media">
             <img
               :src="itemData.image"
               :alt="itemData?.displayName || itemData?.name"
-              class="w-100 h-100 rounded shadow pk-hero-img"
+              class="pk-hero-img"
               loading="lazy"
               @error="imageFailed = true"
             />
+            <span v-if="itemData?.price" class="pk-price-badge">{{ itemData.price }}</span>
           </div>
         </div>
-      </div>
 
-      <div v-if="showDietaryBadge || itemData?.tags?.length || itemData?.allergens?.length || itemData?.spiceLevel" class="pk-item-badges">
-        <span v-if="showDietaryBadge" class="pk-item-chip">
-          <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
-          <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
-        </span>
-        <span v-for="tag in itemData?.tags || []" :key="tag" class="pk-item-chip">{{ tag }}</span>
-        <span v-for="allergen in itemData?.allergens || []" :key="allergen" class="pk-item-chip pk-item-chip--warning">{{ allergen }}</span>
-        <span v-if="itemData?.spiceLevel" class="pk-item-chip text-danger">
-          <i v-for="n in 3" :key="n" class="bi bi-fire" :class="{'opacity-25': n > itemData.spiceLevel}"></i>
-        </span>
-      </div>
+        <div v-if="showDietaryBadge || itemData?.tags?.length || itemData?.spiceLevel" class="pk-item-badges">
+          <span v-if="showDietaryBadge" class="pk-item-chip">
+            <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
+            <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
+          </span>
+          <span v-for="tag in itemData?.tags || []" :key="tag" class="pk-item-chip">{{ tag }}</span>
+          <span v-if="itemData?.spiceLevel" class="pk-item-chip text-danger">
+            <i v-for="n in 3" :key="n" class="bi bi-fire" :class="{'opacity-25': n > itemData.spiceLevel}"></i>
+          </span>
+        </div>
 
-      <nav v-if="itemData.parentItems?.length" class="pk-item-lineage" aria-label="breadcrumb">
-        <ol class="breadcrumb justify-content-center mb-0">
-          <li v-for="parentItem in itemData.parentItems" :key="parentItem.displayName" class="breadcrumb-item">{{ parentItem.displayName }}</li>
-        </ol>
-      </nav>
+        <p v-if="descriptionParts.second" class="pk-story-copy">{{ descriptionParts.second }}</p>
 
-      <section class="pk-story" :class="{ 'pk-story--no-media': !itemData?.image || imageFailed }">
-          <p class="pk-story-kicker">Discover</p>
-          <h2>{{ itemSectionLabel }}</h2>
-          <p class="pk-story-copy">{{ itemData?.description }}</p>
-          <div v-if="itemData?.ingredients" class="d-flex flex-wrap gap-2 mb-3">
+        <div v-if="itemData?.ingredients" class="pk-material">
+          <p class="pk-material-label">Material</p>
+          <div class="d-flex flex-wrap gap-2">
             <span
               v-for="ing in itemData.ingredients.split(',')"
               :key="ing"
@@ -88,7 +86,11 @@
               {{ ing.trim() }}
             </span>
           </div>
-          <div v-if="itemData?.allergens?.length" class="d-flex flex-wrap gap-2">
+        </div>
+
+        <div v-if="itemData?.allergens?.length" class="pk-material">
+          <p class="pk-material-label">Allergens</p>
+          <div class="d-flex flex-wrap gap-2">
             <span
               v-for="allergen in itemData.allergens"
               :key="allergen"
@@ -97,6 +99,7 @@
               {{ allergen }}
             </span>
           </div>
+        </div>
       </section>
 
     </main>
@@ -173,6 +176,28 @@ const itemSectionLabel = computed(() => {
 const showDietaryBadge = computed(() => {
   const type = (itemData.value?.itemType || itemData.value?.type || '').toLowerCase()
   return type === 'dish' && typeof itemData.value?.isVeg === 'boolean'
+})
+
+// The immediate category this item sits under (last entry in the parent chain).
+const categoryLabel = computed(() => {
+  const parents = itemData.value?.parentItems
+  if (!parents?.length) return null
+  return parents[parents.length - 1]?.displayName || null
+})
+
+// Split the description around the hero image: roughly the first half of its
+// sentences before the image, the rest after — so a long description doesn't
+// all sit above or below the photo.
+const descriptionParts = computed(() => {
+  const desc = (itemData.value?.description || '').trim()
+  if (!desc) return { first: '', second: '' }
+  const sentences = desc.match(/[^.!?]+[.!?]+(\s+|$)/g)
+  if (!sentences || sentences.length <= 1) return { first: desc, second: '' }
+  const mid = Math.ceil(sentences.length / 2)
+  return {
+    first: sentences.slice(0, mid).join('').trim(),
+    second: sentences.slice(mid).join('').trim(),
+  }
 })
 const error = ref<string | null>(null)
 const feedback = ref('')
@@ -362,8 +387,7 @@ onMounted(loadItem)
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
 .pk-item-header { padding: clamp(3.25rem, 8vw, 6.5rem) 1rem clamp(2rem, 4vw, 3.25rem); text-align: center; }
-.pk-item-overline,
-.pk-story-kicker {
+.pk-item-overline {
   color: #a77d45;
   font-size: 0.67rem;
   font-weight: 800;
@@ -371,22 +395,56 @@ onMounted(loadItem)
   margin: 0 0 1rem;
   text-transform: uppercase;
 }
+.pk-item-category {
+  color: #8d7b67;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+}
 .pk-item-header h1 {
   color: #19140f;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.55rem, 6vw, 5rem);
+  font-size: clamp(1.9rem, 4vw, 3.25rem);
   font-weight: 500;
-  letter-spacing: -0.045em;
-  line-height: 0.96;
-  margin: 0 auto 1.25rem;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0 auto 0.9rem;
   max-width: 900px;
   overflow-wrap: anywhere;
 }
-.pk-item-price { color: #1c1712; display: block; font-size: 1rem; margin-top: 0.85rem; }
-.pk-item-media-wrap { display: flex; justify-content: center; }
-.pk-item-media { width: min(100%, 960px); }
-.pk-item-media .ratio { --bs-aspect-ratio: 62.5%; }
-.pk-hero-img { border-radius: 2px !important; box-shadow: 0 24px 70px rgba(39, 27, 16, 0.12) !important; object-fit: cover; }
+.pk-item-byline { color: #7a6a58; font-size: 1rem; margin: 0; }
+.pk-item-media-wrap { display: flex; justify-content: center; margin: clamp(1.75rem, 4vw, 2.75rem) 0; }
+.pk-item-media { position: relative; display: inline-block; max-width: 100%; }
+.pk-hero-img {
+  border-radius: 4px;
+  display: block;
+  max-width: 100%;
+  max-height: 64vh;
+  width: auto;
+  height: auto;
+}
+.pk-price-badge {
+  background: #1a1410;
+  border-radius: 999px;
+  bottom: 14px;
+  color: #d4a87a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  position: absolute;
+  right: 14px;
+}
+.pk-material { margin-top: 1.75rem; }
+.pk-material-label {
+  color: #8d7b67;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+}
 .pk-beige-text { color: beige; }
 .pk-item-badges { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; margin: 1.5rem auto; }
 .pk-item-chip {
@@ -400,18 +458,23 @@ onMounted(loadItem)
   padding: 0.35rem 0.7rem;
 }
 .pk-item-chip--warning { background: #fbf5e9; }
-.pk-item-lineage { margin: 1.75rem auto 0; }
-.pk-item-lineage .breadcrumb-item { color: #8d7b67; font-size: 0.76rem; letter-spacing: 0.04em; }
 .pk-story {
   border-top: 1px solid #ddd1c1;
   display: flex;
   flex-direction: column;
-  margin: clamp(3.5rem, 8vw, 6.75rem) auto 0;
+  margin: clamp(2.5rem, 6vw, 4rem) auto 0;
   max-width: 760px;
   padding-top: clamp(2.25rem, 5vw, 4rem);
   width: 100%;
 }
-.pk-story--no-media { margin-top: 1.5rem; }
+.pk-story-kicker {
+  color: #a77d45;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+}
 .pk-story h2 {
   color: #7a5b3d;
   font-family: Georgia, 'Times New Roman', serif;
@@ -479,9 +542,8 @@ onMounted(loadItem)
   .pk-item-page { padding-bottom: 8rem; padding-left: 1rem; padding-right: 1rem; }
   .pk-item-header { padding-bottom: 2rem; padding-top: 3.5rem; }
   .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
-  .pk-item-media .ratio { --bs-aspect-ratio: 78%; }
-  .pk-story { margin-top: 3.5rem; padding-inline: 0.35rem; }
-  .pk-story--no-media { margin-top: 1rem; }
+  .pk-hero-img { max-height: 46vh; }
+  .pk-story { margin-top: 2.5rem; padding-inline: 0.35rem; }
   .pk-story-copy { line-height: 1.7; }
   .pk-action-dock {
     left: 50%;

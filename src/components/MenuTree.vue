@@ -53,6 +53,7 @@
           :search-query="searchQuery"
           :selected-filter="selectedFilter"
           :edit-mode="editMode"
+          :elaborate="elaborate"
           :on-add-child="onAddChild"
           :analytics-vendor-id="analyticsVendorId"
           :analytics-event-id="analyticsEventId"
@@ -66,50 +67,104 @@
       <div
         v-show="matchesFilters"
         class="menu-item"
-        :class="{ 'has-description': item.description && isDescriptionTruncated, 'is-drillable': !editMode && eventName && menuName }"
+        :class="{ 'has-description': item.description && isDescriptionTruncated, 'is-drillable': !editMode && eventName && menuName, 'menu-item-elaborate': elaborate }"
         @click="openItemDetail"
       >
         <!-- Connecting Line -->
         <div v-if="level > 0" class="tree-line"></div>
-        
-        <!-- Enum Type Indicator (Veg/Non-Veg/Egg) - Indian Style with SVG Icons -->
-        <div 
-          v-if="item.enumType" 
-          class="enum-indicator-square" 
-          :class="getEnumClass(item.enumType)"
-          :title="item.enumType"
-        >
-          <!-- SVG Icons for each type -->
-          <svg v-if="item.enumType.toLowerCase() === 'veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66 .95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/>
-          </svg>
-          <svg v-else-if="item.enumType.toLowerCase() === 'egg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C8.5 2 6 6.5 6 12c0 4.97 2.69 9 6 9s6-4.03 6-9c0-5.5-2.5-10-6-10z"/>
-          </svg>
-          <svg v-else-if="item.enumType.toLowerCase() === 'non-veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="8"/>
-          </svg>
-        </div>
-        
-        <!-- Item Content -->
-        <div class="menu-item-content">
-          <!-- Dish Name (Black color) -->
-          <div class="menu-item-name">{{ item.displayName || item.name }}</div>
-          <div
-            v-if="item.description"
-            class="menu-item-description"
-            :class="{ expanded: descriptionExpanded }"
-          >
-            {{ descriptionExpanded ? item.description : truncatedDescription }}
+
+        <template v-if="elaborate">
+          <!-- Editorial photo-lead card: full-width photo, price badged over its corner
+               when a photo exists (falls back to an inline price next to the name
+               otherwise, so a price is never silently dropped). -->
+          <div v-if="item.image && !thumbnailFailed" class="item-photo-wrap">
+            <img :src="item.image" class="item-photo-backdrop" aria-hidden="true" alt="" />
+            <img
+              :src="item.image"
+              :alt="item.displayName || item.name"
+              class="item-photo"
+              @error="thumbnailFailed = true"
+            />
+            <span v-if="item.price" class="price-badge">{{ item.price }}</span>
           </div>
-          <span
-            v-if="item.description && isDescriptionTruncated"
-            class="read-more-link"
-            @click="toggleDescription"
+
+          <div class="menu-item-content">
+            <div class="menu-item-name-row">
+              <div
+                v-if="isDietaryEnum(item.enumType)"
+                class="enum-indicator-square"
+                :class="getEnumClass(item.enumType!)"
+                :title="item.enumType"
+              >
+                <svg v-if="item.enumType!.toLowerCase() === 'veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66 .95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/>
+                </svg>
+                <svg v-else-if="item.enumType!.toLowerCase() === 'egg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.5 2 6 6.5 6 12c0 4.97 2.69 9 6 9s6-4.03 6-9c0-5.5-2.5-10-6-10z"/>
+                </svg>
+                <svg v-else-if="item.enumType!.toLowerCase() === 'non-veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="8"/>
+                </svg>
+              </div>
+              <div class="menu-item-name">{{ item.displayName || item.name }}</div>
+              <span v-if="item.price && !(item.image && !thumbnailFailed)" class="menu-item-price-inline">{{ item.price }}</span>
+            </div>
+            <div
+              v-if="item.description"
+              class="menu-item-description"
+              :class="{ expanded: descriptionExpanded }"
+            >
+              {{ descriptionExpanded ? item.description : truncatedDescription }}
+            </div>
+            <span
+              v-if="item.description && isDescriptionTruncated"
+              class="read-more-link"
+              @click="toggleDescription"
+            >
+              {{ descriptionExpanded ? 'Read less' : 'Read more' }}
+            </span>
+            <div v-if="item.tags && item.tags.length" class="menu-item-tags-caption">
+              <span v-for="tag in item.tags" :key="tag" class="tag-caption">{{ tag }}</span>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <!-- Compact view (unchanged): name + truncated/expandable description only. -->
+          <div
+            v-if="isDietaryEnum(item.enumType)"
+            class="enum-indicator-square"
+            :class="getEnumClass(item.enumType!)"
+            :title="item.enumType"
           >
-            {{ descriptionExpanded ? 'Read less' : 'Read more' }}
-          </span>
-        </div>
+            <svg v-if="item.enumType!.toLowerCase() === 'veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66 .95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/>
+            </svg>
+            <svg v-else-if="item.enumType!.toLowerCase() === 'egg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.5 2 6 6.5 6 12c0 4.97 2.69 9 6 9s6-4.03 6-9c0-5.5-2.5-10-6-10z"/>
+            </svg>
+            <svg v-else-if="item.enumType!.toLowerCase() === 'non-veg'" class="enum-icon" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="8"/>
+            </svg>
+          </div>
+          <div class="menu-item-content">
+            <div class="menu-item-name">{{ item.displayName || item.name }}</div>
+            <div
+              v-if="item.description"
+              class="menu-item-description"
+              :class="{ expanded: descriptionExpanded }"
+            >
+              {{ descriptionExpanded ? item.description : truncatedDescription }}
+            </div>
+            <span
+              v-if="item.description && isDescriptionTruncated"
+              class="read-more-link"
+              @click="toggleDescription"
+            >
+              {{ descriptionExpanded ? 'Read less' : 'Read more' }}
+            </span>
+          </div>
+        </template>
 
         <!-- Studio add-child button on leaf items -->
         <button
@@ -144,6 +199,8 @@ interface LineItem {
   isVeg?: boolean;
   tags?: string[];
   spiceLevel?: number;
+  image?: string;
+  price?: string;
 }
 
 interface Props {
@@ -154,6 +211,8 @@ interface Props {
   searchQuery?: string;
   selectedFilter?: string;
   editMode?: boolean;
+  /** Menu-level setting: show a thumbnail, price and tags per item instead of just a truncated description. */
+  elaborate?: boolean;
   onAddChild?: (parentId: number) => void;
   analyticsVendorId?: number;
   analyticsEventId?: number;
@@ -165,6 +224,7 @@ const props = withDefaults(defineProps<Props>(), {
   searchQuery: '',
   selectedFilter: 'All',
   editMode: false,
+  elaborate: false,
 });
 
 const { track } = useAnalytics();
@@ -172,6 +232,16 @@ const router = useRouter();
 
 const isExpanded = ref(false);
 const descriptionExpanded = ref(false);
+const thumbnailFailed = ref(false);
+
+// The dietary square icon is only meaningful for these three values — enumType
+// also doubles as a free-text label (e.g. "bestseller") elsewhere in the app,
+// and rendering the square for those produced an empty/blank icon.
+const isDietaryEnum = (enumType?: string): boolean => {
+  if (!enumType) return false;
+  const type = enumType.toLowerCase();
+  return type === 'veg' || type === 'non-veg' || type === 'egg';
+};
 
 // Check if item has children (is a category)
 const hasChildren = computed(() => {
@@ -474,6 +544,96 @@ const getEnumClass = (enumType: string): string => {
 .menu-item-content {
   flex-grow: 1;
   min-width: 0;
+}
+
+/* Elaborate view: editorial photo-lead card */
+.menu-item-elaborate {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+.item-photo-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8 / 3;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(189, 148, 90, 0.12), rgba(140, 118, 103, 0.12));
+  flex-shrink: 0;
+}
+
+/* Both images are absolutely positioned so their intrinsic size can never
+   stretch item-photo-wrap — that's what let full-resolution photos render
+   at their native dimensions instead of the fixed card ratio. */
+.item-photo-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(24px) saturate(1.1) brightness(0.9);
+  transform: scale(1.15); /* hide the blur's soft edge fringe */
+}
+
+.item-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 1;
+}
+
+.price-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: var(--pk-near-black);
+  color: var(--pk-gold-hover);
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.menu-item-elaborate .menu-item-content {
+  padding: 12px 14px 14px;
+}
+
+.menu-item-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-item-name-row .menu-item-name {
+  flex-grow: 1;
+  margin-bottom: 0;
+}
+
+.menu-item-price-inline {
+  color: var(--pk-gold);
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.menu-item-tags-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tag-caption {
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pk-stone-beige);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Dish name in brand near-black */

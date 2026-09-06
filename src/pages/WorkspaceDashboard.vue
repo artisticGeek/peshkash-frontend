@@ -750,6 +750,7 @@
             <label>Menu Name<input v-model.trim="menuForm.displayName" class="form-control" placeholder="Maharaja Menu" @input="fillMenuSlug" @blur="fillMenuSlug" /></label>
             <label>Slug<input v-model.trim="menuForm.name" class="form-control" placeholder="maharaja-menu" /></label>
             <label class="check"><input v-model="menuForm.isActive" type="checkbox" /> Active</label>
+            <label class="check"><input v-model="menuForm.elaborateDescriptions" type="checkbox" /> Show elaborate item descriptions (thumbnail, price, tags)</label>
             <label class="wide">Description<textarea v-model.trim="menuForm.description" rows="2" class="form-control"></textarea></label>
             <label class="wide">Item-page story heading
               <select v-model="menuForm.itemStoryHeading" class="form-select">
@@ -910,6 +911,10 @@
                     <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading">{{ heading }}</option>
                   </select>
                 </label>
+                <label class="ribbon-menu-elaborate">
+                  <input v-model="menuElaborateValue" type="checkbox" />
+                  <span>Show elaborate item descriptions (thumbnail, price, tags)</span>
+                </label>
                 <div class="ribbon-menu-settings-actions">
                   <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i> Save settings</button>
                   <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
@@ -967,6 +972,7 @@
                 :event-name="selectedEventForItems?.name || ''"
                 :menu-name="selectedMenuForItems?.name || ''"
                 :edit-mode="true"
+                :elaborate="selectedMenuForItems?.elaborateDescriptions"
                 :on-add-child="openItemDrawer"
               />
               <p v-if="!selectedDesignerItems.length" class="muted">Drop library items here or add a new item.</p>
@@ -1059,6 +1065,7 @@
               :level="0"
               :event-name="selectedEventForItems?.name || ''"
               :menu-name="selectedMenuForItems?.name || ''"
+              :elaborate="selectedMenuForItems?.elaborateDescriptions"
             />
           </div>
         </div>
@@ -2050,7 +2057,7 @@ type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWork
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; socialPreview: SocialPreviewConfig; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
-type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
+type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; elaborateDescriptions?: boolean; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
 type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
@@ -2220,6 +2227,7 @@ const itemDraft = reactive<any>({ displayName: '', name: '', type: 'item', enumT
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
 const menuStoryHeadingValue = ref<string>('The backstory');
+const menuElaborateValue = ref<boolean>(false);
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
@@ -2425,7 +2433,7 @@ function defaultEventExperience(): EventExperience {
 }
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
 const socialPreviewValid = ref(true);
-const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
+const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', elaborateDescriptions: false, isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
@@ -3304,7 +3312,7 @@ async function saveEvent() {
 }
 
 function resetMenu() {
-  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', isActive: true });
+  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', elaborateDescriptions: false, isActive: true });
 }
 
 async function openEventEditorFromWorkspace(event: EventRow) {
@@ -3336,6 +3344,7 @@ function openMenuRename() {
   if (!selectedMenuForItems.value) return;
   menuRenameValue.value = selectedMenuForItems.value.displayName;
   menuStoryHeadingValue.value = selectedMenuForItems.value.itemStoryHeading || 'The backstory';
+  menuElaborateValue.value = selectedMenuForItems.value.elaborateDescriptions ?? false;
   showMenuRenameInline.value = true;
 }
 
@@ -3347,6 +3356,7 @@ async function saveMenuRename() {
       ...menu,
       displayName: menuRenameValue.value.trim(),
       itemStoryHeading: menuStoryHeadingValue.value,
+      elaborateDescriptions: menuElaborateValue.value,
       vendorId: selectedVendorId.value,
     });
     showMenuRenameInline.value = false;
@@ -6531,6 +6541,7 @@ td a {
 }
 .ribbon-menu-settings label { color: #6b5a48; font-size: 0.7rem; gap: 4px; }
 .ribbon-menu-settings-actions { align-items: flex-end; display: flex; gap: 5px; }
+.ribbon-menu-elaborate { align-items: center; display: flex; flex-direction: row; gap: 6px; grid-column: 1 / -1; }
 
 .pill-accent {
   background: #fef3e0;
