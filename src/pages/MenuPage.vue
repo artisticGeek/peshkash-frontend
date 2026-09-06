@@ -91,6 +91,7 @@
         :menu-name="menuName"
         :search-query="searchQuery"
         :selected-filter="selectedFilter"
+        :elaborate="menuData?.menu?.elaborateDescriptions"
         :analytics-vendor-id="menuData?.vendor?.id"
         :analytics-event-id="menuData?.event?.id"
         :analytics-menu-id="menuData?.menu?.id"
