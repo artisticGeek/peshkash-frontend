@@ -369,6 +369,8 @@ onMounted(loadItem)
 .pk-item-page-surface { background: #f3ede4; min-height: 100vh; }
 .pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
 .pk-item-shell { display: flex; flex-direction: column; margin: 0 auto; max-width: 1060px; }
+/* 460px isn't derived from anything else — it's just a comfortable width that
+   keeps the back button close to the overline text it sits beside. */
 .pk-item-toprow { position: relative; max-width: 460px; margin: 0 auto; }
 .pk-back-btn {
   position: absolute;
@@ -400,6 +402,8 @@ onMounted(loadItem)
   font-weight: 800;
   letter-spacing: 0.2em;
   margin: 0 0 1rem;
+  padding-left: 32px; /* reserves the back button's 24px width + gap so a long
+                          collection name can never run under it */
   text-transform: uppercase;
 }
 .pk-item-category {

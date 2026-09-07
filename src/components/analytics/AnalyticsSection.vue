@@ -603,9 +603,16 @@ async function load() {
     summary.value = res.data;
   } catch (err: any) {
     error.value = true;
-    errorMessage.value = err?.response?.status === 401
-      ? 'Your session has expired. Please log in again to view analytics.'
-      : 'Analytics data could not be loaded. Please try again in a moment.';
+    if (err?.response?.status === 401) {
+      errorMessage.value = 'Your session has expired. Please log in again to view analytics.';
+      // This route's 401 doesn't carry the 'session_invalidated' code the global
+      // axios interceptor checks for, so it never logs the user out on its own —
+      // do it here so the login modal actually reappears instead of leaving this
+      // message stuck on screen with no way forward.
+      authStore.logout();
+    } else {
+      errorMessage.value = 'Analytics data could not be loaded. Please try again in a moment.';
+    }
   } finally {
     loading.value = false;
   }
