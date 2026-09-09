@@ -169,9 +169,34 @@ function isIOS(): boolean {
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+export function shouldDownloadAndroidVCard(userAgent: string, file: Pick<File, 'name' | 'type'>): boolean {
+  const mimeType = file.type.split(';', 1)[0].trim().toLowerCase();
+  return /Android/i.test(userAgent)
+    && (mimeType === 'text/vcard' || /\.vcf$/i.test(file.name));
+}
+
+function downloadResource(file: File): NativeResourceResult {
+  const resourceUrl = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = resourceUrl;
+  link.download = file.name;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(resourceUrl), 30_000);
+  return 'opened';
+}
+
 export async function openNativeResource(file: File, androidIntent: string, shareTitle: string): Promise<NativeResourceResult> {
-  // Android's insertion intents open the installed Calendar/Contacts handler
-  // directly and retain the browser click's transient user activation.
+  // Chrome and OEM contact apps do not consistently expose a BROWSABLE handler for
+  // web-to-Contacts intents. Downloading the vCard gives every Android browser a reliable
+  // hand-off: the customer opens the downloaded file and confirms the import in Contacts.
+  if (shouldDownloadAndroidVCard(navigator.userAgent, file)) {
+    return downloadResource(file);
+  }
+
+  // Keep the direct Android intent for calendar files, whose handler is reliable.
   if (/Android/i.test(navigator.userAgent) && androidIntent) {
     window.location.assign(androidIntent);
     return 'intent';

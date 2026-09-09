@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { googleCalendarReminderUrl, publicEventUrl } from '../src/features/events/actions.js';
 import { guestInitials, guestPortraitUrl, instagramUsername } from '../src/features/events/guestPresentation.js';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../src/features/events/workflow.js';
-import { androidCalendarIntent, androidContactIntent, calendarInvite, contactVCard } from '../src/utils/nativeResource.js';
+import { androidCalendarIntent, androidContactIntent, calendarInvite, contactVCard, shouldDownloadAndroidVCard } from '../src/utils/nativeResource.js';
 
 test('a standalone event can publish without a menu', () => {
   const checklist = eventPublishChecklist({ vendorSelected: true, eventSelected: true, hasStartTime: true, hasEndTime: true, standalonePageEnabled: true, linkedMenuCount: 0, linkedItemCount: 0 });
@@ -85,9 +85,20 @@ test('contact cards can be handed to native contacts apps', () => {
   assert.match(card, /EMAIL;TYPE=INTERNET:hello@example\.com/);
 
   const intent = androidContactIntent(input);
-  assert.match(intent, /^intent:#Intent;/);
-  assert.match(intent, /type=vnd\.android\.cursor\.dir\/contact/);
+  assert.match(intent, /^intent:\/\/#Intent;/);
+  assert.match(intent, /action=android\.intent\.action\.INSERT_OR_EDIT/);
+  assert.match(intent, /type=vnd\.android\.cursor\.item\/contact/);
   assert.match(intent, /S\.name=Niharika%20Singh%20%26%20Vidhu%20Shoor/);
+});
+
+test('Android contact cards use a vCard download while calendar intents stay unchanged', () => {
+  const androidUserAgent = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36';
+  const iphoneUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15';
+
+  assert.equal(shouldDownloadAndroidVCard(androidUserAgent, { name: 'nira-dori.vcf', type: 'text/vcard' }), true);
+  assert.equal(shouldDownloadAndroidVCard(androidUserAgent, { name: 'nira-dori.vcf', type: '' }), true);
+  assert.equal(shouldDownloadAndroidVCard(iphoneUserAgent, { name: 'nira-dori.vcf', type: 'text/vcard' }), false);
+  assert.equal(shouldDownloadAndroidVCard(androidUserAgent, { name: 'chapter-her.ics', type: 'text/calendar' }), false);
 });
 
 test('event page persistence includes social preview fields and version', () => {
