@@ -6,7 +6,7 @@
  *
  * Columns (one row per analytics event):
  *   Timestamp | Event Type | Action | Page Type | Page / Item Name |
- *   Page URL  | QR Hash    | QR Status | Device | Session ID |
+ *   Page URL  | QR Hash    | QR Status | Device | Session ID | Phone |
  *   Referrer  | User Agent | Vendor
  */
 
@@ -28,6 +28,7 @@ const COL_WIDTHS: Record<string, number> = {
   'QR Status':        12,
   'Device':           10,
   'Session ID':       12,
+  'Phone':            16,
   'Referrer':         40,
   'User Agent':       55,
   'Vendor':           22,
