@@ -148,11 +148,14 @@
 
   </div>
 
-  <!-- Login nudge — Teleports to <body>, so placement here doesn't affect layout. Stays
-       dismissible; useRequireLoginGate reopens it after a delay if closed without logging
-       in. No redirect on any outcome. -->
+  <!-- Login nudge — Teleports to <body>, so placement here doesn't affect layout. Bottom
+       drawer, dismissible via backdrop/Escape only (no close button, no skip link, per the
+       design team's spec); useRequireLoginGate reopens it after a delay if dismissed without
+       logging in. No redirect on any outcome. -->
   <LoginModal
     v-model="loginModalOpen"
+    :vendor-name="loginVendorName"
+    hide-close-button
     @success="onLoginSuccess"
   />
 </template>
@@ -186,6 +189,9 @@ const isLoggedIn = computed(() => authStore.isLoggedIn)
 // Called after successful OTP verification; auth store is already updated by then.
 // Modal closes itself — nothing extra needed here.
 function onLoginSuccess() {
+  // Fires once per completed login regardless of what the visitor does next — otherwise
+  // a login that isn't followed by another tracked action never shows a phone anywhere.
+  analytics.track('login_success', { vendorId: vendorData.value?.id })
   loginModalOpen.value = false
 }
 
@@ -198,6 +204,7 @@ const error      = ref<string | null>(null)
 
 const vendorRequireLogin = computed(() => vendorData.value?.requireLogin)
 useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
+const loginVendorName = computed(() => vendorData.value?.displayName || '')
 const copiedKey  = ref<string | null>(null)
 
 // ── Copy helper ───────────────────────────────────────────────────────────────

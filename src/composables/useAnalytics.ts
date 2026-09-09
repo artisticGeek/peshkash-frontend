@@ -39,6 +39,7 @@ export type ActionType =
   | 'social_click'
   | 'item_expand'
   | 'vendor_contact_view'
+  | 'login_success'
   | 'menu_view'
   | 'item_detail_view'
   | 'item_bookmark'
