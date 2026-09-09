@@ -148,12 +148,11 @@
 
   </div>
 
-  <!-- Login gate — Teleports to <body>, so placement here doesn't affect layout.
-       noDismiss: no close button, backdrop click shakes the card.
-       Page content blurs behind the backdrop. No redirect on any outcome. -->
+  <!-- Login nudge — Teleports to <body>, so placement here doesn't affect layout. Stays
+       dismissible; useRequireLoginGate reopens it after a delay if closed without logging
+       in. No redirect on any outcome. -->
   <LoginModal
     v-model="loginModalOpen"
-    no-dismiss
     @success="onLoginSuccess"
   />
 </template>
@@ -167,6 +166,7 @@ import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
 import { usePageMeta } from '../composables/usePageMeta'
+import { useRequireLoginGate } from '../composables/useRequireLoginGate'
 import { contactResource, openNativeResource } from '../utils/nativeResource'
 import { sharePublicPage } from '../utils/socialShare'
 
@@ -195,6 +195,9 @@ const analytics = useAnalytics()
 const vendorData = ref<any>(null)
 const isLoading  = ref(true)
 const error      = ref<string | null>(null)
+
+const vendorRequireLogin = computed(() => vendorData.value?.requireLogin)
+useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
 const copiedKey  = ref<string | null>(null)
 
 // ── Copy helper ───────────────────────────────────────────────────────────────

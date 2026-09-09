@@ -1,7 +1,6 @@
 import { watch } from 'vue';
 import type { Router } from 'vue-router';
-import axios from 'axios';
-import { API_BASE_URL } from '../config';
+import { usePublicConfig } from './usePublicConfig';
 
 // A deterrent, not real protection — anything shipped to a customer's browser
 // can still be inspected by someone determined enough (view-source over the
@@ -54,12 +53,10 @@ export function useInspectGuard(router: Router): void {
     }
   }
 
-  axios.get<{ disableInspect: boolean }>(`${API_BASE_URL}/public-config`)
-    .then(({ data }) => {
-      enabled = Boolean(data.disableInspect);
-      apply(router.currentRoute.value.path);
-    })
-    .catch(() => {}); // config fetch failing must never block the app — default stays "off"
+  usePublicConfig().then((config) => {
+    enabled = config.disableInspect;
+    apply(router.currentRoute.value.path);
+  });
 
   watch(() => router.currentRoute.value.path, (path) => apply(path));
 }
