@@ -283,29 +283,37 @@ async function saveItemToPhone() {
   const text = [title, vendor, itemData.value?.description].filter(Boolean).join(' — ')
   const url = window.location.href
 
-  if (navigator.share) {
-    try {
-      await navigator.share({ title, text, url })
-      markItemSaved()
-      feedback.value = 'Saved through your phone'
-      showFeedback.value = true
-      window.setTimeout(() => { showFeedback.value = false }, 2200)
-      return
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return
-    }
+  function showManualFeedback() {
+    feedback.value = 'Use your browser menu to bookmark this item'
+    showFeedback.value = true
+    window.setTimeout(() => { showFeedback.value = false }, 3200)
   }
 
+  // 1) Clipboard copy — silent, no OS chrome, works without a user picking a share target.
   try {
     await navigator.clipboard.writeText(`${text}\n${url}`)
     markItemSaved()
     feedback.value = 'Item link copied — paste it into Notes, Messages, or your browser bookmarks'
     showFeedback.value = true
     window.setTimeout(() => { showFeedback.value = false }, 3200)
-  } catch {
-    feedback.value = 'Use your browser menu to bookmark this item'
+    return
+  } catch { /* clipboard unavailable — fall through */ }
+
+  // 2) No clipboard and no Web Share API at all — nothing left to try.
+  if (!navigator.share) {
+    showManualFeedback()
+    return
+  }
+
+  // 3) Last resort: native share sheet.
+  try {
+    await navigator.share({ title, text, url })
+    markItemSaved()
+    feedback.value = 'Saved through your phone'
     showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 3200)
+    window.setTimeout(() => { showFeedback.value = false }, 2200)
+  } catch (err: any) {
+    if (err?.name !== 'AbortError') showManualFeedback()
   }
 }
 
