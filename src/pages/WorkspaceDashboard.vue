@@ -1941,9 +1941,9 @@
 
         <div class="drawer-actions">
           <button class="btn btn-outline-secondary" @click="showItemDrawer = false">Cancel</button>
-          <button class="btn btn-primary" :disabled="!itemDraft.displayName" @click="saveItemFromDrawer">
+          <button class="btn btn-primary" :disabled="!itemDraft.displayName || uploadingDesignerImage" @click="saveItemFromDrawer">
             <i class="bi bi-plus-lg"></i>
-            {{ editingDesignerItemId != null ? 'Save changes' : `Add ${itemDraft.type === 'category' ? 'category' : 'item'}` }}
+            {{ uploadingDesignerImage ? 'Uploading image…' : editingDesignerItemId != null ? 'Save changes' : `Add ${itemDraft.type === 'category' ? 'category' : 'item'}` }}
           </button>
         </div>
       </div>
@@ -3610,6 +3610,7 @@ async function uploadDesignerImage(event: Event) {
 
 function saveItemFromDrawer() {
   try {
+    if (uploadingDesignerImage.value) throw new Error('Wait for the image upload to finish first');
     if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
     if (!itemDraft.displayName.trim()) throw new Error('Add a name first');
     const existing = editingDesignerItemId.value != null
