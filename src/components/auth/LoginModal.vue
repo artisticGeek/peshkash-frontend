@@ -1,21 +1,28 @@
 <!--
-  LoginModal — unified phone→OTP login overlay.
-  Replaces DashboardLogin (full-page gate) and LoginDrawer (side drawer).
+  LoginModal — unified phone→OTP login drawer.
+  Bottom-anchored sheet (not a centered modal) per the reference spec from the design team,
+  Sept 2026. Slides up from the bottom edge; dismissible via backdrop click or Escape only —
+  no close (×) button and no skip link on the public-page usage, by explicit request. The
+  dashboard's own login keeps its close button since that spec was scoped to "the public
+  drawer" specifically (see doc section 10).
 
-  Usage:
-    <LoginModal :model-value="!authStore.isLoggedIn"
-                @update:model-value="onModalVisibility"
-                @success="onLoginSuccess"
-                allow-skip />
+  Usage (public pages):
+    <LoginModal v-model="loginModalOpen" :vendor-name="vendorName" hide-close-button @success="..." />
+
+  Usage (dashboard):
+    <LoginModal v-model="!authStore.isLoggedIn" @success="onLoginSuccess" />
 
   Props:
-    modelValue  — controls visibility
-    allowSkip   — shows "Skip for now" link (public pages)
+    modelValue       — controls visibility
+    vendorName       — drives the phone/success copy ("Take {vendorName} with you.", etc);
+                        omitted on the dashboard, which falls back to plain functional copy
+    hideCloseButton  — true on public pages; dashboard keeps the × button
 
   Emits:
-    update:modelValue — false when user presses X or clicks backdrop
+    update:modelValue — false on backdrop click, Escape, or successful login
+    dismiss           — { reason: 'backdrop' | 'escape' } — fires only on a premature close,
+                        not on the modelValue=false that follows a successful login
     success           — { role, vendorId } on successful OTP verify
-    skip              — when skip link is clicked
 -->
 <template>
   <Teleport to="body">
@@ -23,102 +30,105 @@
       <div
         v-if="modelValue"
         class="lm-backdrop"
-        :class="{ 'lm-backdrop--nodismiss': noDismiss }"
-        @click.self="noDismiss ? shakeCard() : handleClose()"
-        aria-modal="true"
-        role="dialog"
-        aria-label="Sign in"
+        @click.self="dismiss('backdrop')"
       >
-        <Transition name="lm-scale" appear>
-          <div v-if="modelValue" class="lm-card" :class="{ 'lm-card--shaking': shaking }">
+        <Transition name="lm-drawer" appear>
+          <section
+            v-if="modelValue"
+            ref="drawerRef"
+            class="lm-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lm-drawer-title"
+            @keydown="onDrawerKeydown"
+          >
+            <header class="lm-header">
+              <PeshkashLogo variant="light-bg" :height="20" />
+              <button v-if="!hideCloseButton" class="lm-close" @click="dismiss('close')" aria-label="Close">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </header>
 
-            <!-- Close button (hidden when noDismiss) -->
-            <button v-if="!noDismiss" class="lm-close" @click="handleClose" aria-label="Close">
-              <i class="bi bi-x-lg"></i>
-            </button>
-
-            <!-- Brand -->
-            <div class="lm-brand">
-              <PeshkashLogo variant="light-bg" :height="28" />
+            <div class="lm-progress" role="progressbar" :aria-valuenow="stepIndex + 1" aria-valuemin="1" aria-valuemax="3" aria-label="Sign-in progress">
+              <span v-for="n in 3" :key="n" class="lm-progress-seg" :class="{ 'lm-progress-seg--active': stepIndex >= n - 1 }"></span>
             </div>
 
-            <h5 class="lm-title">Sign in to continue</h5>
-            <p class="lm-sub">Enter your phone number and we'll send a one-time code.</p>
+            <div class="lm-content">
+              <!-- ── Step 1: Phone ── -->
+              <template v-if="step === 'phone'">
+                <h2 id="lm-drawer-title" class="lm-title font-serif">{{ phoneHeadline }}</h2>
+                <div class="lm-field">
+                  <label class="lm-label" for="lm-phone-input">Phone number</label>
+                  <div class="lm-phone-row">
+                    <span class="lm-prefix">+91</span>
+                    <input
+                      id="lm-phone-input"
+                      ref="phoneInputRef"
+                      v-model="rawPhone"
+                      type="tel"
+                      class="lm-input"
+                      placeholder="98765 43210"
+                      maxlength="10"
+                      inputmode="tel"
+                      autocomplete="tel"
+                      :aria-invalid="!!error"
+                      aria-describedby="lm-error-msg"
+                      @keyup.enter="send"
+                    />
+                  </div>
+                </div>
+                <p v-if="error" id="lm-error-msg" class="lm-error" role="alert">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                </p>
+                <button class="lm-btn" :disabled="loading || !canSendPhone" @click="send">
+                  <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
+                  {{ loading ? 'Sending code…' : 'Send one-time code' }}
+                </button>
+              </template>
 
-            <!-- ── Step 1: Phone ── -->
-            <template v-if="step === 'phone'">
-              <div class="lm-field">
-                <label class="lm-label">Phone number</label>
-                <div class="lm-phone-row">
-                  <span class="lm-prefix">+91</span>
+              <!-- ── Step 2: OTP ── -->
+              <template v-else-if="step === 'otp'">
+                <h2 id="lm-drawer-title" class="lm-title font-serif">One quick check.</h2>
+                <p class="lm-sent-note">
+                  Code sent to +91 {{ rawPhone }}
+                  <button class="lm-link" @click="changeNumber">Change number</button>
+                </p>
+                <div class="lm-field">
+                  <label class="lm-label" for="lm-otp-input">6-digit code</label>
                   <input
-                    ref="phoneInputRef"
-                    v-model="rawPhone"
-                    type="tel"
-                    class="lm-input"
-                    placeholder="98765 43210"
-                    maxlength="10"
-                    inputmode="tel"
-                    autocomplete="tel"
-                    @keyup.enter="send"
+                    id="lm-otp-input"
+                    ref="otpInputRef"
+                    v-model="otpValue"
+                    type="text"
+                    class="lm-otp-input"
+                    placeholder="_ _ _ _ _ _"
+                    maxlength="6"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    :aria-invalid="!!error"
+                    aria-describedby="lm-error-msg"
+                    @keyup.enter="verify"
                   />
                 </div>
-              </div>
-              <div v-if="error" class="lm-error">
-                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
-              </div>
-              <button class="lm-btn" :disabled="loading" @click="send">
-                <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
-                {{ loading ? 'Sending OTP…' : 'Send OTP' }}
-              </button>
-            </template>
+                <p v-if="error" id="lm-error-msg" class="lm-error" role="alert">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                </p>
+                <button class="lm-btn" :disabled="loading || otpValue.length !== 6" @click="verify">
+                  <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
+                  {{ loading ? 'Verifying…' : 'Verify and continue' }}
+                </button>
+              </template>
 
-            <!-- ── Step 2: OTP ── -->
-            <template v-else-if="step === 'otp'">
-              <p class="lm-sent-note">
-                <i class="bi bi-check-circle-fill text-success me-1"></i>
-                OTP sent to +91 {{ rawPhone }}
-                <button class="lm-link" @click="changeNumber">Change</button>
-              </p>
-              <div class="lm-field">
-                <label class="lm-label">6-digit OTP</label>
-                <input
-                  ref="otpInputRef"
-                  v-model="loginState.otp.value"
-                  type="text"
-                  class="lm-otp-input"
-                  placeholder="_ _ _ _ _ _"
-                  maxlength="6"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-                  @keyup.enter="verify"
-                />
-              </div>
-              <div v-if="error" class="lm-error">
-                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
-              </div>
-              <button class="lm-btn" :disabled="loading" @click="verify">
-                <i v-if="loading" class="bi bi-arrow-clockwise spin me-2"></i>
-                {{ loading ? 'Verifying…' : 'Verify & Sign In' }}
-              </button>
-            </template>
-
-            <!-- ── Step 3: Success ── -->
-            <template v-else-if="step === 'success'">
-              <div class="lm-success">
-                <i class="bi bi-check-circle-fill"></i>
-                <p>Signed in!</p>
-                <p class="lm-success-sub">Loading your workspace…</p>
-              </div>
-            </template>
-
-            <p v-if="allowSkip && step !== 'success'" class="lm-skip-row">
-              <button class="lm-link lm-skip-link" @click="$emit('skip')">Skip for now</button>
-            </p>
-
-            <p class="lm-footer">No account needed — just use your phone to receive a code.</p>
-
-          </div>
+              <!-- ── Step 3: Success ── -->
+              <template v-else-if="step === 'success'">
+                <div class="lm-success" role="status" aria-live="polite">
+                  <span class="lm-success-mark"><i class="bi bi-check-lg"></i></span>
+                  <h2 id="lm-drawer-title" class="lm-title font-serif">You're in.</h2>
+                  <p class="lm-sub">{{ successSub }}</p>
+                </div>
+              </template>
+            </div>
+          </section>
         </Transition>
       </div>
     </Transition>
@@ -131,17 +141,19 @@ import { useOtpLogin } from '../../composables/useOtpLogin';
 import type { Role } from '../../stores/auth';
 import PeshkashLogo from '../PeshkashLogo.vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean;
-  allowSkip?: boolean;
-  /** When true: hides close button, backdrop click shakes instead of closing */
-  noDismiss?: boolean;
-}>();
+  vendorName?: string;
+  hideCloseButton?: boolean;
+}>(), {
+  vendorName: '',
+  hideCloseButton: false,
+});
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void;
+  (e: 'dismiss', payload: { reason: 'backdrop' | 'close' | 'escape' }): void;
   (e: 'success', payload: { role: Role; vendorId: number | null }): void;
-  (e: 'skip'): void;
 }>();
 
 const loginState = useOtpLogin();
@@ -149,20 +161,34 @@ const { step, phone, loading, error, sendOtp, verifyOtp, reset } = loginState;
 
 const phoneInputRef = ref<HTMLInputElement | null>(null);
 const otpInputRef   = ref<HTMLInputElement | null>(null);
-const shaking       = ref(false);
+const drawerRef      = ref<HTMLElement | null>(null);
 
-// Strip +91 prefix from the composable's phone ref for display
+const stepIndex = computed(() => ({ phone: 0, otp: 1, success: 2 }[step.value] ?? 0));
+
+const phoneHeadline = computed(() =>
+  props.vendorName ? `Take ${props.vendorName} with you.` : 'Sign in to continue'
+);
+const successSub = computed(() =>
+  props.vendorName ? `${props.vendorName} is yours to revisit.` : 'Loading your workspace…'
+);
+
+// Strip everything but digits, capped at 10 — accepts pasted numbers with spaces/punctuation
 const rawPhone = computed({
-  get: () => phone.value.replace(/^\+91/, '').replace(/\s/g, ''),
-  set: (v) => { phone.value = v; },
+  get: () => phone.value.replace(/^\+91/, '').replace(/\D/g, '').slice(0, 10),
+  set: (v) => { phone.value = v.replace(/\D/g, '').slice(0, 10); },
+});
+const canSendPhone = computed(() => rawPhone.value.length === 10);
+
+// otp.value is exposed by useOtpLogin as a plain ref inside loginState; re-expose typed as string
+const otpValue = computed({
+  get: () => (loginState.otp.value as string) ?? '',
+  set: (v: string) => { loginState.otp.value = v.replace(/\D/g, '').slice(0, 6); },
 });
 
 async function send() {
-  if (!phone.value.startsWith('+')) {
-    phone.value = '+91' + phone.value.replace(/\D/g, '');
-  }
+  if (!canSendPhone.value) return;
+  phone.value = '+91' + rawPhone.value;
   await sendOtp();
-  // Focus OTP input after transition
   if (step.value === 'otp') {
     await nextTick();
     otpInputRef.value?.focus();
@@ -184,18 +210,36 @@ function changeNumber() {
   nextTick(() => phoneInputRef.value?.focus());
 }
 
-function handleClose() {
+/** Never interrupt an active OTP entry or verification — only phone-step and success allow dismiss. */
+function dismiss(reason: 'backdrop' | 'close' | 'escape') {
+  if (step.value === 'otp' && loading.value) return;
+  emit('dismiss', { reason });
   emit('update:modelValue', false);
 }
 
-/** Visual feedback when user taps backdrop on a non-dismissible modal */
-function shakeCard() {
-  if (shaking.value) return;
-  shaking.value = true;
-  setTimeout(() => { shaking.value = false; }, 500);
+function onDrawerKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    dismiss('escape');
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  // Light focus trap: wrap Tab/Shift+Tab within the drawer's focusable elements.
+  const focusable = drawerRef.value?.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+  if (!focusable || !focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
 }
 
-// Reset state and focus phone input when modal opens
+// Reset state and focus phone input when the drawer opens
 watch(
   () => props.modelValue,
   (open) => {
@@ -210,180 +254,211 @@ watch(
 <style scoped>
 /* ── Backdrop ───────────────────────────────────────────────────────────────── */
 .lm-backdrop {
+  /* The exact six tokens from BRAND_BRIEF.md — nothing invented. */
+  --lm-ink:        #1A1410;
+  --lm-muted:      #564C40;
+  --lm-cream:      #F5F2EE;
+  --lm-cream-dark: #EBE7E1;
+  --lm-gold:       #BD945A;
+  --lm-gold-light: #D4A87A;
+
   position: fixed;
   inset: 0;
   z-index: 1080;
-  background: rgba(0, 0, 0, 0.5);
-  /* A full-viewport backdrop-filter intermittently renders as an opaque blank frame in Chromium
-     (especially during route-level lazy loading). The solid scrim is both clearer and reliable. */
+  /* Spec: the page underneath should stay recognizable — a light scrim, not a heavy black one. */
+  background: rgba(26, 20, 16, 0.16);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 1rem;
 }
 
-/* ── Card ───────────────────────────────────────────────────────────────────── */
-.lm-card {
+/* ── Drawer ─────────────────────────────────────────────────────────────────── */
+.lm-drawer {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  background: var(--bs-body-bg, #fff);
-  border-radius: 20px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.08);
-  padding: 2rem 2rem 1.5rem;
+  max-width: 480px;
+  background: var(--lm-cream);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 24px rgba(26, 20, 16, 0.14);
+  padding-bottom: env(safe-area-inset-bottom, 0);
   overflow: hidden;
 }
 
-/* ── Close button ───────────────────────────────────────────────────────────── */
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.lm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.5rem 0;
+}
 .lm-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
   width: 32px;
   height: 32px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px -10px 0 0;
   border: none;
-  background: var(--bs-light, #f0f2f5);
+  background: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--bs-secondary-color, #6c757d);
-  font-size: 0.8rem;
+  color: var(--lm-muted);
+  font-size: 0.85rem;
   transition: background 0.15s, color 0.15s;
 }
-.lm-close:hover {
-  background: var(--bs-secondary-bg, #e2e5ea);
-  color: var(--bs-body-color, #212529);
-}
+.lm-close:hover { background: var(--lm-cream-dark); color: var(--lm-ink); }
 
-/* ── Brand ──────────────────────────────────────────────────────────────────── */
-.lm-brand {
+/* ── Progress ───────────────────────────────────────────────────────────────── */
+.lm-progress {
   display: flex;
-  align-items: center;
-  margin-bottom: 1.5rem;
+  gap: 5px;
+  padding: 0.9rem 1.5rem 0;
 }
+.lm-progress-seg {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--lm-cream-dark);
+  transition: background 0.2s;
+}
+.lm-progress-seg--active { background: var(--lm-gold); }
+
+/* ── Content ────────────────────────────────────────────────────────────────── */
+.lm-content { padding: 1.1rem 1.5rem 1.6rem; }
 
 /* ── Headings ───────────────────────────────────────────────────────────────── */
 .lm-title {
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  margin-bottom: 0.25rem;
-  color: var(--bs-body-color);
+  line-height: 1.25;
+  margin-bottom: 1rem;
+  color: var(--lm-ink);
 }
 .lm-sub {
-  font-size: 0.875rem;
-  color: var(--bs-secondary-color, #6c757d);
-  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--lm-muted);
+  margin: 0;
 }
 
 /* ── Field ──────────────────────────────────────────────────────────────────── */
-.lm-field { margin-bottom: 1rem; }
+.lm-field { margin-bottom: 1.1rem; }
 .lm-label {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--bs-body-color);
-  margin-bottom: 0.4rem;
+  letter-spacing: 0.07em;
+  color: var(--lm-ink);
+  margin-bottom: 0.5rem;
 }
 
 /* Phone row */
 .lm-phone-row {
   display: flex;
   align-items: center;
-  border: 1.5px solid var(--bs-border-color, #dee2e6);
-  border-radius: 12px;
+  border: 1.5px solid var(--lm-cream-dark);
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--bs-body-bg, #fff);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+  transition: border-color 0.15s;
 }
-.lm-phone-row:focus-within {
-  border-color: #BD945A;
-  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.18);
-}
+.lm-phone-row:focus-within { border-color: var(--lm-gold); }
 .lm-prefix {
-  padding: 0.65rem 0.9rem;
-  background: var(--bs-light, #f8f9fa);
-  border-right: 1.5px solid var(--bs-border-color, #dee2e6);
+  padding: 0.7rem 0.9rem;
+  background: var(--lm-cream-dark);
+  border-right: 1.5px solid var(--lm-cream-dark);
   font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--bs-secondary-color, #6c757d);
+  font-weight: 700;
+  color: var(--lm-muted);
   flex-shrink: 0;
 }
 .lm-input {
   flex: 1;
+  min-height: 44px;
   border: none;
   outline: none;
-  padding: 0.65rem 0.9rem;
+  padding: 0.7rem 0.9rem;
   font-size: 1rem;
   background: transparent;
-  color: var(--bs-body-color);
+  color: var(--lm-ink);
 }
 
 /* OTP input */
 .lm-otp-input {
   width: 100%;
-  border: 1.5px solid var(--bs-border-color, #dee2e6);
-  border-radius: 12px;
-  padding: 0.75rem;
+  min-height: 44px;
+  border: 1.5px solid var(--lm-cream-dark);
+  border-radius: 8px;
+  padding: 0.8rem;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.3em;
   text-align: center;
   outline: none;
-  background: var(--bs-body-bg, #fff);
-  color: var(--bs-body-color);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+  color: var(--lm-ink);
+  transition: border-color 0.15s;
 }
-.lm-otp-input:focus {
-  border-color: #BD945A;
-  box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.18);
-}
+.lm-otp-input:focus { border-color: var(--lm-gold); }
 
 /* ── Sent note ──────────────────────────────────────────────────────────────── */
 .lm-sent-note {
   font-size: 0.85rem;
-  color: var(--bs-secondary-color, #6c757d);
-  margin-bottom: 1rem;
+  color: var(--lm-muted);
+  margin-bottom: 1.1rem;
 }
 
 /* ── Error ──────────────────────────────────────────────────────────────────── */
 .lm-error {
   font-size: 0.82rem;
-  color: #dc3545;
-  background: #fff5f5;
-  border: 1px solid #ffd6d6;
+  color: #9B2A46;
+  background: #FBF0F3;
+  border: 1px solid #EFD2DB;
   border-radius: 8px;
   padding: 0.45rem 0.75rem;
-  margin-bottom: 0.75rem;
+  margin: 0 0 0.75rem;
 }
 
 /* ── Primary button ─────────────────────────────────────────────────────────── */
 .lm-btn {
   width: 100%;
-  padding: 0.8rem;
+  min-height: 44px;
+  padding: 0.85rem;
   border: none;
-  border-radius: 12px;
-  background: #BD945A;
+  border-radius: 8px;
+  background: var(--lm-gold);
   color: #fff;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.1s;
 }
-.lm-btn:disabled { opacity: 0.65; cursor: not-allowed; }
-.lm-btn:not(:disabled):hover { opacity: 0.88; }
+.lm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.lm-btn:not(:disabled):hover { background: var(--lm-gold-light); }
 .lm-btn:not(:disabled):active { transform: scale(0.98); }
+.lm-btn:focus-visible,
+.lm-close:focus-visible,
+.lm-link:focus-visible,
+.lm-input:focus-visible,
+.lm-otp-input:focus-visible {
+  outline: 2px solid var(--lm-gold);
+  outline-offset: 2px;
+}
 
 /* ── Link / change button ───────────────────────────────────────────────────── */
 .lm-link {
   border: none;
   background: none;
-  color: #BD945A;
+  color: var(--lm-gold);
   font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
   padding: 0;
@@ -391,74 +466,39 @@ watch(
 }
 
 /* ── Success state ──────────────────────────────────────────────────────────── */
-.lm-success {
-  text-align: center;
-  padding: 1.5rem 0 0.5rem;
-  color: var(--bs-success, #198754);
+.lm-success { text-align: center; padding: 0.5rem 0 0.2rem; }
+.lm-success-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--lm-gold);
+  color: var(--lm-gold);
+  font-size: 1.4rem;
 }
-.lm-success i {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: 0.6rem;
-}
-.lm-success p {
-  font-weight: 700;
-  font-size: 1.1rem;
-  margin-bottom: 0.2rem;
-}
-.lm-success-sub {
-  font-size: 0.82rem;
-  color: var(--bs-secondary-color, #6c757d);
-  font-weight: 400 !important;
-}
-
-/* ── Skip / footer ──────────────────────────────────────────────────────────── */
-.lm-skip-row {
-  text-align: center;
-  margin-top: 1rem;
-  margin-bottom: 0;
-}
-.lm-skip-link {
-  font-size: 0.82rem;
-  color: var(--bs-secondary-color, #6c757d);
-  margin-left: 0;
-}
-.lm-footer {
-  margin-top: 1.25rem;
-  margin-bottom: 0;
-  font-size: 0.75rem;
-  color: var(--bs-secondary-color, #6c757d);
-  text-align: center;
-  line-height: 1.5;
-}
+.lm-success .lm-title { margin-bottom: 0.4rem; }
 
 /* ── Transitions ────────────────────────────────────────────────────────────── */
 .lm-fade-enter-active,
-.lm-fade-leave-active { transition: opacity 0.2s ease; }
+.lm-fade-leave-active { transition: opacity 0.18s ease-out; }
 .lm-fade-enter-from,
 .lm-fade-leave-to { opacity: 0; }
 
-.lm-scale-enter-active { transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.lm-scale-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.lm-scale-enter-from,
-.lm-scale-leave-to { opacity: 0; transform: scale(0.92) translateY(8px); }
+.lm-drawer-enter-active { transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+.lm-drawer-leave-active { transition: transform 0.18s ease-in; }
+.lm-drawer-enter-from,
+.lm-drawer-leave-to { transform: translateY(100%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-fade-enter-active, .lm-fade-leave-active,
+  .lm-drawer-enter-active, .lm-drawer-leave-active { transition: opacity 0.01s linear !important; }
+  .lm-drawer-enter-from, .lm-drawer-leave-to { transform: none !important; }
+}
 
 /* ── Spinner ────────────────────────────────────────────────────────────────── */
 .spin { animation: spin 0.8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Shake (noDismiss visual feedback) ─────────────────────────────────────── */
-.lm-card--shaking {
-  animation: lm-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-}
-@keyframes lm-shake {
-  10%, 90%  { transform: translateX(-2px); }
-  20%, 80%  { transform: translateX( 4px); }
-  30%, 50%, 70% { transform: translateX(-6px); }
-  40%, 60%  { transform: translateX( 6px); }
-}
-
-/* Cursor hint: clicking a locked backdrop won't close */
-.lm-backdrop--nodismiss { cursor: not-allowed; }
-.lm-backdrop--nodismiss .lm-card { cursor: default; }
 </style>
