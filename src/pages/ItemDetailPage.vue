@@ -22,11 +22,13 @@
       <peshkash-loader size="110" theme="light" label="Loading item" />
     </div>
     <main v-else class="pk-reveal pk-item-shell" data-anim="animate__fadeInUp">
-      <button v-if="canGoBack" class="pk-back-btn" @click="router.back()" aria-label="Go back">
-        <i class="bi bi-chevron-left"></i> Back
-      </button>
       <header class="pk-item-header">
-        <p class="pk-item-overline">{{ itemData?.menu?.displayName || 'Peshkash selection' }}</p>
+        <div class="pk-item-toprow">
+          <button v-if="canGoBack" class="pk-back-btn" @click="router.back()" aria-label="Go back">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <p class="pk-item-overline">{{ itemData?.menu?.displayName || 'Peshkash selection' }}</p>
+        </div>
         <p v-if="categoryLabel" class="pk-item-category">{{ categoryLabel }}</p>
         <h1>{{ itemData?.displayName || itemData?.name }}</h1>
         <p v-if="itemData?.event?.vendor?.displayName" class="pk-item-byline">
@@ -100,6 +102,8 @@
             </span>
           </div>
         </div>
+        <br>
+        <br>
       </section>
 
     </main>
@@ -367,32 +371,41 @@ onMounted(loadItem)
 .pk-item-page-surface { background: #f3ede4; min-height: 100vh; }
 .pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
 .pk-item-shell { display: flex; flex-direction: column; margin: 0 auto; max-width: 1060px; }
+/* 460px isn't derived from anything else — it's just a comfortable width that
+   keeps the back button close to the overline text it sits beside. */
+.pk-item-toprow { position: relative; max-width: 460px; margin: 0 auto; }
 .pk-back-btn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   background: none;
   border: none;
-  padding: 0.3rem 0;
-  margin-top: 1.25rem;
-  font-size: 0.82rem;
-  font-weight: 500;
+  padding: 0;
+  font-size: 1.05rem;
   color: #bd945a;
   cursor: pointer;
-  opacity: 0.8;
+  opacity: 0.75;
   transition: opacity 0.15s;
 }
 .pk-back-btn:hover { opacity: 1; }
 
 .pk-reveal { opacity: 0; }
 .pk-visible { opacity: 1; }
-.pk-item-header { padding: clamp(3.25rem, 8vw, 6.5rem) 1rem clamp(2rem, 4vw, 3.25rem); text-align: center; }
+.pk-item-header { padding: clamp(1.25rem, 3vw, 2rem) 1rem clamp(1.5rem, 3vw, 2rem); text-align: center; }
 .pk-item-overline {
   color: #a77d45;
   font-size: 0.67rem;
   font-weight: 800;
   letter-spacing: 0.2em;
   margin: 0 0 1rem;
+  padding-left: 32px; /* reserves the back button's 24px width + gap so a long
+                          collection name can never run under it */
   text-transform: uppercase;
 }
 .pk-item-category {
@@ -406,7 +419,7 @@ onMounted(loadItem)
 .pk-item-header h1 {
   color: #19140f;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.9rem, 4vw, 3.25rem);
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -540,8 +553,8 @@ onMounted(loadItem)
 
 @media (max-width: 640px) {
   .pk-item-page { padding-bottom: 8rem; padding-left: 1rem; padding-right: 1rem; }
-  .pk-item-header { padding-bottom: 2rem; padding-top: 3.5rem; }
-  .pk-item-header h1 { font-size: clamp(2.5rem, 12vw, 3.8rem); }
+  .pk-item-header { padding-bottom: 1.5rem; padding-top: 1rem; }
+  .pk-item-header h1 { font-size: clamp(1.4rem, 7vw, 2rem); }
   .pk-hero-img { max-height: 46vh; }
   .pk-story { margin-top: 2.5rem; padding-inline: 0.35rem; }
   .pk-story-copy { line-height: 1.7; }

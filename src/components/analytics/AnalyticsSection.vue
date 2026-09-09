@@ -57,7 +57,7 @@
     <!-- Error state -->
     <div v-else-if="error" class="alert alert-warning d-flex align-items-center gap-2">
       <i class="bi bi-exclamation-triangle-fill"></i>
-      <span>Analytics data unavailable. The <code>analytics_event</code> table may not exist yet — run the migration.</span>
+      <span>{{ errorMessage }}</span>
     </div>
 
     <!-- Data -->
@@ -410,6 +410,7 @@ const isVendorRole = computed(() => authStore.role === 'vendor');
 
 const loading = ref(false);
 const error = ref(false);
+const errorMessage = ref('');
 const summary = ref<Summary | null>(null);
 const vendors = ref<Vendor[]>([]);
 const selectedVendorId = ref<number | undefined>(props.initialVendorId || undefined);
@@ -600,8 +601,18 @@ async function load() {
     if (selectedVendorId.value) params.vendorId = selectedVendorId.value;
     const res = await axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, { params });
     summary.value = res.data;
-  } catch {
+  } catch (err: any) {
     error.value = true;
+    if (err?.response?.status === 401) {
+      errorMessage.value = 'Your session has expired. Please log in again to view analytics.';
+      // This route's 401 doesn't carry the 'session_invalidated' code the global
+      // axios interceptor checks for, so it never logs the user out on its own —
+      // do it here so the login modal actually reappears instead of leaving this
+      // message stuck on screen with no way forward.
+      authStore.logout();
+    } else {
+      errorMessage.value = 'Analytics data could not be loaded. Please try again in a moment.';
+    }
   } finally {
     loading.value = false;
   }
