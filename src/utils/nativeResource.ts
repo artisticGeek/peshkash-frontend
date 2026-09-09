@@ -125,7 +125,12 @@ export function androidCalendarIntent(input: CalendarResourceInput) {
 
 export function androidContactIntent(input: ContactResourceInput) {
   return [
-    'intent:#Intent',
+    // Intent.parseUri() finds "#Intent;" and treats everything before it as the intent's data
+    // URI. With no "//" here, that substring is exactly "intent:" — landing on the parser's
+    // boundary case and risking a bogus self-referential data URI instead of none at all, which
+    // then fails to match any contacts app's intent-filter. "intent://#Intent" (empty host,
+    // matching the documented host-less pattern) keeps the data URI genuinely empty.
+    'intent://#Intent',
     // Contacts.CONTENT_TYPE ("...cursor.dir/contact") is the MIME type for the LIST of all
     // contacts — used for browsing/picking, not creating one — so no contacts app's manifest
     // matches ACTION_INSERT against it and the intent silently fails to launch anything.
