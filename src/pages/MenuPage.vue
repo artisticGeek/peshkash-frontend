@@ -1,11 +1,14 @@
 <template>
   <PublicNav v-if="!error" />
 
-  <!-- Login nudge — shown when vendor.requireLogin=true and user not yet logged in. Stays
-       dismissible; useRequireLoginGate reopens it after a delay if they close it without
+  <!-- Login nudge — shown when vendor.requireLogin=true and user not yet logged in. Bottom
+       drawer, dismissible via backdrop/Escape only (no close button, no skip link, per the
+       design team's spec); useRequireLoginGate reopens it after a delay if dismissed without
        logging in. -->
   <LoginModal
     v-model="loginModalOpen"
+    :vendor-name="loginVendorName"
+    hide-close-button
     @success="onLoginSuccess"
   />
 
@@ -142,6 +145,13 @@ const loginModalOpen = ref(false)
 const isLoggedIn = computed(() => authStore.isLoggedIn)
 
 function onLoginSuccess() {
+  // Fires once per completed login regardless of what the visitor does next — otherwise
+  // a login that isn't followed by another tracked action never shows a phone anywhere.
+  analytics.track('login_success', {
+    vendorId: menuData.value?.vendor?.id,
+    eventId: menuData.value?.event?.id,
+    menuId: menuData.value?.menu?.id,
+  })
   loginModalOpen.value = false
 }
 
@@ -153,6 +163,7 @@ const error = ref<string | null>(null)
 
 const vendorRequireLogin = computed(() => menuData.value?.vendor?.requireLogin)
 useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
+const loginVendorName = computed(() => menuData.value?.vendor?.displayName || '')
 
 // Filter state
 const searchQuery = ref('')
