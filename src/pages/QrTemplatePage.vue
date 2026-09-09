@@ -285,7 +285,7 @@
               <div v-if="design.grid?.rulers" class="canvas-ruler canvas-ruler--x" :style="rulerXStyle"></div>
               <div v-if="design.grid?.rulers" class="canvas-ruler canvas-ruler--y" :style="rulerYStyle"></div>
               <div class="canvas-root"
-                 :class="{ 'canvas-root--canonical': !design.customTemplate }"
+                 :class="{ 'canvas-root--canonical': !design.customTemplate, 'canvas-root--round-clip': design.customTemplate && activeTemplate?.format === 'round' }"
                  :style="{ width: displayW + 'px', height: displayH + 'px' }"
                  @click.self="selectedEl = null; selectedElementId = null">
 
@@ -347,7 +347,14 @@
                    :style="copyElStyle"
                    @pointerdown="onBlockPointerDown('copy', $event)"
                    @click.stop="selectedEl = 'copy'">
-                <div v-if="vis.eyebrow"
+                <!-- An empty line still requires v-if="vis.X" alone to render (a blank block
+                     reserving its own line-height + margin), but renderTemplateSvg()'s textBlock()
+                     skips any field whose text is empty and skips its vertical space too — so a
+                     design that leaves eyebrow/descriptor/cta blank rendered every line after the
+                     gap higher in the export than on canvas, in the worst case straight into the
+                     QR code above it. Requiring the text itself (not just the vis toggle) keeps
+                     both renderers reserving space for exactly the same set of lines. -->
+                <div v-if="vis.eyebrow && design.eyebrow"
                      class="t-line t-eyebrow"
                      :style="eyebrowStyle"
                      :key="'ey-' + designKey"
@@ -359,7 +366,7 @@
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.eyebrow = ($event.target as HTMLElement).innerText"
                 >{{ design.eyebrow }}</div>
-                <div v-if="vis.headline"
+                <div v-if="vis.headline && design.headline"
                      class="t-line t-headline"
                      :style="headlineStyle"
                      :key="'hl-' + designKey"
@@ -371,7 +378,7 @@
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.headline = ($event.target as HTMLElement).innerText"
                 >{{ design.headline }}</div>
-                <div v-if="vis.descriptor"
+                <div v-if="vis.descriptor && design.descriptor"
                      class="t-line t-descriptor"
                      :style="descriptorStyle"
                      :key="'ds-' + designKey"
@@ -383,7 +390,7 @@
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.descriptor = ($event.target as HTMLElement).innerText"
                 >{{ design.descriptor }}</div>
-                <div v-if="vis.cta"
+                <div v-if="vis.cta && design.cta"
                      class="t-line t-cta"
                      :style="ctaStyle"
                      :key="'ct-' + designKey"
@@ -1811,7 +1818,12 @@ function fromApi(row: Record<string, unknown>): StudioDesign & { vendorId?: numb
   const elements = Array.isArray(row.elements) && row.elements[0] && typeof row.elements[0] === 'object' ? row.elements[0] as Partial<StudioDesign> : {};
   const document = readStudioDocument(row.document);
   const documentDesign = document ? designFromDocument(document) : {};
-  return { ...blankDesign(), ...elements, ...settings, ...documentDesign, id: row.id as number,
+  // row.id is a Postgres BIGINT, which the pg driver returns as a string — saveDesign()
+  // and applyDesign() both branch on `typeof design.id === 'number'` to decide whether a
+  // design is already persisted remotely, so a bare cast here (not an actual conversion)
+  // left every design looking unsaved after load/save, causing autosave to POST a new
+  // row every cycle instead of PUT-ing the existing one.
+  return { ...blankDesign(), ...elements, ...settings, ...documentDesign, id: Number(row.id),
     vendorId: row.vendorId ? Number(row.vendorId) : undefined,
     name: String(row.name || settings.name || 'Untitled design'),
     libraryTemplateId: String(row.libraryTemplateId || settings.libraryTemplateId || qrManifest.templates[0].id),
@@ -2156,6 +2168,12 @@ onUnmounted(() => {
 .canvas-ruler--x{left:18px;right:0;top:0;height:17px;border-bottom:1px solid #cbbba8;background-image:repeating-linear-gradient(90deg,#8c7667 0 1px,transparent 1px 100%)}
 .canvas-ruler--y{top:18px;bottom:0;left:0;width:17px;border-right:1px solid #cbbba8;background-image:repeating-linear-gradient(0deg,#8c7667 0 1px,transparent 1px 100%)}
 .canvas-root{position:relative;flex-shrink:0;box-shadow:0 18px 44px rgba(26,20,16,.22);user-select:none}
+/* From-scratch "Round sticker" designs export with a circular clip (renderGenericTemplateSvg's
+   roundClip) applied to the whole composition, so anything left in the square canvas's corners
+   silently disappears on export. Without this, the live canvas stays a plain rectangle the entire
+   time it's being designed, so that loss is invisible until after export. Round format is always
+   a 1:1 square canvas, so a 50% border-radius here is the same circle the SVG clip-path draws. */
+.canvas-root--round-clip{border-radius:50%;overflow:hidden}
 .canvas-render{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;z-index:0}
 .canvas-grid{position:absolute;inset:0;pointer-events:none;z-index:5}
 /* Approved library templates are rendered once, by the export renderer itself. The DOM boxes
