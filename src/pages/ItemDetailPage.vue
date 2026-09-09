@@ -1,6 +1,14 @@
 <template>
   <div class="pk-item-page-surface">
   <PublicNav v-if="!error" />
+
+  <!-- Login nudge — shown when the item's vendor has requireLogin=true and the visitor
+       isn't logged in. Stays dismissible; useRequireLoginGate reopens it after a delay
+       if closed without logging in. -->
+  <LoginModal
+    v-model="loginModalOpen"
+    @success="onLoginSuccess"
+  />
   <div
     v-if="showFeedback"
     class="position-fixed top-0 start-50 translate-middle-x mt-3"
@@ -143,6 +151,9 @@ import PublicErrorState from '../components/PublicErrorState.vue';
 import { API_BASE_URL } from '../config';
 import { useAnalytics } from '../composables/useAnalytics';
 import { usePageMeta } from '../composables/usePageMeta';
+import { useRequireLoginGate } from '../composables/useRequireLoginGate';
+import { useAuthStore } from '../stores/auth';
+import LoginModal from '../components/auth/LoginModal.vue';
 import { sharePublicPage } from '../utils/socialShare';
 
 const route = useRoute()
@@ -162,6 +173,20 @@ onUnmounted(resetMeta)
 const itemData = ref<any>(null)
 const isLoading = ref(true)
 const imageFailed = ref(false)
+
+// Login nudge — same dismissible/re-nagging gate as MenuPage/VendorCardPage. This page is
+// reachable directly (a shared item link, a QR pointed straight at a dish), bypassing the
+// menu page entirely, so it needs its own copy of the gate rather than relying on the menu
+// page having already shown it.
+const authStore = useAuthStore()
+const loginModalOpen = ref(false)
+const isLoggedIn = computed(() => authStore.isLoggedIn)
+const vendorRequireLogin = computed(() => itemData.value?.event?.vendor?.requireLogin)
+useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
+
+function onLoginSuccess() {
+  loginModalOpen.value = false
+}
 
 const ITEM_SECTION_MAP: Record<string, { label: string; icon: string }> = {
   dish:     { label: 'The flavour story', icon: 'bi-fork-knife' },
@@ -330,6 +355,12 @@ async function loadItem() {
       image: data?.image || undefined,
       type: 'article',
     })
+
+    // If the vendor requires login and the visitor isn't logged in, nudge them.
+    // No redirect — just a dismissible nag; they stay on this page either way.
+    if (data?.event?.vendor?.requireLogin && !isLoggedIn.value) {
+      loginModalOpen.value = true
+    }
 
     analytics.track('item_detail_view', {
       vendorId: data?.event?.vendor?.id,

@@ -126,8 +126,13 @@ export function androidCalendarIntent(input: CalendarResourceInput) {
 export function androidContactIntent(input: ContactResourceInput) {
   return [
     'intent:#Intent',
-    'action=android.intent.action.INSERT',
-    'type=vnd.android.cursor.dir/contact',
+    // Contacts.CONTENT_TYPE ("...cursor.dir/contact") is the MIME type for the LIST of all
+    // contacts — used for browsing/picking, not creating one — so no contacts app's manifest
+    // matches ACTION_INSERT against it and the intent silently fails to launch anything.
+    // Android's own "Common Intents" docs use ACTION_INSERT_OR_EDIT + CONTENT_ITEM_TYPE
+    // ("...cursor.item/contact", singular) for inserting a single new contact.
+    'action=android.intent.action.INSERT_OR_EDIT',
+    'type=vnd.android.cursor.item/contact',
     `S.name=${intentValue(input.name)}`,
     input.organization ? `S.company=${intentValue(input.organization)}` : '',
     input.phone ? `S.phone=${intentValue(input.phone)}` : '',
@@ -152,6 +157,13 @@ export function contactResource(input: ContactResourceInput) {
   };
 }
 
+// iPadOS 13+ reports as "MacIntel" in the UA string to pass desktop-site checks, but a real
+// Mac never reports touch points — this is the standard way to tell the two apart.
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 export async function openNativeResource(file: File, androidIntent: string, shareTitle: string): Promise<NativeResourceResult> {
   // Android's insertion intents open the installed Calendar/Contacts handler
   // directly and retain the browser click's transient user activation.
@@ -160,7 +172,13 @@ export async function openNativeResource(file: File, androidIntent: string, shar
     return 'intent';
   }
 
-  if (typeof navigator.canShare === 'function' && typeof navigator.share === 'function' && navigator.canShare({ files: [file] })) {
+  // iOS/iPadOS recognizes .ics/.vcf content-types natively and opens its own "Add to
+  // Calendar"/"Add to Contacts" screen on direct navigation to the file — routing through
+  // the Web Share API instead detours through the generic share sheet (AirDrop/Messages/
+  // Mail/Save to Files/...) with no guaranteed one-tap path back to that screen. iOS must
+  // skip straight to the plain-navigation fallback below, same as a browser with no file
+  // sharing support at all.
+  if (!isIOS() && typeof navigator.canShare === 'function' && typeof navigator.share === 'function' && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: shareTitle });
       return 'shared';

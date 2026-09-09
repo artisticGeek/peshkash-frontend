@@ -1,10 +1,11 @@
 <template>
   <PublicNav v-if="!error" />
 
-  <!-- Login gate — shown when vendor.requireLogin=true and user not yet logged in -->
+  <!-- Login nudge — shown when vendor.requireLogin=true and user not yet logged in. Stays
+       dismissible; useRequireLoginGate reopens it after a delay if they close it without
+       logging in. -->
   <LoginModal
     v-model="loginModalOpen"
-    no-dismiss
     @success="onLoginSuccess"
   />
 
@@ -125,6 +126,7 @@ import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
 import { useAuthStore } from '../stores/auth'
 import { usePageMeta } from '../composables/usePageMeta'
+import { useRequireLoginGate } from '../composables/useRequireLoginGate'
 import { sharePublicPage } from '../utils/socialShare'
 
 const route = useRoute()
@@ -148,6 +150,9 @@ const analytics = useAnalytics()
 const menuData = ref<any>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
+
+const vendorRequireLogin = computed(() => menuData.value?.vendor?.requireLogin)
+useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
 
 // Filter state
 const searchQuery = ref('')
