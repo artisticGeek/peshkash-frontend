@@ -51,11 +51,12 @@
           <div v-if="row.pageName" class="el-page">{{ row.pageName }}</div>
         </div>
 
-        <!-- Right: session badge — the backend doesn't track a session/visitor identity yet
-             (no session_id or per-event phone column exists), so this stays hidden until it does
-             rather than showing an empty badge with a "Session: undefined" tooltip. -->
+        <!-- Right: identity badge — phone once the visitor has logged in; otherwise the
+             persistent per-browser device UUID (analytics_event.device_id), which is what
+             sessionId actually holds now. Hidden entirely only when neither is present
+             (e.g. an old row from before device_id existed). -->
         <div v-if="row.phone || row.sessionId" class="el-session">
-          <span class="el-session-badge" :title="row.phone ? `Phone: ${row.phone}` : `Session: ${row.sessionId}`">
+          <span class="el-session-badge" :title="row.phone ? `Phone: ${row.phone}` : `Device: ${row.sessionId}`">
             <i class="bi bi-person-circle me-1" />{{ row.phone ?? row.sessionId }}
           </span>
         </div>
@@ -83,8 +84,8 @@ interface EventRow {
   eventType: string;
   actionType: string | null;
   deviceType: string;
-  // Not currently populated by the backend — no session/visitor identity is tracked in the
-  // analytics_event schema (no session_id or per-event phone column).
+  // Despite the name, this is the persistent per-browser device UUID (analytics_event.device_id)
+  // once that's set, falling back to a UA hash for older rows recorded before it existed.
   sessionId?: string;
   phone?: string | null;
   referrer: string | null;

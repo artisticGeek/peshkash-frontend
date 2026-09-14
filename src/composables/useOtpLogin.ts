@@ -7,6 +7,7 @@ import { ref } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useAuthStore, Role } from '../stores/auth';
+import { getDeviceId } from '../utils/deviceId';
 
 export type OtpStep = 'phone' | 'otp' | 'success';
 
@@ -46,10 +47,11 @@ export function useOtpLogin() {
     error.value   = '';
     try {
       const { data } = await axios.post<{
-        token: string; role: Role; vendorId: number | null; phone: string;
+        token: string; role: Role; vendorId: number | null; phone: string; sectionGrants?: string[];
       }>(`${API_BASE_URL}/auth/verify-otp`, {
-        phone: phone.value.trim(),
-        otp:   otp.value.trim(),
+        phone:    phone.value.trim(),
+        otp:      otp.value.trim(),
+        deviceId: getDeviceId(),
       });
       authStore.login(data);
       step.value = 'success';

@@ -15,6 +15,7 @@
 
 import { API_BASE_URL } from '../config';
 import { gtagEvent } from '../utils/ga';
+import { getDeviceId } from '../utils/deviceId';
 
 export interface AnalyticsContext {
   vendorId?: number;
@@ -82,7 +83,13 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
   function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): void {
     const merged = { ...ctx, ...extra };
     const phone = getStoredPhone();
-    const payload = { actionType, ...merged, pageUrl: window.location.href, ...(phone ? { phone } : {}) };
+    const payload = {
+      actionType,
+      ...merged,
+      pageUrl: window.location.href,
+      deviceId: getDeviceId(),
+      ...(phone ? { phone } : {}),
+    };
 
     // ── 1. Backend (Postgres via Redis queue) ──────────────────────────
     // keepalive:true lets the request outlive page navigation (same guarantee

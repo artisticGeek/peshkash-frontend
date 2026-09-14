@@ -21,11 +21,14 @@ import axios from 'axios';
 export type Role = 'admin' | 'vendor' | 'customer';
 
 export interface AuthState {
-  token:     string;
-  phone:     string;
-  role:      Role;
-  vendorId:  number | null;
-  expiresAt: number;   // ms since epoch
+  token:         string;
+  phone:         string;
+  role:          Role;
+  vendorId:      number | null;
+  // UI convenience only (which dashboard sections to render) — the server re-checks
+  // admin_section_grant live on every admin request, this is never the authorization source.
+  sectionGrants: string[];
+  expiresAt:     number;   // ms since epoch
 }
 
 const STORAGE_KEY          = 'peshkash_auth_v1';
@@ -40,7 +43,7 @@ const SLIDE_THRESHOLD_MS   = 45 * 24 * 60 * 60 * 1000; // slide when < 45 days r
  * we can read the claims. The server verifies every request anyway.
  * We use this to derive role/phone/vendorId rather than trusting stored fields.
  */
-function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId: number | null } | null {
+function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId: number | null; sectionGrants: string[] } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
@@ -49,9 +52,10 @@ function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId:
     const payload = JSON.parse(json);
     if (typeof payload.phone !== 'string' || typeof payload.role !== 'string') return null;
     return {
-      phone:    payload.phone,
-      role:     payload.role as Role,
-      vendorId: typeof payload.vendorId === 'number' ? payload.vendorId : null,
+      phone:         payload.phone,
+      role:          payload.role as Role,
+      vendorId:      typeof payload.vendorId === 'number' ? payload.vendorId : null,
+      sectionGrants: Array.isArray(payload.sectionGrants) ? payload.sectionGrants.filter((s: unknown) => typeof s === 'string') : [],
     };
   } catch {
     return null;
@@ -86,11 +90,12 @@ export const useAuthStore = defineStore('auth', () => {
         ? Date.now() + TTL_MS
         : parsed.expiresAt;
       state.value = {
-        token:     parsed.token,
+        token:         parsed.token,
         expiresAt,
-        phone:     decoded.phone,
-        role:      decoded.role,
-        vendorId:  decoded.vendorId,
+        phone:         decoded.phone,
+        role:          decoded.role,
+        vendorId:      decoded.vendorId,
+        sectionGrants: decoded.sectionGrants,
       };
       if (expiresAt !== parsed.expiresAt) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, expiresAt }));
@@ -108,11 +113,12 @@ export const useAuthStore = defineStore('auth', () => {
     const decoded = decodeJwtPayload(data.token);
     if (!decoded) return;
     const full: AuthState = {
-      token:     data.token,
-      expiresAt: Date.now() + TTL_MS,
-      phone:     decoded.phone,
-      role:      decoded.role,
-      vendorId:  decoded.vendorId,
+      token:         data.token,
+      expiresAt:     Date.now() + TTL_MS,
+      phone:         decoded.phone,
+      role:          decoded.role,
+      vendorId:      decoded.vendorId,
+      sectionGrants: decoded.sectionGrants,
     };
     state.value = full;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(full));
@@ -134,6 +140,10 @@ export const useAuthStore = defineStore('auth', () => {
   const vendorId    = computed(() => state.value?.vendorId ?? null);
   const phone       = computed(() => state.value?.phone ?? null);
   const token       = computed(() => state.value?.token ?? null);
+  const sectionGrants = computed(() => state.value?.sectionGrants ?? []);
+  function hasSection(key: string): boolean {
+    return sectionGrants.value.includes(key);
+  }
 
   // Bootstrap: load persisted session and restore axios header
   _load();
@@ -153,5 +163,7 @@ export const useAuthStore = defineStore('auth', () => {
     vendorId,
     phone,
     token,
+    sectionGrants,
+    hasSection,
   };
 });

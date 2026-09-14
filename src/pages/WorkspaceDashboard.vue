@@ -1758,11 +1758,24 @@
             <button class="icon-button small" title="Refresh" @click="loadAdminUsers"><i class="bi bi-arrow-clockwise"></i></button>
           </div>
           <div class="ws-admin-list">
-            <div v-for="au in adminUsers" :key="au.phone" class="ws-admin-row">
-              <span class="ws-admin-phone">{{ au.phone }}</span>
-              <span v-if="au.phone === authStore.phone" class="ws-admin-you">you</span>
-              <button v-else class="icon-button icon-btn--danger small" title="Remove admin" @click="removeAdminUser(au.phone)"><i class="bi bi-x"></i></button>
-            </div>
+            <template v-for="au in adminUsers" :key="au.phone">
+              <div class="ws-admin-row">
+                <span class="ws-admin-phone">{{ au.phone }}</span>
+                <span v-if="au.phone === authStore.phone" class="ws-admin-you">you</span>
+                <button class="icon-button small" title="Manage sections" @click="openGrantsEditor(au.phone)"><i class="bi bi-sliders"></i></button>
+                <button v-if="au.phone !== authStore.phone" class="icon-button icon-btn--danger small" title="Remove admin" @click="removeAdminUser(au.phone)"><i class="bi bi-x"></i></button>
+              </div>
+              <div v-if="editingGrantsFor === au.phone" class="ws-admin-grants">
+                <label v-for="s in GRANTABLE_SECTIONS" :key="s.key" class="ws-admin-grant-item">
+                  <input type="checkbox" :checked="editingGrantsSelection.has(s.key)" @change="toggleGrantSection(s.key)" />
+                  <i :class="s.icon"></i>
+                  <span>{{ s.label }}</span>
+                </label>
+                <button class="btn btn-sm btn-primary" :disabled="grantsSaving" @click="saveGrantsEditor(au.phone)">
+                  <i class="bi bi-check2 me-1"></i>Save
+                </button>
+              </div>
+            </template>
             <div v-if="!adminUsers.length" class="ws-modal-empty">No admins.</div>
           </div>
           <div class="ws-admin-add-row">
@@ -2050,10 +2063,9 @@ import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
+import { sectionFromPath, type SectionKey } from '../utils/dashboardSections';
 
 const authStore = useAuthStore();
-
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'resources' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; socialPreview: SocialPreviewConfig; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
@@ -2086,9 +2098,14 @@ const sections = [
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
-// Some sections are only visible to admins
+// Admins see whichever sections they've been granted (admin_section_grant, checked
+// server-side on every request too — this filter is cosmetic, not the security boundary).
+// 'home' is always visible, never a grantable section. Vendors keep their existing,
+// separate behavior — grants are an admin-only concept.
 const visibleSections = computed(() =>
-  authStore.isAdmin ? sections : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
+  authStore.isAdmin
+    ? sections.filter(s => s.key === 'home' || authStore.hasSection(s.key))
+    : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
 );
 
 const route = useRoute();
@@ -2113,26 +2130,6 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   insights:       '/dashboard/analytics',
   sessions:       '/dashboard/sessions',
 };
-
-function sectionFromPath(path: string): SectionKey {
-  if (/^\/dashboard\/vendors\/\d+/.test(path)) return 'vendorWorkspace';
-  if (path.startsWith('/dashboard/vendors')) return 'vendors';
-  if (/^\/dashboard\/events\/\d+\/qr-sheet/.test(path)) return 'qrSheet';
-  if (/^\/dashboard\/events\/\d+\/publish/.test(path)) return 'eventWorkspace';
-  if (/^\/dashboard\/events\/\d+/.test(path)) return 'eventWorkspace';
-  if (path === '/dashboard/events') return 'events';
-  // /dashboard/items/:id opens item analytics drawer while staying on inventory
-  if (path.startsWith('/dashboard/items')) return 'inventory';
-  if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
-  if (path.startsWith('/dashboard/menus/preview')) return 'preview';
-  if (path.startsWith('/dashboard/menus')) return 'designer';
-  if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
-  if (path.startsWith('/dashboard/resources')) return 'resources';
-  if (path.startsWith('/dashboard/qr')) return 'qr';
-  if (path.startsWith('/dashboard/analytics')) return 'insights';
-  if (path.startsWith('/dashboard/sessions')) return 'sessions';
-  return 'home';
-}
 
 const activeSection = computed<SectionKey>({
   get: () => sectionFromPath(route.path),
@@ -4615,6 +4612,39 @@ watch(showWsModal, (open) => {
   if (open && authStore.isAdmin) loadAdminUsers();
 });
 
+// ── Admin section grants — flat per-admin list, no role hierarchy ──────────────
+// The nav filter (visibleSections) and the router guard are cosmetic; the server
+// re-checks admin_section_grant on every admin request regardless of this editor.
+const GRANTABLE_SECTIONS = sections.filter(s => s.key !== 'home');
+const editingGrantsFor = ref<string | null>(null);
+const editingGrantsSelection = ref<Set<string>>(new Set());
+const grantsSaving = ref(false);
+
+async function openGrantsEditor(phone: string) {
+  if (editingGrantsFor.value === phone) { editingGrantsFor.value = null; return; }
+  editingGrantsFor.value = phone;
+  editingGrantsSelection.value = new Set();
+  try {
+    const { data } = await axios.get<{ phone: string; sections: string[] }>(adminUrl('/section-grants'), { params: { phone } });
+    editingGrantsSelection.value = new Set(data.sections);
+  } catch (err) { setError(err); }
+}
+
+function toggleGrantSection(key: string) {
+  const next = new Set(editingGrantsSelection.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  editingGrantsSelection.value = next;
+}
+
+async function saveGrantsEditor(phone: string) {
+  grantsSaving.value = true;
+  try {
+    await axios.put(adminUrl('/section-grants'), { phone, sections: [...editingGrantsSelection.value] });
+    editingGrantsFor.value = null;
+  } catch (err) { setError(err); }
+  finally { grantsSaving.value = false; }
+}
+
 // ── Session management ───────────────────────────────────────────────────────
 type SessionInvalidation = { phone: string; invalidate_before: string; created_at: string };
 const sessionInvalidations = ref<SessionInvalidation[]>([]);
@@ -5619,6 +5649,24 @@ label {
 }
 .ws-admin-add-row .form-control { flex: 1; font-size: 0.85rem; }
 .icon-button.small { font-size: 0.75rem; height: 24px; width: 24px; }
+.ws-admin-grants {
+  background: #f8f5f0;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 2px 0 8px;
+  padding: 8px 10px;
+}
+.ws-admin-grant-item {
+  align-items: center;
+  display: flex;
+  font-size: 0.78rem;
+  gap: 4px;
+  width: calc(50% - 5px);
+}
+.ws-admin-grant-item input { margin: 0; }
+.ws-admin-grants .btn { flex-basis: 100%; margin-top: 4px; }
 
 
 /* Inline menu attach row */

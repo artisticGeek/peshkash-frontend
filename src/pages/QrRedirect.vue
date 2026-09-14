@@ -17,6 +17,7 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { API_BASE_URL } from '../config';
 import { gtagEvent } from '../utils/ga';
+import { getDeviceId } from '../utils/deviceId';
 import PublicErrorState from '../components/PublicErrorState.vue';
 
 const route = useRoute();
@@ -34,7 +35,7 @@ async function resolveQr(qrHash: string) {
     // Add timestamp to bust any HTTP/CDN caching so every scan reaches the server
     // (the server records a QR scan event on each request).
     const apiResponse = await fetch(
-      `${API_BASE_URL}/details/${qrHash}?t=${Date.now()}`,
+      `${API_BASE_URL}/details/${qrHash}?t=${Date.now()}&deviceId=${getDeviceId()}`,
       { cache: 'no-store' },
     );
 

@@ -3,6 +3,7 @@ import ItemDetailPage from './pages/ItemDetailPage.vue'
 import LandingPage from './pages/LandingPage.vue'
 import MenuPage from './pages/MenuPage.vue'
 import QrRedirect from './pages/QrRedirect.vue' // Import the new component
+import { grantSectionForPath } from './utils/dashboardSections'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -167,14 +168,18 @@ export const router = createRouter({
 })
 
 // ── JWT decode helper (mirrors auth.ts — no signature verification, just read claims) ──
-function _decodeJwt(token: string): { role: string; vendorId: number | null } | null {
+function _decodeJwt(token: string): { role: string; vendorId: number | null; sectionGrants: string[] } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     const p = JSON.parse(json);
     if (typeof p.role !== 'string') return null;
-    return { role: p.role, vendorId: typeof p.vendorId === 'number' ? p.vendorId : null };
+    return {
+      role: p.role,
+      vendorId: typeof p.vendorId === 'number' ? p.vendorId : null,
+      sectionGrants: Array.isArray(p.sectionGrants) ? p.sectionGrants.filter((s: unknown) => typeof s === 'string') : [],
+    };
   } catch {
     return null;
   }
@@ -197,10 +202,16 @@ router.beforeEach((to) => {
     // Decode role/vendorId from JWT — ignores any tampering with the plain stored fields
     const decoded = _decodeJwt(auth.token);
     if (!decoded) return true; // malformed token — LoginModal will prompt
-    const { role, vendorId } = decoded;
+    const { role, vendorId, sectionGrants } = decoded;
     // Customers have no dashboard access — send them home
     if (role === 'customer') return '/';
     if (to.meta.adminOnly && role !== 'admin') return '/dashboard/home';
+    // Admin section grants — cosmetic redirect only; every admin API route re-checks
+    // admin_section_grant live regardless of what the client believes it can see.
+    if (role === 'admin') {
+      const requiredSection = grantSectionForPath(to.path);
+      if (requiredSection && !sectionGrants.includes(requiredSection)) return '/dashboard/home';
+    }
     // Vendor users are locked to their own workspace
     if (role === 'vendor' && vendorId) {
       const path = to.path;
