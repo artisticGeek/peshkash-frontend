@@ -4,12 +4,12 @@
       <div>
         <p class="engagement-kicker">Peshkash engagement</p>
         <h2>Bring people back, thoughtfully.</h2>
-        <p>Build campaigns only for people who explicitly asked to hear from {{ vendorName || 'this vendor' }}.</p>
+        <p>Reach Peshkash subscribers who have interacted with {{ vendorName || 'this vendor' }}.</p>
       </div>
       <span class="sender-chip"><i class="bi bi-whatsapp"></i> Sent by Peshkash Updates</span>
     </header>
 
-    <div v-if="!vendorId" class="engagement-empty"><i class="bi bi-building"></i><div><strong>Select a vendor</strong><p>Campaigns and consented audiences are always vendor-specific.</p></div></div>
+    <div v-if="!vendorId" class="engagement-empty"><i class="bi bi-building"></i><div><strong>Select a vendor</strong><p>Campaign audiences are matched from Peshkash subscribers who interacted with that vendor.</p></div></div>
     <div v-else-if="loading" class="engagement-loading"><span></span><span></span><span></span></div>
     <div v-else-if="error" class="engagement-empty"><i class="bi bi-cloud-slash"></i><div><strong>Could not load Engage</strong><p>{{ error }}</p></div><button class="eg-link" @click="load">Try again</button></div>
 

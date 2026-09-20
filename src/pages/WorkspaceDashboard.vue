@@ -2713,7 +2713,7 @@ const activeSubtitle = computed(() => {
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
     resources:      'Preview, share and download the approved Peshkash brochure collection.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
-    engagement:     'Build consent-safe WhatsApp and push campaigns for people who chose to hear from this vendor.',
+    engagement:     'Build WhatsApp and push campaigns for Peshkash subscribers who interacted with this vendor.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
   return copy[activeSection.value];

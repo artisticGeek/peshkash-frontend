@@ -1,5 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
-import { enableVendorPush, getPushConfig, pwaInstalled, pushSupported } from '../utils/pushNotifications'
+import { enablePushNotifications, getPushConfig, pwaInstalled, pushSupported } from '../utils/pushNotifications'
 import { gtagEvent } from '../utils/ga'
 
 interface InstallPromptChoice { outcome: 'accepted' | 'dismissed'; platform: string }
@@ -22,7 +22,6 @@ const HOME_VISITS_KEY = 'peshkash_pwa_home_visits'
 const deferredInstall = shallowRef<InstallPromptEvent | null>(null)
 const installOpen = ref(false)
 const notificationOpen = ref(false)
-const notificationContext = ref<PwaEngagementContext | null>(null)
 const notificationError = ref('')
 const notificationBusy = ref(false)
 const installed = ref(false)
@@ -119,9 +118,9 @@ function dismissInstall(days = 14) {
   localStorage.setItem(INSTALL_SNOOZE_KEY, String(Date.now() + days * DAY))
 }
 
-async function requestNotification(context: PwaEngagementContext, manual = false) {
+async function requestNotification(manual = false) {
   initializePwaLifecycle()
-  if (!installed.value || surfaceUsedThisSession || !context.vendorId || !pushSupported()) return false
+  if (!installed.value || surfaceUsedThisSession || !pushSupported()) return false
   if (Notification.permission !== 'default') return false
   if (!manual && snoozed(NOTIFICATION_SNOOZE_KEY)) return false
   try {
@@ -131,7 +130,6 @@ async function requestNotification(context: PwaEngagementContext, manual = false
     return false
   }
   installOpen.value = false
-  notificationContext.value = context
   notificationError.value = ''
   notificationOpen.value = true
   surfaceUsedThisSession = true
@@ -139,12 +137,11 @@ async function requestNotification(context: PwaEngagementContext, manual = false
 }
 
 async function enableNotifications() {
-  const vendorId = notificationContext.value?.vendorId
-  if (!vendorId || notificationBusy.value) return
+  if (notificationBusy.value) return
   notificationBusy.value = true
   notificationError.value = ''
   try {
-    await enableVendorPush(vendorId)
+    await enablePushNotifications()
     notificationOpen.value = false
   } catch (error: any) {
     notificationError.value = error?.response?.data?.error || error?.message || 'Could not enable notifications.'
@@ -159,11 +156,11 @@ function dismissNotification() {
   localStorage.setItem(NOTIFICATION_SNOOZE_KEY, String(Date.now() + 14 * DAY))
 }
 
-function considerAfterEngagement(context: PwaEngagementContext, loggedIn: boolean) {
+function considerAfterEngagement(_context: PwaEngagementContext, loggedIn: boolean) {
   if (!loggedIn) return
   window.setTimeout(() => {
     if (!installed.value) requestInstall()
-    else requestNotification(context)
+    else requestNotification()
   }, 6500)
 }
 
@@ -187,7 +184,6 @@ export function usePwaLifecycle() {
     installAvailable,
     installOpen,
     notificationOpen,
-    notificationContext,
     notificationError,
     notificationBusy,
     isIosInstallHelp,
