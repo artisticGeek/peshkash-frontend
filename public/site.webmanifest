@@ -4,15 +4,19 @@
   "id": "/",
   "description": "Keep the pieces, places and experiences that caught your eye.",
   "icons": [
-    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/peshkash-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "theme_color": "#1A1410",
   "background_color": "#F5F2EE",
   "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "any",
   "scope": "/",
   "start_url": "/home?source=pwa",
+  "prefer_related_applications": false,
   "categories": ["lifestyle", "shopping"],
   "shortcuts": [
     { "name": "Saved items", "short_name": "Saved", "url": "/home/saved", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] },
