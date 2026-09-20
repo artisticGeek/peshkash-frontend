@@ -21,7 +21,7 @@ export async function getPushConfig() {
   return (await axios.get<{ enabled:boolean;publicKey:string }>(`${API_BASE_URL}/user/push/config`)).data
 }
 
-export async function enableVendorPush(vendorId: number) {
+export async function enablePushNotifications() {
   if (!pwaInstalled()) throw new Error('Install Peshkash first, then enable notifications from the installed app.')
   if (!pushSupported()) throw new Error('Browser notifications are not supported on this device.')
   const config = await getPushConfig()
@@ -34,9 +34,12 @@ export async function enableVendorPush(vendorId: number) {
     userVisibleOnly: true,
     applicationServerKey: applicationServerKey(config.publicKey),
   })
-  await axios.post(`${API_BASE_URL}/user/push/subscriptions`, { vendorId, subscription: subscription.toJSON() })
+  await axios.post(`${API_BASE_URL}/user/push/subscriptions`, { subscription: subscription.toJSON() })
 }
 
-export async function disableVendorPush(vendorId: number) {
-  await axios.delete(`${API_BASE_URL}/user/push/subscriptions/${vendorId}`)
+export async function disablePushNotifications() {
+  const registration = await navigator.serviceWorker.ready
+  const subscription = await registration.pushManager.getSubscription()
+  await axios.delete(`${API_BASE_URL}/user/push/subscriptions`)
+  await subscription?.unsubscribe()
 }

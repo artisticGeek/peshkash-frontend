@@ -32,8 +32,8 @@
             <template v-else>
               <span class="pwa-sheet-mark"><i class="bi bi-bell"></i></span>
               <p class="pwa-sheet-kicker">Stay in the loop</p>
-              <h2 id="pwa-notification-title">Updates from {{ notificationContext?.vendorName || 'this vendor' }}?</h2>
-              <p class="pwa-sheet-copy">Get useful updates about new collections and experiences from this vendor. Nothing else is opted in.</p>
+              <h2 id="pwa-notification-title">Turn on Peshkash notifications?</h2>
+              <p class="pwa-sheet-copy">Hear about relevant collections, events and the things you choose to follow.</p>
               <div class="pwa-consent-note"><i class="bi bi-shield-check"></i><span>You can turn this off anytime in Peshkash preferences.</span></div>
               <p v-if="notificationError" class="pwa-error" role="alert">{{ notificationError }}</p>
               <div class="pwa-sheet-actions">
@@ -60,7 +60,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const lifecycle = usePwaLifecycle()
 const {
-  installOpen, notificationOpen, notificationContext, notificationError,
+  installOpen, notificationOpen, notificationError,
   notificationBusy, isIosInstallHelp, install, dismissInstall,
   enableNotifications, dismissNotification, considerAfterEngagement,
   considerAfterLogin, noteHomeVisit,
