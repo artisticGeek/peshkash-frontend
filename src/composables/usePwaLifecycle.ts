@@ -1,8 +1,10 @@
 import { computed, ref, shallowRef } from 'vue'
 import { enableVendorPush, getPushConfig, pwaInstalled, pushSupported } from '../utils/pushNotifications'
+import { gtagEvent } from '../utils/ga'
 
 interface InstallPromptChoice { outcome: 'accepted' | 'dismissed'; platform: string }
 interface InstallPromptEvent extends Event {
+  platforms?: string[]
   prompt: () => Promise<void>
   userChoice: Promise<InstallPromptChoice>
 }
@@ -60,6 +62,9 @@ function initializePwaLifecycle() {
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault()
     deferredInstall.value = event as InstallPromptEvent
+    gtagEvent('pwa_install_available', {
+      platforms: (event as InstallPromptEvent).platforms?.join(',') || 'web',
+    })
     if (installRequested) requestInstall()
   })
   window.addEventListener('appinstalled', () => {
@@ -68,6 +73,9 @@ function initializePwaLifecycle() {
     installOpen.value = false
     surfaceUsedThisSession = true
     localStorage.setItem('peshkash_pwa_installed_at', String(Date.now()))
+    gtagEvent('pwa_installed', {
+      display_mode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
+    })
   })
 }
 
@@ -90,8 +98,13 @@ async function install() {
   if (isIosInstallHelp.value) return
   const prompt = deferredInstall.value
   if (!prompt) return
+  gtagEvent('pwa_install_prompt_opened')
   await prompt.prompt()
   const choice = await prompt.userChoice
+  gtagEvent('pwa_install_prompt_result', {
+    outcome: choice.outcome,
+    platform: choice.platform || 'web',
+  })
   deferredInstall.value = null
   installRequested = false
   installOpen.value = false

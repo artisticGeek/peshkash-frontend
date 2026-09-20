@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Peshkash app icon">
+  <rect width="512" height="512" rx="96" fill="#1A1410"/>
+  <g transform="translate(80 80) scale(.8)">
+    <g fill="none" stroke="#BB9057" stroke-width="5" stroke-linecap="square" stroke-linejoin="miter">
+      <path d="M50 42H10v40"/>
+      <path d="M362 42h39v40"/>
+      <path d="M10 330v41h40"/>
+      <path d="M362 371h39v-41"/>
+    </g>
+    <g shape-rendering="geometricPrecision">
+      <path d="M177 84h79.5l45 41L177 196.5Z" fill="#E8DBCE"/>
+      <path d="M301.5 125v57.5l-45.5 47.5-79-33.5Z" fill="#C5AF9D"/>
+      <path d="M177 196.5 256 230h-79Z" fill="#8C7667"/>
+      <path d="M120.5 84h57v251l-28-26-29 26Z" fill="#BB9057"/>
+    </g>
+  </g>
+</svg>
