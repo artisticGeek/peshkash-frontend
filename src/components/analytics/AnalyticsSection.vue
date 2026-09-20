@@ -72,6 +72,15 @@
         </div>
         <div class="col-6 col-md">
           <KpiCard
+            label="Unique Visitors"
+            :value="summary.uniqueVisitors"
+            :subtitle="`${summary.identifiedVisitors} signed in · ${summary.anonymousVisitors} anonymous`"
+            icon="bi-people-fill"
+            icon-class="text-info"
+          />
+        </div>
+        <div class="col-6 col-md">
+          <KpiCard
             label="Actions / Scan"
             :value="actionsPerScan + '×'"
             :subtitle="actionsPerScan >= 1 ? 'avg interactions per QR scan' : 'most scans exit without action'"
@@ -387,6 +396,9 @@ interface QrDetail {
 interface Summary {
   totalScans: number;
   totalActions: number;
+  uniqueVisitors: number;
+  identifiedVisitors: number;
+  anonymousVisitors: number;
   scansPerDay?: Array<{ date: string; count: number }>;
   scansPerPeriod?: Array<{ period: string; count: number }>;
   actionsPerDayByType?: Array<{ date: string; actionType: string; count: number }>;
@@ -532,7 +544,7 @@ const summaryText = computed(() => {
   const period = dateRange.value.label ?? 'This period';
 
   const parts: string[] = [];
-  parts.push(`${period}, your QR pages received ${scans} scan${scans !== 1 ? 's' : ''} and ${actions} customer action${actions !== 1 ? 's' : ''}.`);
+  parts.push(`${period}, ${s.uniqueVisitors} unique visitor${s.uniqueVisitors !== 1 ? 's' : ''} generated ${scans} scan${scans !== 1 ? 's' : ''} and ${actions} customer action${actions !== 1 ? 's' : ''}.`);
   if (topQr) parts.push(`The top QR code was "${topQr.targetName}" with ${topQr.scans} scan${topQr.scans !== 1 ? 's' : ''}.`);
   if (topAction) parts.push(`${ACTION_LABEL[topAction.actionType] ?? topAction.actionType} was the most used action.`);
   if (scans > 0) parts.push(`Engagement rate: ${engagementRate.value}%.`);

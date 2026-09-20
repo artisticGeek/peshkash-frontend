@@ -1,5 +1,5 @@
 <template>
-  <PublicNav v-if="!error" />
+  <PublicNav />
 
   <!-- Login nudge — shown when vendor.requireLogin=true and user not yet logged in. Bottom
        drawer, dismissible via backdrop/Escape only (no close button, no skip link, per the

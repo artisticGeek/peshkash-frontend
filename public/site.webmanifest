@@ -1,7 +1,8 @@
 {
   "name": "Peshkash",
   "short_name": "Peshkash",
-  "description": "QR-powered digital presence for offline businesses",
+  "id": "/",
+  "description": "Keep the pieces, places and experiences that caught your eye.",
   "icons": [
     { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
@@ -10,5 +11,12 @@
   "theme_color": "#1A1410",
   "background_color": "#F5F2EE",
   "display": "standalone",
-  "start_url": "/"
+  "scope": "/",
+  "start_url": "/home?source=pwa",
+  "categories": ["lifestyle", "shopping"],
+  "shortcuts": [
+    { "name": "Saved items", "short_name": "Saved", "url": "/home/saved", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] },
+    { "name": "Activity history", "short_name": "History", "url": "/home/history", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] },
+    { "name": "Notification preferences", "short_name": "Preferences", "url": "/home/preferences", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] }
+  ]
 }

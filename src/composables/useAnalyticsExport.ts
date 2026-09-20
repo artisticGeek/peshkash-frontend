@@ -6,8 +6,8 @@
  *
  * Columns (one row per analytics event):
  *   Timestamp | Event Type | Action | Page Type | Page / Item Name |
- *   Page URL  | QR Hash    | QR Status | Device | Session ID | Phone |
- *   Referrer  | User Agent | Vendor
+ *   Page URL  | QR Hash    | QR Status | Device | Device Name | OS | Browser |
+ *   Device ID | Phone | Referrer | User Agent | Vendor
  */
 
 import { ref } from 'vue';
@@ -27,7 +27,10 @@ const COL_WIDTHS: Record<string, number> = {
   'QR Hash':          18,
   'QR Status':        12,
   'Device':           10,
-  'Session ID':       12,
+  'Device Name':      16,
+  'OS':               12,
+  'Browser':          16,
+  'Device ID':        38,
   'Phone':            16,
   'Referrer':         40,
   'User Agent':       55,

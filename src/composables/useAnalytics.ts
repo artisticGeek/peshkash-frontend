@@ -9,12 +9,14 @@
  *   const { track } = useAnalytics({ vendorId: 3, eventId: 12 })
  *   track('whatsapp_click')
  *
- * All calls are best-effort: errors are silently swallowed.
- * Never awaited by callers — analytics must never block UX.
+ * Most callers intentionally ignore the returned promise. State-changing
+ * callers (save/like) await it to guarantee read-your-write on /home.
  */
 
 import { API_BASE_URL } from '../config';
 import { gtagEvent } from '../utils/ga';
+import { getDeviceId } from '../utils/deviceId';
+import { useAuthStore } from '../stores/auth';
 
 export interface AnalyticsContext {
   vendorId?: number;
@@ -43,6 +45,11 @@ export type ActionType =
   | 'menu_view'
   | 'item_detail_view'
   | 'item_bookmark'
+  | 'item_unbookmark'
+  | 'item_like'
+  | 'item_unlike'
+  | 'item_dislike'
+  | 'item_undislike'
   | 'landing_page_view'
   | 'landing_whatsapp_hero'
   | 'landing_demo_anchor'
@@ -65,35 +72,34 @@ export type ActionType =
   | 'exhibit_share'
   | 'exhibit_get_started';
 
-function getStoredPhone(): string | null {
-  try {
-    const raw = localStorage.getItem('peshkash_auth_v1');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return typeof parsed.phone === 'string' ? parsed.phone : null;
-  } catch { return null; }
-}
-
 export function useAnalytics(ctx: AnalyticsContext = {}) {
+  const authStore = useAuthStore();
   /**
    * Fire-and-forget: posts to backend AND fires a GA custom event.
-   * Always returns void synchronously — never await this.
+   * Returns after the backend accepts the event; callers may ignore the promise.
    */
-  function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): void {
+  async function track(actionType: ActionType | string, extra?: Partial<AnalyticsContext>): Promise<boolean> {
     const merged = { ...ctx, ...extra };
-    const phone = getStoredPhone();
-    const payload = { actionType, ...merged, pageUrl: window.location.href, ...(phone ? { phone } : {}) };
+    const payload = {
+      actionType,
+      ...merged,
+      pageUrl: window.location.href,
+      deviceId: getDeviceId(),
+    };
 
     // ── 1. Backend (Postgres via Redis queue) ──────────────────────────
     // keepalive:true lets the request outlive page navigation (same guarantee
     // as sendBeacon). sendBeacon with application/json blobs fails in Chrome
     // for cross-origin preflighted requests — fetch + keepalive is reliable.
-    fetch(`${API_BASE_URL}/analytics/action`, {
+    const request = fetch(`${API_BASE_URL}/analytics/action`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}),
+      },
       body: JSON.stringify(payload),
       keepalive: true,
-    }).catch(() => {/* silent */});
+    });
 
     // ── 2. Google Analytics 4 (no-op if VITE_GA_MEASUREMENT_ID not set) ─
     gtagEvent(actionType, {
@@ -105,6 +111,13 @@ export function useAnalytics(ctx: AnalyticsContext = {}) {
       qr_hash: merged.qrHash,
       ...(merged.bookmarked !== undefined ? { bookmarked: merged.bookmarked } : {}),
     });
+
+    try {
+      const response = await request;
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   return { track };

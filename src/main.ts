@@ -12,6 +12,7 @@ import './assets/peshkash-loader.js';
 import { router } from './router';
 import { initGA } from './utils/ga';
 import { useAuthStore } from './stores/auth';
+import { registerPeshkashPwa } from './utils/pwaRegistration';
 
 initGA();
 
@@ -33,3 +34,7 @@ axios.interceptors.response.use(
 );
 
 app.mount('#app');
+
+// Registration never requests notification permission. It only provides the
+// install/update shell and the background handler used after explicit opt-in.
+registerPeshkashPwa();

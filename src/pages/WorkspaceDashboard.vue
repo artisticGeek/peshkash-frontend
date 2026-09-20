@@ -871,6 +871,12 @@
         <AnalyticsSection :initial-vendor-id="selectedVendorId || undefined" />
       </section>
 
+      <EngagementSection
+        v-if="activeSection === 'engagement'"
+        :vendor-id="selectedVendorId || undefined"
+        :vendor-name="selectedVendor?.displayName"
+      />
+
       <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
 
         <!-- Mobile tab bar (hidden on desktop via CSS) -->
@@ -1574,6 +1580,113 @@
 
       <!-- ── Session Management ──────────────────────────────────────────── -->
       <section v-if="activeSection === 'sessions'" class="stack-layout">
+        <!-- Admin access and section permissions -->
+        <div class="panel access-panel">
+          <div class="panel-heading access-panel-heading">
+            <div>
+              <h3><i class="bi bi-shield-check me-2"></i>Admin Access</h3>
+              <p class="hint">Add administrators and choose which dashboard sections each person can access. Dashboard is always available.</p>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary refresh-btn" :disabled="adminUsersLoading" @click="loadAdminUsers">
+              <i class="bi bi-arrow-clockwise" :class="{ 'spin': adminUsersLoading }"></i>
+              <span class="d-none d-sm-inline ms-1">Refresh</span>
+            </button>
+          </div>
+
+          <div class="admin-add-bar">
+            <div>
+              <label class="form-label" for="new-admin-phone">Add an administrator</label>
+              <p class="hint mb-0">Use the same phone format used for OTP login.</p>
+            </div>
+            <div class="admin-add-controls">
+              <input
+                id="new-admin-phone"
+                v-model.trim="newAdminPhone"
+                type="tel"
+                class="form-control form-control-sm"
+                placeholder="+91 98765 43210"
+                @keyup.enter="addAdminUser"
+              />
+              <button class="btn btn-sm btn-primary" :disabled="!newAdminPhone.trim() || adminUserActing" @click="addAdminUser">
+                <i class="bi bi-person-plus me-1"></i>Add admin
+              </button>
+            </div>
+          </div>
+
+          <div v-if="adminUsersLoading && !adminUsers.length" class="access-empty">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            Loading administrators…
+          </div>
+          <div v-else-if="!adminUsers.length" class="access-empty">
+            <i class="bi bi-people"></i>
+            No administrators found.
+          </div>
+          <div v-else class="admin-access-list">
+            <article v-for="au in adminUsers" :key="au.phone" class="admin-access-row" :class="{ expanded: editingGrantsFor === au.phone }">
+              <div class="admin-access-summary">
+                <div class="admin-access-identity">
+                  <span class="admin-avatar"><i class="bi bi-person"></i></span>
+                  <div>
+                    <div class="admin-phone-line">
+                      <code>{{ au.phone }}</code>
+                      <span v-if="au.phone === authStore.phone" class="ws-admin-you">You</span>
+                    </div>
+                    <span class="admin-created">Added {{ formatDate(au.created_at) }}</span>
+                  </div>
+                </div>
+                <div class="admin-access-actions">
+                  <button class="btn btn-sm btn-outline-secondary" @click="openGrantsEditor(au.phone)">
+                    <i class="bi bi-sliders me-1"></i>
+                    {{ editingGrantsFor === au.phone ? 'Close' : 'Manage access' }}
+                  </button>
+                  <button
+                    v-if="au.phone !== authStore.phone"
+                    class="btn btn-sm btn-outline-danger"
+                    :disabled="adminUserActing"
+                    @click="removeAdminUser(au.phone)"
+                  >
+                    <i class="bi bi-person-x me-1"></i>Remove
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="editingGrantsFor === au.phone" class="admin-grants-editor">
+                <div class="admin-grants-heading">
+                  <div>
+                    <strong>Dashboard sections</strong>
+                    <p class="hint mb-0">Changes take effect on the server immediately after saving.</p>
+                  </div>
+                  <span class="grant-count">{{ editingGrantsSelection.size }} of {{ GRANTABLE_SECTIONS.length }} selected</span>
+                </div>
+                <div v-if="grantsLoading" class="access-empty compact">
+                  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                  Loading permissions…
+                </div>
+                <div v-else class="grant-grid">
+                  <label
+                    v-for="s in GRANTABLE_SECTIONS"
+                    :key="s.key"
+                    class="grant-option"
+                    :class="{ selected: editingGrantsSelection.has(s.key) }"
+                  >
+                    <input type="checkbox" :checked="editingGrantsSelection.has(s.key)" @change="toggleGrantSection(s.key)" />
+                    <span class="grant-option-icon"><i :class="s.icon"></i></span>
+                    <span>{{ s.label }}</span>
+                    <i v-if="editingGrantsSelection.has(s.key)" class="bi bi-check-circle-fill grant-check"></i>
+                  </label>
+                </div>
+                <div class="admin-grants-footer">
+                  <span class="hint"><i class="bi bi-grid-1x2 me-1"></i>Dashboard is always available.</span>
+                  <button class="btn btn-sm btn-primary" :disabled="grantsSaving || grantsLoading" @click="saveGrantsEditor(au.phone)">
+                    <span v-if="grantsSaving" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                    <i v-else class="bi bi-check2 me-1"></i>Save permissions
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
         <!-- Force logout a specific user -->
         <div class="panel">
           <div class="panel-heading">
@@ -1751,33 +1864,6 @@
           </RouterLink>
         </div>
 
-        <!-- Admin users section -->
-        <div class="ws-admin-section">
-          <div class="ws-admin-header">
-            <span><i class="bi bi-shield-lock me-1"></i>Admin Phones</span>
-            <button class="icon-button small" title="Refresh" @click="loadAdminUsers"><i class="bi bi-arrow-clockwise"></i></button>
-          </div>
-          <div class="ws-admin-list">
-            <div v-for="au in adminUsers" :key="au.phone" class="ws-admin-row">
-              <span class="ws-admin-phone">{{ au.phone }}</span>
-              <span v-if="au.phone === authStore.phone" class="ws-admin-you">you</span>
-              <button v-else class="icon-button icon-btn--danger small" title="Remove admin" @click="removeAdminUser(au.phone)"><i class="bi bi-x"></i></button>
-            </div>
-            <div v-if="!adminUsers.length" class="ws-modal-empty">No admins.</div>
-          </div>
-          <div class="ws-admin-add-row">
-            <input
-              v-model="newAdminPhone"
-              type="tel"
-              class="form-control form-control-sm"
-              placeholder="+91 98765 43210"
-              @keyup.enter="addAdminUser"
-            />
-            <button class="btn btn-sm btn-primary" :disabled="!newAdminPhone.trim()" @click="addAdminUser">
-              <i class="bi bi-plus-lg"></i>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </teleport>
@@ -2043,6 +2129,7 @@ import PrintStudio from '../components/admin/PrintStudio.vue';
 import PrintResourcesPanel from '../components/admin/PrintResourcesPanel.vue';
 import SocialPreviewEditor, { type SocialPreviewConfig } from '../components/admin/SocialPreviewEditor.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
+import EngagementSection from '../components/engagement/EngagementSection.vue';
 import AnalyticsDrawer from '../components/analytics/AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
@@ -2050,10 +2137,9 @@ import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
+import { sectionFromPath, type SectionKey } from '../utils/dashboardSections';
 
 const authStore = useAuthStore();
-
-type SectionKey = 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet' | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates' | 'resources' | 'menus' | 'items' | 'sessions';
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; socialPreview: SocialPreviewConfig; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
@@ -2083,12 +2169,18 @@ const sections = [
   { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
   { key: 'resources',     label: 'Brochures',         icon: 'bi bi-file-earmark-richtext' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
+  { key: 'engagement',    label: 'Engage',            icon: 'bi bi-send' },
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
-// Some sections are only visible to admins
+// Admins see whichever sections they've been granted (admin_section_grant, checked
+// server-side on every request too — this filter is cosmetic, not the security boundary).
+// 'home' is always visible, never a grantable section. Vendors keep their existing,
+// separate behavior — grants are an admin-only concept.
 const visibleSections = computed(() =>
-  authStore.isAdmin ? sections : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
+  authStore.isAdmin
+    ? sections.filter(s => s.key === 'home' || s.key === 'engagement' || authStore.hasSection(s.key))
+    : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
 );
 
 const route = useRoute();
@@ -2111,28 +2203,9 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
   insights:       '/dashboard/analytics',
+  engagement:     '/dashboard/engagement',
   sessions:       '/dashboard/sessions',
 };
-
-function sectionFromPath(path: string): SectionKey {
-  if (/^\/dashboard\/vendors\/\d+/.test(path)) return 'vendorWorkspace';
-  if (path.startsWith('/dashboard/vendors')) return 'vendors';
-  if (/^\/dashboard\/events\/\d+\/qr-sheet/.test(path)) return 'qrSheet';
-  if (/^\/dashboard\/events\/\d+\/publish/.test(path)) return 'eventWorkspace';
-  if (/^\/dashboard\/events\/\d+/.test(path)) return 'eventWorkspace';
-  if (path === '/dashboard/events') return 'events';
-  // /dashboard/items/:id opens item analytics drawer while staying on inventory
-  if (path.startsWith('/dashboard/items')) return 'inventory';
-  if (/^\/dashboard\/menus\/\d+\/preview/.test(path)) return 'preview';
-  if (path.startsWith('/dashboard/menus/preview')) return 'preview';
-  if (path.startsWith('/dashboard/menus')) return 'designer';
-  if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
-  if (path.startsWith('/dashboard/resources')) return 'resources';
-  if (path.startsWith('/dashboard/qr')) return 'qr';
-  if (path.startsWith('/dashboard/analytics')) return 'insights';
-  if (path.startsWith('/dashboard/sessions')) return 'sessions';
-  return 'home';
-}
 
 const activeSection = computed<SectionKey>({
   get: () => sectionFromPath(route.path),
@@ -2640,6 +2713,7 @@ const activeSubtitle = computed(() => {
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
     resources:      'Preview, share and download the approved Peshkash brochure collection.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
+    engagement:     'Build consent-safe WhatsApp and push campaigns for people who chose to hear from this vendor.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
   return copy[activeSection.value];
@@ -4583,37 +4657,85 @@ const showLinkEventModal = ref(false);
 type AdminUser = { phone: string; created_at: string };
 const adminUsers = ref<AdminUser[]>([]);
 const newAdminPhone = ref('');
+const adminUsersLoading = ref(false);
+const adminUserActing = ref(false);
 
 async function loadAdminUsers() {
   if (!authStore.isAdmin) return;
+  adminUsersLoading.value = true;
   try {
     const { data } = await axios.get<AdminUser[]>(adminUrl('/admin-users'));
     adminUsers.value = data;
-  } catch { /* silent */ }
+  } catch (err) { setError(err); }
+  finally { adminUsersLoading.value = false; }
 }
 
 async function addAdminUser() {
   const phone = newAdminPhone.value.trim();
   if (!phone) return;
+  adminUserActing.value = true;
   try {
     await axios.post(adminUrl('/admin-users'), { phone });
     newAdminPhone.value = '';
     await loadAdminUsers();
+    addToast('success', `${phone} can now sign in as an administrator. Choose their dashboard access below.`);
+    await openGrantsEditor(phone);
   } catch (err) { setError(err); }
+  finally { adminUserActing.value = false; }
 }
 
 async function removeAdminUser(phone: string) {
   if (!window.confirm(`Remove admin access for ${phone}?`)) return;
+  adminUserActing.value = true;
   try {
     await axios.delete(adminUrl(`/admin-users/${encodeURIComponent(phone)}`));
+    if (editingGrantsFor.value === phone) editingGrantsFor.value = null;
     await loadAdminUsers();
+    addToast('success', `Admin access removed for ${phone}.`);
   } catch (err) { setError(err); }
+  finally { adminUserActing.value = false; }
 }
 
-// Load admin users when workspace modal opens
-watch(showWsModal, (open) => {
-  if (open && authStore.isAdmin) loadAdminUsers();
-});
+// ── Admin section grants — flat per-admin list, no role hierarchy ──────────────
+// The nav filter (visibleSections) and the router guard are cosmetic; the server
+// re-checks admin_section_grant on every admin request regardless of this editor.
+const GRANTABLE_SECTIONS = sections.filter(s => s.key !== 'home');
+const editingGrantsFor = ref<string | null>(null);
+const editingGrantsSelection = ref<Set<string>>(new Set());
+const grantsLoading = ref(false);
+const grantsSaving = ref(false);
+
+async function openGrantsEditor(phone: string) {
+  if (editingGrantsFor.value === phone) { editingGrantsFor.value = null; return; }
+  editingGrantsFor.value = phone;
+  editingGrantsSelection.value = new Set();
+  grantsLoading.value = true;
+  try {
+    const { data } = await axios.get<{ phone: string; sections: string[] }>(adminUrl('/section-grants'), { params: { phone } });
+    editingGrantsSelection.value = new Set(data.sections);
+  } catch (err) {
+    editingGrantsFor.value = null;
+    setError(err);
+  } finally {
+    grantsLoading.value = false;
+  }
+}
+
+function toggleGrantSection(key: string) {
+  const next = new Set(editingGrantsSelection.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  editingGrantsSelection.value = next;
+}
+
+async function saveGrantsEditor(phone: string) {
+  grantsSaving.value = true;
+  try {
+    await axios.put(adminUrl('/section-grants'), { phone, sections: [...editingGrantsSelection.value] });
+    editingGrantsFor.value = null;
+    addToast('success', `Dashboard access updated for ${phone}.`);
+  } catch (err) { setError(err); }
+  finally { grantsSaving.value = false; }
+}
 
 // ── Session management ───────────────────────────────────────────────────────
 type SessionInvalidation = { phone: string; invalidate_before: string; created_at: string };
@@ -4659,7 +4781,10 @@ async function doClearInvalidation(phone: string) {
 }
 
 watch(activeSection, (s) => {
-  if (s === 'sessions') loadSessionInvalidations();
+  if (s === 'sessions') {
+    loadAdminUsers();
+    loadSessionInvalidations();
+  }
 }, { immediate: true });
 
 function isMenuLinked(menuId: number): boolean {
@@ -5580,31 +5705,86 @@ label {
 }
 .ws-modal-new:hover { background: #f7efe3; color: #15191e; }
 
-/* Admin users section inside workspace modal */
-.ws-admin-section {
-  border-top: 1px solid #e8dccb;
-  padding: 10px 12px 12px;
-}
-.ws-admin-header {
-  align-items: center;
+/* Admin access and dashboard permissions */
+.access-panel { overflow: hidden; }
+.access-panel-heading {
+  align-items: flex-start;
   display: flex;
-  font-size: 0.78rem;
-  font-weight: 700;
+  gap: 16px;
   justify-content: space-between;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  color: #7a542a;
 }
-.ws-admin-list { margin-bottom: 8px; }
-.ws-admin-row {
+.access-panel-heading .hint { margin-bottom: 0; }
+.admin-add-bar {
+  align-items: flex-end;
+  background: #faf7f2;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin: 18px 0;
+  padding: 14px 16px;
+}
+.admin-add-bar .form-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.admin-add-controls {
+  display: flex;
+  flex: 0 1 440px;
+  gap: 8px;
+}
+.admin-add-controls .form-control { min-width: 210px; }
+.admin-add-controls .btn { white-space: nowrap; }
+.access-empty {
+  align-items: center;
+  color: #887762;
+  display: flex;
+  font-size: 0.88rem;
+  gap: 8px;
+  justify-content: center;
+  min-height: 92px;
+}
+.access-empty.compact { min-height: 76px; }
+.admin-access-list {
+  border: 1px solid #e8dfd2;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.admin-access-row + .admin-access-row { border-top: 1px solid #eee6da; }
+.admin-access-row.expanded { background: #fdfbf8; }
+.admin-access-summary {
   align-items: center;
   display: flex;
-  font-size: 0.85rem;
-  gap: 6px;
-  padding: 4px 0;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
 }
-.ws-admin-phone { flex: 1; font-family: monospace; font-size: 0.82rem; }
+.admin-access-identity,
+.admin-phone-line,
+.admin-access-actions,
+.admin-grants-heading,
+.admin-grants-footer {
+  align-items: center;
+  display: flex;
+}
+.admin-access-identity { gap: 11px; min-width: 0; }
+.admin-avatar {
+  align-items: center;
+  background: #f1e8da;
+  border-radius: 50%;
+  color: #76552f;
+  display: inline-flex;
+  flex: 0 0 36px;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+.admin-phone-line { gap: 7px; }
+.admin-phone-line code { color: #2f2922; font-size: 0.88rem; }
+.admin-created { color: #92826f; display: block; font-size: 0.75rem; margin-top: 2px; }
+.admin-access-actions { flex-shrink: 0; gap: 8px; }
 .ws-admin-you {
   background: #e8f4e8;
   border-radius: 4px;
@@ -5613,12 +5793,73 @@ label {
   font-weight: 600;
   padding: 1px 6px;
 }
-.ws-admin-add-row {
-  display: flex;
-  gap: 6px;
-}
-.ws-admin-add-row .form-control { flex: 1; font-size: 0.85rem; }
 .icon-button.small { font-size: 0.75rem; height: 24px; width: 24px; }
+.admin-grants-editor {
+  border-top: 1px solid #ebe1d4;
+  padding: 16px;
+}
+.admin-grants-heading { justify-content: space-between; margin-bottom: 14px; }
+.admin-grants-heading strong { font-size: 0.88rem; }
+.grant-count {
+  background: #eee7dc;
+  border-radius: 999px;
+  color: #715c43;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.grant-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.grant-option {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e4dacd;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 9px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.grant-option:hover { border-color: #baa17f; }
+.grant-option.selected { background: #f8f1e7; border-color: #a77b43; color: #5f431f; }
+.grant-option input { height: 1px; opacity: 0; position: absolute; width: 1px; }
+.grant-option-icon {
+  align-items: center;
+  color: #8b755b;
+  display: inline-flex;
+  font-size: 0.95rem;
+  justify-content: center;
+  width: 18px;
+}
+.grant-option.selected .grant-option-icon { color: #7a542a; }
+.grant-check { color: #8a6231; margin-left: auto; }
+.admin-grants-footer { justify-content: space-between; margin-top: 14px; }
+
+@media (max-width: 900px) {
+  .grant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .admin-add-bar,
+  .admin-access-summary,
+  .admin-grants-heading,
+  .admin-grants-footer { align-items: stretch; flex-direction: column; }
+  .admin-add-bar { gap: 12px; }
+  .admin-add-controls { flex-basis: auto; }
+  .admin-add-controls .form-control { min-width: 0; }
+  .admin-access-actions { width: 100%; }
+  .admin-access-actions .btn { flex: 1; }
+  .grant-grid { grid-template-columns: 1fr; }
+  .grant-count { align-self: flex-start; }
+  .admin-grants-footer { gap: 10px; }
+}
 
 
 /* Inline menu attach row */
