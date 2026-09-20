@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dev-dist
+.pwa-dev-temp
 .studio-test-dist
 *.local
 

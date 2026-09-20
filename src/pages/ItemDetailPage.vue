@@ -280,6 +280,7 @@ function announceEngagement(action: 'save' | 'like' | 'dislike', active: boolean
       synced,
       itemName: itemData.value?.displayName || itemData.value?.name || itemName,
       image: itemData.value?.image || null,
+      vendorId: itemData.value?.event?.vendor?.id || null,
       vendorName: itemData.value?.event?.vendor?.displayName || null,
       eventName: itemData.value?.event?.displayName || null,
     },

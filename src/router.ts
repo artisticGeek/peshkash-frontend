@@ -25,7 +25,7 @@ const routes: Array<RouteRecordRaw> = [
     redirect: '/home/saved'
   },
   {
-    path: '/home/:section(saved|liked|disliked|history)',
+    path: '/home/:section(saved|liked|disliked|history|preferences)',
     name: 'UserHome',
     component: () => import('./pages/UserHomePage.vue')
   },
@@ -157,6 +157,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
+    path: '/dashboard/engagement',
+    name: 'DashboardEngagement',
+    component: () => import('./pages/WorkspaceDashboard.vue'),
+  },
+  {
     path: '/dashboard/sessions',
     name: 'DashboardSessions',
     component: () => import('./pages/WorkspaceDashboard.vue'),
@@ -219,7 +224,9 @@ router.beforeEach((to) => {
     // admin_section_grant live regardless of what the client believes it can see.
     if (role === 'admin') {
       const requiredSection = grantSectionForPath(to.path);
-      if (requiredSection && !sectionGrants.includes(requiredSection)) return '/dashboard/home';
+      // Engagement was added after long-lived admin JWTs were issued. The backend
+      // still checks the live grant table, so allow this route during token rollover.
+      if (requiredSection && requiredSection !== 'engagement' && !sectionGrants.includes(requiredSection)) return '/dashboard/home';
     }
     // Vendor users are locked to their own workspace
     if (role === 'vendor' && vendorId) {

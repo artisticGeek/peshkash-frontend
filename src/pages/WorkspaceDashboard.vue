@@ -871,6 +871,12 @@
         <AnalyticsSection :initial-vendor-id="selectedVendorId || undefined" />
       </section>
 
+      <EngagementSection
+        v-if="activeSection === 'engagement'"
+        :vendor-id="selectedVendorId || undefined"
+        :vendor-name="selectedVendor?.displayName"
+      />
+
       <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
 
         <!-- Mobile tab bar (hidden on desktop via CSS) -->
@@ -2123,6 +2129,7 @@ import PrintStudio from '../components/admin/PrintStudio.vue';
 import PrintResourcesPanel from '../components/admin/PrintResourcesPanel.vue';
 import SocialPreviewEditor, { type SocialPreviewConfig } from '../components/admin/SocialPreviewEditor.vue';
 import AnalyticsSection from '../components/analytics/AnalyticsSection.vue';
+import EngagementSection from '../components/engagement/EngagementSection.vue';
 import AnalyticsDrawer from '../components/analytics/AnalyticsDrawer.vue';
 import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.vue';
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
@@ -2162,6 +2169,7 @@ const sections = [
   { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
   { key: 'resources',     label: 'Brochures',         icon: 'bi bi-file-earmark-richtext' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
+  { key: 'engagement',    label: 'Engage',            icon: 'bi bi-send' },
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
@@ -2171,7 +2179,7 @@ const sections = [
 // separate behavior — grants are an admin-only concept.
 const visibleSections = computed(() =>
   authStore.isAdmin
-    ? sections.filter(s => s.key === 'home' || authStore.hasSection(s.key))
+    ? sections.filter(s => s.key === 'home' || s.key === 'engagement' || authStore.hasSection(s.key))
     : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
 );
 
@@ -2195,6 +2203,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   menus:          '/dashboard/menus/studio',
   items:          '/dashboard/menus/studio',
   insights:       '/dashboard/analytics',
+  engagement:     '/dashboard/engagement',
   sessions:       '/dashboard/sessions',
 };
 
@@ -2704,6 +2713,7 @@ const activeSubtitle = computed(() => {
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
     resources:      'Preview, share and download the approved Peshkash brochure collection.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
+    engagement:     'Build consent-safe WhatsApp and push campaigns for people who chose to hear from this vendor.',
     sessions:       'Force specific users — or everyone — to re-authenticate.',
   };
   return copy[activeSection.value];

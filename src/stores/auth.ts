@@ -123,6 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
     state.value = full;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(full));
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    window.dispatchEvent(new CustomEvent('peshkash:auth-login', { detail: { role: decoded.role } }));
   }
 
   function logout() {
