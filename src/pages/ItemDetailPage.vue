@@ -1,6 +1,6 @@
 <template>
   <div class="pk-item-page-surface">
-  <PublicNav v-if="!error" />
+  <PublicNav />
 
   <!-- Login nudge — shown when the item's vendor has requireLogin=true and the visitor
        isn't logged in. Bottom drawer, dismissible via backdrop/Escape only (no close
@@ -14,17 +14,19 @@
   />
   <div
     v-if="showFeedback"
-    class="position-fixed top-0 start-50 translate-middle-x mt-3"
-    style="z-index: 2000;"
+    class="pk-action-feedback"
+    role="status"
+    aria-live="polite"
   >
-    <div class="alert alert-warning shadow" role="alert">{{ feedback }}</div>
+    <i class="bi bi-info-circle"></i><span>{{ feedback }}</span>
   </div>
 
   <PublicErrorState
     v-if="error"
-    title="This item is not available right now"
-    message="The link may have changed, or the item may be temporarily unavailable. Please try again."
+    :title="errorCopy.title"
+    :message="errorCopy.message"
     :reference="`${eventName}/${menuName}/${itemName}`"
+    :retryable="error === 'unavailable'"
     @retry="loadItem"
   />
 
@@ -133,7 +135,7 @@
           <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
           <span class="visually-hidden">Dislike</span>
         </button>
-        <button class="pk-action-icon" :class="{ active: isBookmarked }" type="button" @click="saveItemToPhone" aria-label="Save this item using your phone" :aria-pressed="isBookmarked" title="Save">
+        <button class="pk-action-icon" :class="{ active: isBookmarked }" type="button" @click="toggleBookmark" :aria-label="isBookmarked ? 'Remove this item from saved' : 'Save this item'" :aria-pressed="isBookmarked" :title="isBookmarked ? 'Remove from saved' : 'Save'">
           <i :class="isBookmarked ? 'bi bi-bookmark-check-fill' : 'bi bi-bookmark-plus'"></i>
           <span class="visually-hidden">{{ isBookmarked ? 'Saved' : 'Save' }}</span>
         </button>
@@ -241,6 +243,24 @@ const descriptionParts = computed(() => {
   }
 })
 const error = ref<string | null>(null)
+const errorCopy = computed(() => {
+  if (error.value === 'expired') return {
+    title: 'This event has ended',
+    message: 'This item can remain in your Peshkash history, but its event details are no longer available.',
+  }
+  if (error.value === 'upcoming') return {
+    title: 'This event is not available yet',
+    message: 'The item details will be available when the event begins.',
+  }
+  if (error.value === 'item-unavailable') return {
+    title: 'This item is no longer available',
+    message: 'It may still appear in your history as something you previously discovered.',
+  }
+  return {
+    title: 'This item is not available right now',
+    message: 'The link may have changed, or the item may be temporarily unavailable. Please try again.',
+  }
+})
 const feedback = ref('')
 const showFeedback = ref(false)
 const analytics = useAnalytics()
@@ -252,6 +272,20 @@ function engagementKey() { return `${eventName}:${menuName}:${itemName}` }
 function reactionKey() { return `pk-reaction-${engagementKey()}` }
 function bookmarkKey() { return `pk-bookmark-${engagementKey()}` }
 
+function announceEngagement(action: 'save' | 'like' | 'dislike', active: boolean, synced: boolean) {
+  window.dispatchEvent(new CustomEvent('peshkash:engagement-change', {
+    detail: {
+      action,
+      active,
+      synced,
+      itemName: itemData.value?.displayName || itemData.value?.name || itemName,
+      image: itemData.value?.image || null,
+      vendorName: itemData.value?.event?.vendor?.displayName || null,
+      eventName: itemData.value?.event?.displayName || null,
+    },
+  }))
+}
+
 function loadEngagement() {
   try {
     const r = localStorage.getItem(reactionKey())
@@ -260,73 +294,39 @@ function loadEngagement() {
   } catch {}
 }
 
-function toggleReaction(type: 'like' | 'dislike') {
+async function toggleReaction(type: 'like' | 'dislike') {
   const next = userReaction.value === type ? null : type
   userReaction.value = next
   try {
     if (next) localStorage.setItem(reactionKey(), next)
     else localStorage.removeItem(reactionKey())
   } catch {}
-  analytics.track(next ? `item_${type}` : `item_un${type}`, {
+  const active = next === type
+  if (!isLoggedIn.value) announceEngagement(type, active, false)
+  const synced = await analytics.track(next ? `item_${type}` : `item_un${type}`, {
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   })
+  if (isLoggedIn.value) announceEngagement(type, active, synced)
 }
 
-function markItemSaved() {
-  isBookmarked.value = true
+async function toggleBookmark() {
+  isBookmarked.value = !isBookmarked.value
   try {
-    localStorage.setItem(bookmarkKey(), '1')
+    if (isBookmarked.value) localStorage.setItem(bookmarkKey(), '1')
+    else localStorage.removeItem(bookmarkKey())
   } catch {}
-  analytics.track('item_bookmark', {
-    bookmarked: true,
+  if (!isLoggedIn.value) announceEngagement('save', isBookmarked.value, false)
+  const synced = await analytics.track(isBookmarked.value ? 'item_bookmark' : 'item_unbookmark', {
+    bookmarked: isBookmarked.value,
     vendorId: itemData.value?.event?.vendor?.id,
     eventId: itemData.value?.event?.id,
     menuId: itemData.value?.menu?.id,
     itemId: itemData.value?.numericId,
   })
-}
-
-async function saveItemToPhone() {
-  const title = itemData.value?.displayName || itemData.value?.name || 'Peshkash item'
-  const vendor = itemData.value?.event?.vendor?.displayName
-  const text = [title, vendor, itemData.value?.description].filter(Boolean).join(' — ')
-  const url = window.location.href
-
-  function showManualFeedback() {
-    feedback.value = 'Use your browser menu to bookmark this item'
-    showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 3200)
-  }
-
-  // 1) Clipboard copy — silent, no OS chrome, works without a user picking a share target.
-  try {
-    await navigator.clipboard.writeText(`${text}\n${url}`)
-    markItemSaved()
-    feedback.value = 'Item link copied — paste it into Notes, Messages, or your browser bookmarks'
-    showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 3200)
-    return
-  } catch { /* clipboard unavailable — fall through */ }
-
-  // 2) No clipboard and no Web Share API at all — nothing left to try.
-  if (!navigator.share) {
-    showManualFeedback()
-    return
-  }
-
-  // 3) Last resort: native share sheet.
-  try {
-    await navigator.share({ title, text, url })
-    markItemSaved()
-    feedback.value = 'Saved through your phone'
-    showFeedback.value = true
-    window.setTimeout(() => { showFeedback.value = false }, 2200)
-  } catch (err: any) {
-    if (err?.name !== 'AbortError') showManualFeedback()
-  }
+  if (isLoggedIn.value) announceEngagement('save', isBookmarked.value, synced)
 }
 
 async function shareItem() {
@@ -360,9 +360,31 @@ async function loadItem() {
 
   try {
     const res = await fetch(`${API_BASE_URL}/event/${eventName}/menu/${menuName}/item/${itemName}`)
-    if (!res.ok) throw new Error(`API error: ${res.status}`)
+    if (!res.ok) {
+      const problem = await res.json().catch(() => ({}))
+      error.value = problem?.code === 'EVENT_EXPIRED'
+        ? 'expired'
+        : problem?.code === 'EVENT_UNAVAILABLE'
+          ? 'upcoming'
+          : problem?.code === 'ITEM_UNAVAILABLE'
+            ? 'item-unavailable'
+            : 'unavailable'
+      return
+    }
     const data = await res.json()
     itemData.value = data
+
+    // The server is the cross-device source of truth for signed-in users.
+    // Anonymous visitors still get instant, device-local state.
+    if (authStore.token && data?.numericId) {
+      fetch(`${API_BASE_URL}/user/items/${data.numericId}/state`, {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      }).then(r => r.ok ? r.json() : null).then(state => {
+        if (!state) return
+        isBookmarked.value = !!state.saved
+        userReaction.value = state.reaction === 'like' || state.reaction === 'dislike' ? state.reaction : null
+      }).catch(() => {})
+    }
 
     // Dynamic SEO
     const itemDisplay  = data?.displayName || data?.name || itemName
@@ -420,6 +442,7 @@ onMounted(loadItem)
 
 <style scoped>
 .pk-item-page-surface { background: #f3ede4; min-height: 100vh; }
+.pk-action-feedback{align-items:center;background:#fffaf3;border:1px solid #ddcfbf;border-radius:999px;box-shadow:0 10px 30px rgba(35,24,16,.16);color:#675442;display:flex;font-size:.75rem;gap:.45rem;left:50%;max-width:calc(100vw - 2rem);padding:.65rem .9rem;position:fixed;top:1rem;transform:translateX(-50%);z-index:2000}.pk-action-feedback i{color:#a77d45}.pk-action-feedback span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pk-item-page { max-width: 1180px; padding-bottom: 6rem; }
 .pk-item-shell { display: flex; flex-direction: column; margin: 0 auto; max-width: 1060px; }
 /* 460px isn't derived from anything else — it's just a comfortable width that

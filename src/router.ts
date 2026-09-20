@@ -21,6 +21,15 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/ShowroomsPage.vue')
   },
   {
+    path: '/home',
+    redirect: '/home/saved'
+  },
+  {
+    path: '/home/:section(saved|liked|disliked|history)',
+    name: 'UserHome',
+    component: () => import('./pages/UserHomePage.vue')
+  },
+  {
     path: '/event/:eventName/menu/:menuName',
     component: MenuPage
   },

@@ -3,7 +3,8 @@
 // For production, use the deployed backend URL
 
 const isDevelopment = import.meta.env.DEV;
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
-export const API_BASE_URL = isDevelopment 
+export const API_BASE_URL = configuredApiBaseUrl || (isDevelopment
   ? 'http://localhost:4000/api'
-  : 'https://peshkash-backend.onrender.com/api';
+  : 'https://peshkash-backend.onrender.com/api');

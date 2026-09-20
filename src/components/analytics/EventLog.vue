@@ -56,9 +56,10 @@
              sessionId actually holds now. Hidden entirely only when neither is present
              (e.g. an old row from before device_id existed). -->
         <div v-if="row.phone || row.sessionId" class="el-session">
-          <span class="el-session-badge" :title="row.phone ? `Phone: ${row.phone}` : `Device: ${row.sessionId}`">
-            <i class="bi bi-person-circle me-1" />{{ row.phone ?? row.sessionId }}
+          <span class="el-session-badge" :title="row.phone ? `Signed-in visitor: ${row.phone}` : `Not logged in · device ${row.sessionId}`">
+            <i class="bi bi-person-circle me-1" />{{ row.phone ?? `Visitor ${shortVisitor(row.sessionId)}` }}
           </span>
+          <small v-if="!row.phone" class="d-block text-muted mt-1" style="font-size:.62rem">Not logged in</small>
         </div>
       </div>
 
@@ -126,6 +127,13 @@ const ACTION_LABELS: Record<string, string> = {
   menu_view:           'Menu viewed',
   item_expand:         'Item expanded',
   item_detail_view:    'Item detail opened',
+  item_bookmark:       'Item saved',
+  item_unbookmark:     'Item removed from saved',
+  item_like:           'Item liked',
+  item_unlike:         'Like removed',
+  item_dislike:        'Item disliked',
+  item_undislike:      'Dislike removed',
+  login_success:       'Visitor signed in',
   event_page_view:     'Event page opened',
   event_registration:  'Registration completed',
   event_reminder_click:'Reminder saved',
@@ -201,6 +209,10 @@ const DOT_COLORS: Record<string, string> = {
   exhibit_share: '#f97316',
   exhibit_get_started: '#a855f7',
 };
+
+function shortVisitor(id?: string) {
+  return id ? id.replace(/-/g, '').slice(0, 8).toUpperCase() : 'unknown';
+}
 
 function rowKind(row: EventRow) {
   return row.eventType === 'qr_scan' ? 'scan' : 'action';
