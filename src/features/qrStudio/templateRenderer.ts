@@ -174,15 +174,11 @@ function scanCorners(width: number, height: number, color: string): string {
 
 // Brand kit logo: viewBox 0 0 1536 512, visual content x:[335,1312] y:[164,415]
 function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark: boolean): string {
-  const svgW = 1536, svgH = 512;
   const cx2 = 1312, cy2 = 415, contentH = cy2 - 164;
   const scale = logoH / contentH;
-  const imgW = svgW * scale;
-  const imgH = svgH * scale;
   const imgX = rightX - cx2 * scale;
   const imgY = bottomY - cy2 * scale;
-  const href = dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg';
-  return `<image href="${href}" x="${imgX.toFixed(2)}" y="${imgY.toFixed(2)}" width="${imgW.toFixed(2)}" height="${imgH.toFixed(2)}"/>`;
+  return `<g transform="translate(${imgX.toFixed(2)} ${imgY.toFixed(2)}) scale(${scale.toFixed(6)})">${svgBody(dark ? logoDark : logoLight)}</g>`;
 }
 
 // Freeform element bank layer — shapes and CTA badges the user dropped onto the canvas.

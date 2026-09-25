@@ -88,6 +88,8 @@ export interface CustomTemplateSpec {
   canvas: { width: number; height: number };
   qr: { x: number; y: number; size: number };
   ratio: string;
+  sourceFileName?: string;
+  sourceFileSize?: number;
 }
 
 // ── Freeform element bank: shapes and CTA badges the user drops onto the canvas ────────────────

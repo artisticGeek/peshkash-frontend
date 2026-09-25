@@ -17,27 +17,27 @@
          ref="textDiv"
          class="dyn-text"
          :data-el-text="el.id"
-         :contenteditable="editing"
+         :contenteditable="editing && !el.dynamicField"
          spellcheck="false"
          :style="textStyle"
          @dblclick.stop="$emit('start-text-edit', el.id, $event)"
          @blur="$emit('end-text-edit')"
          @keydown.escape="($event.target as HTMLElement).blur()"
          @input="onTextInput"
-    >{{ el.text }}</div>
+    >{{ previewText ?? el.text }}</div>
 
     <div v-else class="dyn-shape" :style="shapeStyle">
       <div v-if="el.kind === 'cta'"
            class="dyn-cta-text"
            :data-el-text="el.id"
-           :contenteditable="editing"
+           :contenteditable="editing && !el.dynamicField"
            spellcheck="false"
            :style="ctaTextStyle"
            @dblclick.stop="$emit('start-text-edit', el.id, $event)"
            @blur="$emit('end-text-edit')"
            @keydown.escape="($event.target as HTMLElement).blur()"
            @input="$emit('input-text', el.id, ($event.target as HTMLElement).innerText)"
-      >{{ el.text }}</div>
+      >{{ previewText ?? el.text }}</div>
     </div>
 
     <template v-if="selected">
@@ -58,6 +58,7 @@ const props = defineProps<{
   selected: boolean;
   editing: boolean;
   scale: number;
+  previewText?: string;
 }>();
 
 const emit = defineEmits<{
