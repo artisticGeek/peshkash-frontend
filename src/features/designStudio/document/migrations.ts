@@ -46,6 +46,7 @@ export function createStudioDocument(design: StudioDesign, layout: FixedElementL
         cta: design.cta,
         destination: design.destination,
       },
+      fieldBindings: clone(design.fieldBindings),
       safeArea: { top: 4, right: 4, bottom: 4, left: 4 },
       bleed: { top: 3, right: 3, bottom: 3, left: 3 },
     }],
@@ -96,6 +97,7 @@ export function designFromDocument(document: StudioDocument): Partial<StudioDesi
     layout: clone(page.layout),
     canvasElements: clone(page.elements),
     variables: clone(document.variables),
+    fieldBindings: clone(page.fieldBindings),
     ...clone(page.copy),
   };
 }

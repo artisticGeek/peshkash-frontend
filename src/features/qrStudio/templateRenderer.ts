@@ -137,15 +137,17 @@ function textBlock(
   }
 
   if (vis.headline !== false && options.headline) {
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.displayFont)}" font-size="${headlineSize}" fill="currentColor">${esc(options.headline)}</text>`);
-    y += headlineSize * 1.1 + scale * 0.014;
+    const lines = wrapCopy(options.headline, Math.max(12, Math.floor(width / (headlineSize * 0.56))));
+    parts.push(liveTextLines(options.headline, tx, y, width, headlineSize, 'currentColor', pairing.displayFont, anchor));
+    y += headlineSize * 1.1 * lines.length + scale * 0.014;
     hasAny = true;
   }
 
   if (vis.descriptor !== false && options.descriptor) {
     if (hasAny) y += scale * 0.004; // a little extra gap before descriptor
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${descriptorSize}" opacity=".7" fill="currentColor">${esc(options.descriptor)}</text>`);
-    y += descriptorSize * 1.3 + scale * 0.018;
+    const lines = wrapCopy(options.descriptor, Math.max(12, Math.floor(width / (descriptorSize * 0.56))));
+    parts.push(`<g opacity=".7">${liveTextLines(options.descriptor, tx, y, width, descriptorSize, 'currentColor', pairing.bodyFont, anchor)}</g>`);
+    y += descriptorSize * 1.3 * lines.length + scale * 0.018;
     hasAny = true;
   }
 
@@ -394,7 +396,7 @@ function renderBrandKitTemplateSvg(
   const headline = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.headline === false || !options.headline ? ''
     : liveTextLines(options.headline, x + dx, y + dy, copyWidth, size * typeScale, fg, pairing.displayFont, anchor);
   const descriptor = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.descriptor === false || !options.descriptor ? ''
-    : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" fill="${muted}">${esc(options.descriptor)}</text>`;
+    : liveTextLines(options.descriptor, x + dx, y + dy, copyWidth, size * typeScale, muted, pairing.bodyFont, anchor);
   const cta = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.cta === false || !options.cta ? ''
     : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" font-weight="700" letter-spacing="${1.5 * typeScale}" fill="${fg}">${esc(options.cta.toUpperCase())}</text>`;
 

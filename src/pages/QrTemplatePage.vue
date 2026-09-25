@@ -520,10 +520,22 @@
               </div>
             </section>
             <section>
-              <label>Eyebrow<input v-model="design.eyebrow" maxlength="40" placeholder="e.g. ORIGINAL WORK" :disabled="!vis.eyebrow"></label>
-              <label>Headline<textarea v-model="design.headline" rows="2" maxlength="90" placeholder="e.g. Study No. 14" :disabled="!vis.headline"></textarea></label>
-              <label>Descriptor<input v-model="design.descriptor" maxlength="100" placeholder="e.g. Process · provenance · available pieces" :disabled="!vis.descriptor"></label>
-              <label>Call to action<input v-model="design.cta" maxlength="40" placeholder="e.g. Scan to explore" :disabled="!vis.cta"></label>
+              <div v-for="field in ([
+                { key: 'eyebrow', label: 'Eyebrow', max: 40, placeholder: 'e.g. ORIGINAL WORK' },
+                { key: 'headline', label: 'Headline', max: 90, placeholder: 'e.g. Study No. 14' },
+                { key: 'descriptor', label: 'Descriptor', max: 100, placeholder: 'e.g. Process · provenance · available pieces' },
+                { key: 'cta', label: 'Call to action', max: 40, placeholder: 'e.g. Scan to explore' },
+              ] as const)" :key="field.key" class="binding-field">
+                <label>{{ field.label }}
+                  <select :value="fixedBinding(field.key)" :disabled="!vis[field.key]" @change="setFixedBinding(field.key, ($event.target as HTMLSelectElement).value)">
+                    <option value="">Static text</option>
+                    <option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">Dynamic · {{ option.label }}</option>
+                  </select>
+                </label>
+                <textarea v-if="field.key === 'headline'" v-model="design[field.key]" rows="2" :maxlength="field.max" :placeholder="field.placeholder" :disabled="!vis[field.key] || !!fixedBinding(field.key)"></textarea>
+                <input v-else v-model="design[field.key]" :maxlength="field.max" :placeholder="field.placeholder" :disabled="!vis[field.key] || !!fixedBinding(field.key)">
+                <small v-if="fixedBinding(field.key)" class="binding-preview"><i class="bi bi-database"></i> Example: {{ bindingExample(fixedBinding(field.key)) }}</small>
+              </div>
             </section>
           </template>
 
@@ -541,7 +553,16 @@
                   Show name
                 </button>
               </div>
-              <label>Business or maker<input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName"></label>
+              <div class="binding-field">
+                <label>Business or maker
+                  <select :value="fixedBinding('merchantName')" :disabled="!vis.merchantName" @change="setFixedBinding('merchantName', ($event.target as HTMLSelectElement).value)">
+                    <option value="">Static text</option>
+                    <option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">Dynamic · {{ option.label }}</option>
+                  </select>
+                </label>
+                <input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName || !!fixedBinding('merchantName')">
+                <small v-if="fixedBinding('merchantName')" class="binding-preview"><i class="bi bi-database"></i> Example: {{ bindingExample(fixedBinding('merchantName')) }}</small>
+              </div>
             </section>
           </template>
 
@@ -587,14 +608,24 @@
               </p>
             </section>
             <section v-if="selectedElement.kind === 'shape' || selectedElement.kind === 'cta'">
-              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
+              <label v-if="selectedElement.kind === 'cta'">Content source<select v-model="selectedElement.dynamicField">
+                <option :value="undefined">Static text</option>
+                <option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">Dynamic · {{ option.label }}</option>
+              </select></label>
+              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30" :disabled="!!selectedElement.dynamicField"></label>
+              <small v-if="selectedElement.kind === 'cta' && selectedElement.dynamicField" class="binding-preview"><i class="bi bi-database"></i> Example: {{ bindingExample(selectedElement.dynamicField) }}</small>
               <label>{{ selectedElement.kind === 'shape' && selectedElement.shape === 'frame' ? 'Border color' : 'Fill color' }}<input type="color" v-model="selectedElement.fill" class="color-input"></label>
               <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
               <label v-if="selectedElement.kind === 'shape' && (selectedElement.shape === 'rect' || selectedElement.shape === 'frame')">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
               <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
             </section>
             <section v-else-if="selectedElement.kind === 'text'">
-              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200"></textarea></label>
+              <label>Content source<select v-model="selectedElement.dynamicField">
+                <option :value="undefined">Static text</option>
+                <option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">Dynamic · {{ option.label }}</option>
+              </select></label>
+              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200" :disabled="!!selectedElement.dynamicField"></textarea></label>
+              <small v-if="selectedElement.dynamicField" class="binding-preview"><i class="bi bi-database"></i> Example: {{ bindingExample(selectedElement.dynamicField) }}</small>
               <label>Font<select v-model="selectedElement.fontFamily" :style="{ fontFamily: selectedElement.fontFamily }">
                 <option v-for="f in TEXT_FONT_CHOICES" :key="f.value" :value="f.value" :style="{ fontFamily: f.value }">{{ f.label }}</option>
               </select></label>
@@ -690,6 +721,7 @@ import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT
 import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioDocument } from '../features/designStudio/document/migrations';
 import { STUDIO_SCHEMA_VERSION } from '../features/designStudio/document/types';
 import { preflightDesign } from '../features/designStudio/export/preflight';
+import { DYNAMIC_FIELD_OPTIONS, dynamicFieldSample } from '../features/qrStudio/dynamicFields';
 import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
 import '../features/qrStudio/qr-template-tokens.css';
 
@@ -777,6 +809,19 @@ const selectedElementOpacity = computed<number>({
   get: () => selectedElement.value?.opacity ?? 1,
   set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
 });
+
+type BindableFixedField = 'merchantName' | 'eyebrow' | 'headline' | 'descriptor' | 'cta';
+function fixedBinding(field: BindableFixedField): string {
+  return design.fieldBindings?.[field] ?? '';
+}
+function setFixedBinding(field: BindableFixedField, value: string): void {
+  if (!design.fieldBindings) design.fieldBindings = {};
+  if (value) design.fieldBindings[field] = value;
+  else delete design.fieldBindings[field];
+}
+function bindingExample(value?: string): string {
+  return dynamicFieldSample(value) || 'Uses the saved text';
+}
 
 interface ElRect { x: number; y: number; w: number; h: number }
 const elPos = ref({
@@ -1597,6 +1642,7 @@ const blankDesign = (): StudioDesign => ({
   typography: undefined,
   layout: undefined,
   variables: undefined,
+  fieldBindings: {},
   updatedAt: undefined,
 });
 const design = reactive<StudioDesign>(blankDesign());
@@ -1881,7 +1927,7 @@ async function saveDesign(quiet = false): Promise<void> {
     descriptor: design.descriptor, cta: design.cta, destination: design.destination,
     displayUnit: design.displayUnit, grid: design.grid, qrColors: design.qrColors,
     background: design.background, typography: design.typography, visibility: design.visibility,
-    customTemplate: design.customTemplate, variables: design.variables,
+    customTemplate: design.customTemplate, variables: design.variables, fieldBindings: design.fieldBindings,
   };
   const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
     vendorId: props.vendorId,
@@ -2337,6 +2383,7 @@ onUnmounted(() => {
 .vis-btn:hover{border-color:var(--gold);color:var(--ink)}
 .vis-btn i{font-size:11px}
 .properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+.binding-field{border-bottom:1px solid #ebe3dc;margin-bottom:12px;padding-bottom:12px}.binding-field>label{margin-bottom:6px}.binding-field select{margin-top:5px}.binding-preview{align-items:center;color:#8c6839;display:flex;font-size:9.5px;gap:5px;line-height:1.35;margin-top:5px}.binding-preview i{color:var(--gold)}
 .text-style-row{display:flex;gap:6px;margin-bottom:13px}
 .text-style-row .vis-btn{padding:6px 9px}
 .properties-panel select{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink)}

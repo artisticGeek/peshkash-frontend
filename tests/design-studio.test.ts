@@ -4,6 +4,8 @@ import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioD
 import { STUDIO_SCHEMA_VERSION } from '../src/features/designStudio/document/types.js';
 import { preflightDesign } from '../src/features/designStudio/export/preflight.js';
 import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../src/features/qrStudio/types.js';
+import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
+import { createZip } from '../src/utils/zip.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -78,6 +80,7 @@ test('the versioned document round-trips copy, layout, variables, and revision',
     layout,
     canvasElements: [],
     variables: design.variables,
+    fieldBindings: undefined,
     merchantName: design.merchantName,
     eyebrow: design.eyebrow,
     headline: design.headline,
@@ -85,6 +88,35 @@ test('the versioned document round-trips copy, layout, variables, and revision',
     cta: design.cta,
     destination: design.destination,
   });
+});
+
+test('dynamic text bindings resolve fixed and freeform text independently for every QR target', () => {
+  const bound: StudioDesign = {
+    ...design,
+    fieldBindings: { headline: 'item.name', descriptor: 'item.description', merchantName: 'vendor.name' },
+    canvasElements: [{ id: 'price', kind: 'text', x: 0, y: 0, w: 100, h: 30, text: 'Price on request', color: '#111111', fontFamily: 'Arial', fontSize: 18, fontWeight: '700', align: 'left', dynamicField: 'item.price' }],
+  };
+  const first = resolveDesignBindings(bound, { 'item.name': 'Paneer Tikka', 'item.description': 'Smoked paneer', 'item.price': '₹450', 'vendor.name': 'Acme Caterers' });
+  const second = resolveDesignBindings(bound, { 'item.name': 'Gulab Jamun', 'item.price': '₹250', 'vendor.name': 'Acme Caterers' });
+  assert.equal(first.headline, 'Paneer Tikka');
+  assert.equal(first.descriptor, 'Smoked paneer');
+  assert.equal(first.merchantName, 'Acme Caterers');
+  assert.equal(first.canvasElements?.[0].kind === 'text' && first.canvasElements[0].text, '₹450');
+  assert.equal(second.headline, 'Gulab Jamun');
+  assert.equal(second.descriptor, '');
+});
+
+test('batch export creates one ZIP container with every named QR asset', async () => {
+  const blob = createZip([
+    { name: '01-paneer.png', data: new Uint8Array([1, 2, 3]) },
+    { name: '02-dessert.png', data: new Uint8Array([4, 5]) },
+  ]);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const text = new TextDecoder().decode(bytes);
+  assert.equal(String.fromCharCode(...bytes.slice(0, 4)), 'PK\u0003\u0004');
+  assert.match(text, /01-paneer\.png/);
+  assert.match(text, /02-dessert\.png/);
+  assert.equal(String.fromCharCode(...bytes.slice(-22, -18)), 'PK\u0005\u0006');
 });
 
 test('unknown or incomplete document schemas are rejected', () => {

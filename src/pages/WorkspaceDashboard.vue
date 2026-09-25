@@ -2995,6 +2995,15 @@ const NON_SCANNABLE_TYPES = new Set(['category', 'serving', 'dishtype', 'modifie
 
 function eventQrTargets(event: EventRow) {
   const menusForEvent = eventMenus(event.id);
+  const vendor = event.vendor || vendors.value.find((candidate) => candidate.id === event.vendorId) || selectedVendor.value;
+  const baseVariables = {
+    'event.name': event.displayName,
+    'event.description': event.eventDescription || '',
+    'event.venue': event.experienceConfig?.venueName || '',
+    'event.date': event.startTime ? formatDate(event.startTime) : '',
+    'vendor.name': vendor?.displayName || '',
+    'vendor.description': vendor?.description || '',
+  };
   return [
     ...(event.experienceConfig?.enabled ? [{
       key: `event-page-${event.id}`,
@@ -3002,6 +3011,7 @@ function eventQrTargets(event: EventRow) {
       context: 'Registration, reminder and event details',
       type: 'Event page',
       path: `/event/${event.name}`,
+      variables: { ...baseVariables, 'target.description': event.eventDescription || '' },
     }] : []),
     ...menusForEvent.map((menu) => ({
       key: `menu-${menu.id}`,
@@ -3009,6 +3019,7 @@ function eventQrTargets(event: EventRow) {
       context: 'Full menu',
       type: 'Menu',
       path: menuPathFor(event, menu),
+      variables: { ...baseVariables, 'menu.name': menu.displayName, 'menu.description': menu.description || '', 'target.description': menu.description || '' },
     })),
     ...menusForEvent.flatMap((menu) =>
       menuItems(menu.id)
@@ -3019,6 +3030,15 @@ function eventQrTargets(event: EventRow) {
           context: menu.displayName,
           type: itemTypeLabel(item.type),
           path: itemPathFor(event, item),
+          variables: {
+            ...baseVariables,
+            'menu.name': menu.displayName,
+            'menu.description': menu.description || '',
+            'item.name': itemLabel(item),
+            'item.description': item.description || '',
+            'item.price': item.price || '',
+            'target.description': item.description || '',
+          },
         }))
     ),
   ];
@@ -4538,13 +4558,35 @@ const filteredUnmappedQrTargets = computed(() => {
 });
 
 const selectedQrMappings = computed(() => vendorQrMappings.value.filter((mapping) => selectedQrIds.value.includes(mapping.id)));
-const qrBatchTargets = computed(() => selectedQrMappings.value.map((mapping) => ({
-  key: `mapping-${mapping.id}`,
-  label: qrTargetLabel(mapping),
-  context: mapping.qrHash,
-  type: qrTypeBadge(mapping).label,
-  path: mapping.url,
-})));
+const qrBatchTargets = computed(() => selectedQrMappings.value.map((mapping) => {
+  const event = events.value.find((candidate) => candidate.id === mapping.eventId)
+    || events.value.find((candidate) => mapping.url?.includes(`/event/${candidate.name}`));
+  const menu = menus.value.find((candidate) => mapping.url?.includes(`/menu/${candidate.name}`));
+  const item = items.value.find((candidate) => mapping.url?.includes(`/item/${candidate.name}`));
+  const vendor = vendors.value.find((candidate) => candidate.id === (mapping.vendorId || event?.vendorId)) || selectedVendor.value;
+  return {
+    key: `mapping-${mapping.id}`,
+    mappingId: mapping.id,
+    label: qrTargetLabel(mapping),
+    context: mapping.qrHash,
+    type: qrTypeBadge(mapping).label,
+    path: mapping.url,
+    variables: {
+      'target.description': item?.description || menu?.description || event?.eventDescription || vendor?.description || '',
+      'item.name': item ? itemLabel(item) : '',
+      'item.description': item?.description || '',
+      'item.price': item?.price || '',
+      'menu.name': menu?.displayName || '',
+      'menu.description': menu?.description || '',
+      'event.name': event?.displayName || '',
+      'event.description': event?.eventDescription || '',
+      'event.venue': event?.experienceConfig?.venueName || '',
+      'event.date': event?.startTime ? formatDate(event.startTime) : '',
+      'vendor.name': vendor?.displayName || '',
+      'vendor.description': vendor?.description || '',
+    },
+  };
+}));
 
 function toggleAllVisibleQrs() {
   const visibleIds = filteredQrMappings.value.map((mapping) => mapping.id);
