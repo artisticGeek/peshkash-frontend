@@ -9,7 +9,7 @@ import { svgDataUri } from '../../features/qrStudio/qrRenderer';
 import { qrManifest, type FixedElementLayout, type QrTemplateDefinition, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
 import { DYNAMIC_FIELD_OPTIONS, missingDynamicFields, requiredDynamicFields, resolveDesignBindings, type DynamicValues } from '../../features/qrStudio/dynamicFields';
 import { synthesizeCustomTemplate } from '../../features/qrStudio/customTemplate';
-import { inlineSvgImages, normaliseCorelGeometry } from '../../features/qrStudio/corelSvg';
+import { corelPngCardObject } from '../../features/qrStudio/corelSvg';
 import { designFromDocument, readStudioDocument } from '../../features/designStudio/document/migrations';
 import { preflightDesign } from '../../features/designStudio/export/preflight';
 import { API_BASE_URL } from '../../config';
@@ -243,29 +243,34 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 async function exportZip() { if (!selectedTemplate.value || !canExport.value) return; isExporting.value = true; const images = await renderBatch(selectedTargets.value, EXPORT_SCALE, true); const files = selectedTargets.value.filter(t => images[t.key]).map((t, i) => ({ name: uniqueFilename(t, i), data: dataUrlBytes(images[t.key]) })); if (files.length) downloadBlob(createZip(files), zipFilename.value); isExporting.value = false; }
 function escapeXml(v: string) { return v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c] ?? c); }
-function placeSvgOnSheet(svg: string, x: number, y: number, width: number, height: number, prefix: string): string {
-  const root = svg.match(/<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/i);
-  if (!root) return '';
-  const viewBox = root[1].match(/viewBox="([^"]+)"/i)?.[1] || '0 0 1000 1000';
-  const [viewX, viewY, viewWidth, viewHeight] = viewBox.split(/[ ,]+/).map(Number);
-  const body = normaliseCorelGeometry(inlineSvgImages(root[2]))
-    // CorelDRAW treats CSS fallback lists as separate font variants (for example
-    // Arial-Normal) and prompts even when the first face is available. Keep the
-    // authored primary face only in the production SVG.
-    .replace(/font-family="([^"]+)"/g, (_match, familyList: string) => {
-      const primary = familyList.split(',')[0].trim().replace(/^&quot;|&quot;$/g, '').replace(/^['"]|['"]$/g, '');
-      const corelFamily = /^arial(?: black)?$/i.test(primary) ? 'Noto Sans' : (primary || 'Urbanist');
-      return `font-family="${corelFamily}"`;
-    })
-    .replace(/id="([^"]+)"/g, (_match, id: string) => `id="${prefix}-${id}"`)
-    .replace(/url\(#([^)]+)\)/g, (_match, id: string) => `url(#${prefix}-${id})`)
-    .replace(/(href|xlink:href)="#([^"]+)"/g, (_match, attr: string, id: string) => `${attr}="#${prefix}-${id}"`);
-  const scaleX = width / (viewWidth || 1000); const scaleY = height / (viewHeight || 1000);
-  return `<g id="${prefix}" data-object-type="qr-artwork" transform="translate(${x.toFixed(3)} ${y.toFixed(3)})"><g transform="scale(${scaleX.toFixed(8)} ${scaleY.toFixed(8)})"><g transform="translate(${(-viewX || 0).toFixed(3)} ${(-viewY || 0).toFixed(3)})">${body}</g></g></g>`;
+async function renderCorelCard(design: StudioDesign, target: QrTarget, widthMm: number, heightMm: number, captionHeightMm: number): Promise<string> {
+  const svg = renderToSvg(design, target);
+  const source = new Image();
+  await new Promise<void>((resolve, reject) => { source.onload = () => resolve(); source.onerror = () => reject(new Error('The CorelDRAW card could not be rendered.')); source.src = svgDataUri(svg); });
+  const widthPx = Math.max(1, Math.round(widthMm * EXPORT_SCALE));
+  const artworkHeightPx = Math.max(1, Math.round(heightMm * EXPORT_SCALE));
+  const captionHeightPx = Math.max(0, Math.round(captionHeightMm * EXPORT_SCALE));
+  const canvas = document.createElement('canvas'); canvas.width = widthPx; canvas.height = artworkHeightPx + captionHeightPx;
+  const context = canvas.getContext('2d')!; context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(source, 0, 0, widthPx, artworkHeightPx);
+  if (captionHeightPx) {
+    context.fillStyle = '#2b211a'; context.font = `${Math.max(10, Math.round(3.2 * EXPORT_SCALE))}px Arial, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.fillText(displayTargetLabel(target), widthPx / 2, artworkHeightPx + (captionHeightPx / 2), widthPx - Math.round(4 * EXPORT_SCALE));
+  }
+  return canvas.toDataURL('image/png');
 }
-function corelDrawPages(): string[] {
-  const design = selectedTemplate.value;
-  if (!design) return [];
+async function renderCorelCards(design: StudioDesign, layout: typeof sheetLayout.value): Promise<Record<string, string>> {
+  const images: Record<string, string> = {}; let cursor = 0; progress.value = 0; progressTotal.value = selectedTargets.value.length;
+  async function worker() {
+    while (cursor < selectedTargets.value.length) {
+      const target = selectedTargets.value[cursor++];
+      images[target.key] = await renderCorelCard(design, target, layout.width, layout.height, layout.captionHeight);
+      progress.value += 1;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, selectedTargets.value.length) }, () => worker()));
+  return images;
+}
+function corelDrawPages(images: Record<string, string>): string[] {
   const layout = sheetLayout.value;
   if (!layout.fits || !layout.perPage) return [];
   const { pageWidth, pageHeight, margin, gap, columns, width: artworkWidth, height: artworkHeight, captionHeight, perPage, startX } = layout;
@@ -275,21 +280,19 @@ function corelDrawPages(): string[] {
       const column = index % columns; const row = Math.floor(index / columns);
       const columnX = startX + column * (artworkWidth + gap); const x = columnX;
       const y = margin + row * (artworkHeight + captionHeight + gap);
-      const placed = placeSvgOnSheet(renderToSvg(design, target), x, y, artworkWidth, artworkHeight, `p${pages.length + 1}-c${index + 1}`);
-      const caption = printCaptions.value ? `<text x="${(columnX + artworkWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Noto Sans" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
-      const label = escapeXml(displayTargetLabel(target));
-      return `<g id="qr-card-page-${pages.length + 1}-item-${index + 1}" data-object-type="qr-card" data-qr-name="${label}"><title>${label}</title>${placed}${caption}</g>`;
+      return corelPngCardObject(images[target.key] || '', x, y, artworkWidth, artworkHeight + captionHeight, `qr-card-page-${pages.length + 1}-item-${index + 1}`, displayTargetLabel(target));
     }).join('');
     pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect id="page-background" width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
   }
   return pages;
 }
-function exportForCorelDraw() {
+async function exportForCorelDraw() {
   if (!selectedTemplate.value || !canExport.value || !sheetLayout.value.fits) return;
   isExporting.value = true;
   try {
-    const pages = corelDrawPages(); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
-    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract this ZIP file.\r\n2. In CorelDRAW, choose File > Import and select an SVG page.\r\n3. Each QR card is a named top-level group and can be selected and moved independently.\r\n4. QR modules, rounded corners, finder rings, and medallions are closed Bezier curves. They remain editable and retain their geometry when resized.\r\n5. QR artwork is expanded inline, so the file has no linked or browser-only images.\r\n6. Keep each QR grouped and preserve its aspect ratio when resizing.\r\n\r\nCanvas: ${sheetLayout.value.pageWidth} x ${sheetLayout.value.pageHeight} mm\r\nQR artwork: ${sheetLayout.value.width.toFixed(2)} x ${sheetLayout.value.height.toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
+    const layout = sheetLayout.value; const design = selectedTemplate.value;
+    const pages = corelDrawPages(await renderCorelCards(design, layout)); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
+    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract this ZIP file.\r\n2. In CorelDRAW, choose File > Import and select an SVG page.\r\n3. Each finished QR card is one named, print-quality bitmap object.\r\n4. Move, align, duplicate, or rearrange complete cards without ungrouping them.\r\n5. Cards are embedded at 300 DPI for the dimensions selected in Print setup; there are no linked files or missing fonts.\r\n6. Re-export from Peshkash if the final print dimensions change.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard object: ${layout.width.toFixed(2)} x ${(layout.height + layout.captionHeight).toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
     const files = pages.map((page, index) => ({ name: `${base}-page-${String(index + 1).padStart(2, '0')}.svg`, data: new TextEncoder().encode(page) }));
     files.push({ name: 'README.txt', data: new TextEncoder().encode(instructions) });
     downloadBlob(createZip(files), `${base}-package.zip`);
@@ -353,7 +356,7 @@ onMounted(loadTemplates);
     <div v-if="zoomedTarget" class="ps-overlay" role="dialog" aria-modal="true" :aria-label="`Inspect ${displayTargetLabel(zoomedTarget)}`" @click.self="zoomedTargetKey = null"><div class="ps-proof-modal"><header><div><small>Actual rendered proof</small><h4>{{ displayTargetLabel(zoomedTarget) }}</h4><code>{{ mappingForTarget(zoomedTarget)?.shortQrUrl }}</code></div><button type="button" aria-label="Close proof" @click="zoomedTargetKey = null"><i class="bi bi-x-lg"></i></button></header><div class="ps-proof-image"><img :src="previews[zoomedTarget.key]" :alt="`Full proof for ${displayTargetLabel(zoomedTarget)}`"></div><footer><span><i class="bi bi-zoom-in"></i> Review copy, spacing and QR quiet zone at full size.</span><label><input v-model="selectedTargetKeys" type="checkbox" :value="zoomedTarget.key"> Include in export</label></footer></div></div>
     <div v-if="showPrintSetup" class="ps-overlay" role="dialog" aria-modal="true" aria-label="Print setup" @click.self="showPrintSetup = false">
       <div class="ps-print-modal">
-        <header><div><small>Print &amp; vector export</small><h4>{{ selectedPaper.label }} canvas</h4></div><button type="button" aria-label="Close print setup" @click="showPrintSetup = false"><i class="bi bi-x-lg"></i></button></header>
+        <header><div><small>Print &amp; CorelDRAW layout</small><h4>{{ selectedPaper.label }} canvas</h4></div><button type="button" aria-label="Close print setup" @click="showPrintSetup = false"><i class="bi bi-x-lg"></i></button></header>
         <div class="ps-print-body">
           <div class="ps-print-controls">
             <label>Canvas size<select v-model="printPaperSize"><option v-for="paper in paperSizes" :key="paper.id" :value="paper.id">{{ paper.label }} · {{ paper.widthMm }} × {{ paper.heightMm }} mm</option><option value="custom">Custom canvas…</option></select></label>
@@ -362,7 +365,7 @@ onMounted(loadTemplates);
             <label>Orientation<select v-model="printOrientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
             <label>Maximum cards per row<select v-model.number="printColumns"><option v-for="columns in 6" :key="columns" :value="columns">{{ columns }}</option></select></label>
             <fieldset class="ps-size-control">
-              <legend>QR artwork size <span><i class="bi bi-lock-fill"></i> Aspect ratio locked</span></legend>
+              <legend>Card size <span><i class="bi bi-lock-fill"></i> Aspect ratio locked</span></legend>
               <label>Width<input v-model.number="artworkWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label>
               <label>Height<input :value="artworkHeight" type="number" readonly><span>{{ displayUnit }}</span></label>
               <label class="ps-scale">Scale<input v-model.number="artworkScalePercent" type="range" min="25" max="400" step="5"><output>{{ artworkScalePercent }}%</output></label>
@@ -372,7 +375,7 @@ onMounted(loadTemplates);
             <label class="ps-check"><input v-model="printCaptions" type="checkbox"> Print card names below artwork</label>
           </div>
           <aside class="ps-layout-preview">
-            <div class="ps-layout-heading"><span>LIVE PLACEMENT</span><b>{{ sheetLayout.pageCount || '—' }} page{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ artworkWidth.toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ artworkHeight.toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} per QR</small></div>
+            <div class="ps-layout-heading"><span>LIVE PLACEMENT</span><b>{{ sheetLayout.pageCount || '—' }} page{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ artworkWidth.toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ artworkHeight.toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} per card</small></div>
             <div v-if="!sheetLayout.fits" class="ps-layout-error"><i class="bi bi-exclamation-triangle"></i> This artwork size does not fit inside the selected canvas and margins.</div>
             <div v-else class="ps-page-list">
               <article v-for="page in printPreviewPages" :key="page.number"><header>Page {{ page.number }} <span>{{ page.targets.length }} QR{{ page.targets.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="(target, index) in page.targets" :key="target.key" class="ps-mini-card" :style="previewCardStyle(index)" :title="displayTargetLabel(target)"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Placed preview for ${displayTargetLabel(target)}`"><i v-else class="bi bi-qr-code"></i></div></div></article>
@@ -381,7 +384,7 @@ onMounted(loadTemplates);
             <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas</p>
           </aside>
         </div>
-        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-file-earmark-zip"></i> Download CorelDRAW package</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
+        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-file-earmark-zip"></i> Download CorelDRAW layout</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
       </div>
     </div>
   </div>

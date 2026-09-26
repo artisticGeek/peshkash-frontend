@@ -6,8 +6,7 @@ import { preflightDesign } from '../src/features/designStudio/export/preflight.j
 import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../src/features/qrStudio/types.js';
 import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
 import { createZip } from '../src/utils/zip.js';
-import { inlineSvgImages, normaliseCorelGeometry } from '../src/features/qrStudio/corelSvg.js';
-import { circleCurvePath, roundedRectCurvePath } from '../src/features/qrStudio/vectorGeometry.js';
+import { corelPngCardObject } from '../src/features/qrStudio/corelSvg.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -32,36 +31,14 @@ const design: StudioDesign = {
   destination: 'https://pksh.in/noor', revision: 3, variables: { collection: 'Monsoon' },
 };
 
-test('CorelDRAW export expands embedded QR SVGs into editable vector groups', () => {
-  const qr = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-label="Peshkash branded QR code"><rect x="10" y="10" width="20" height="20"/></svg>';
-  const source = `<image href="data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr)}" x="40" y="50" width="200" height="200"/>`;
-  const output = inlineSvgImages(source);
-  assert.equal(output.includes('<image'), false);
-  assert.equal(output.includes('data:image'), false);
-  assert.equal(output.includes('data-object-type="qr-code"'), true);
-  assert.equal(output.includes('data-object-name="Editable QR vector curves"'), true);
-  assert.equal(output.includes('translate(40.000 50.000)'), true);
-  assert.equal(output.includes('scale(2.00000000 2.00000000)'), true);
-  assert.equal(output.includes('<rect x="10" y="10" width="20" height="20"/>'), true);
-});
-
-test('QR artwork uses Corel-safe closed curves for rounded geometry', () => {
-  const module = roundedRectCurvePath(10, 20, 30, 5);
-  const knockout = roundedRectCurvePath(15, 25, 20, 3, true);
-  const finderCore = circleCurvePath(50, 50, 12);
-  assert.match(module, /^M.+C.+Z$/);
-  assert.match(knockout, /^M.+C.+Z$/);
-  assert.equal((finderCore.match(/C/g) || []).length, 4);
-  assert.match(finderCore, /^M.+Z$/);
-  assert.notEqual(module, knockout);
-});
-
-test('CorelDRAW export converts rounded card edges and circles to explicit curves', () => {
-  const output = normaliseCorelGeometry('<rect id="card" x="2" y="3" width="800" height="1200" rx="32" fill="#fff"/><circle id="seal" cx="50" cy="60" r="12" fill="#000"/>');
-  assert.equal(output.includes('<rect'), false);
-  assert.equal(output.includes('<circle'), false);
-  assert.match(output, /<path d="M34 3.+" id="card" fill="#fff"\/>/);
-  assert.match(output, /<path d="M50 48.+" id="seal" fill="#000"\/>/);
+test('CorelDRAW grid export exposes each finished card as one movable object', () => {
+  const png = `data:image/png;base64,${Buffer.from('card').toString('base64')}`;
+  const output = corelPngCardObject(png, 10, 20, 90, 141, 'page-1-card-1', 'Brass & Chai');
+  assert.equal((output.match(/<(?:image|g|path|rect|text)\b/g) || []).length, 1);
+  assert.match(output, /^<image id="page-1-card-1" data-object-type="qr-card"/);
+  assert.match(output, /width="90\.000" height="141\.000"/);
+  assert.match(output, /data-qr-name="Brass &amp; Chai"/);
+  assert.match(output, /href="data:image\/png;base64,/);
 });
 
 test('preflight accepts an approved HTTPS destination and print-safe QR', () => {

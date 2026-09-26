@@ -1,6 +1,5 @@
 import QRCode from 'qrcode';
 import { qrManifest, type QrColorSpec, type QrStyleId } from './types';
-import { circleCurvePath, roundedRectCurvePath } from './vectorGeometry';
 
 interface QrMatrix {
   size: number;
@@ -25,6 +24,11 @@ function esc(value: string): string {
   return value.replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&apos;', '"': '&quot;',
   })[char] ?? char);
+}
+
+function roundedRectPath(x: number, y: number, width: number, radius: number): string {
+  const r = Math.max(0, Math.min(radius, width / 2));
+  return `M${(x + r).toFixed(3)} ${y.toFixed(3)}H${(x + width - r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + width).toFixed(3)} ${(y + r).toFixed(3)}V${(y + width - r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + width - r).toFixed(3)} ${(y + width).toFixed(3)}H${(x + r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${x.toFixed(3)} ${(y + width - r).toFixed(3)}V${(y + r).toFixed(3)}A${r.toFixed(3)} ${r.toFixed(3)} 0 0 1 ${(x + r).toFixed(3)} ${y.toFixed(3)}Z`;
 }
 
 function matrixFor(value: string, maskPattern?: number): QrMatrix {
@@ -112,7 +116,7 @@ export function renderBrandedQrSvg(
       if (isFinder(row, col, matrix.size) || !matrix.data[row * matrix.size + col]) continue;
       const x = (col + quiet) * cell;
       const y = (row + quiet) * cell;
-      paths.push(`<path d="${roundedRectCurvePath(x, y, cell, moduleRadius)}" fill="${colors.foreground}"/>`);
+      paths.push(`<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${cell.toFixed(3)}" height="${cell.toFixed(3)}" rx="${moduleRadius.toFixed(3)}" fill="${colors.foreground}"/>`);
     }
   }
 
@@ -126,12 +130,10 @@ export function renderBrandedQrSvg(
     const innerX = x + cell;
     const innerY = y + cell;
     const innerW = 5 * cell;
-    const outerPath = roundedRectCurvePath(x, y, outerW, finderRadius);
-    // Reverse the inner contour so the default non-zero winding rule creates
-    // a true knockout. This survives CorelDRAW import as one compound curve.
-    const innerPath = roundedRectCurvePath(innerX, innerY, innerW, Math.max(0, finderRadius - cell), true);
-    paths.push(`<path d="${outerPath}${innerPath}" fill="${colors.foreground}"/>`);
-    paths.push(`<path d="${circleCurvePath(x + (3.5 * cell), y + (3.5 * cell), 1.5 * cell)}" fill="${colors.accent || style.finderCore}"/>`);
+    const outerPath = roundedRectPath(x, y, outerW, finderRadius);
+    const innerPath = roundedRectPath(innerX, innerY, innerW, Math.max(0, finderRadius - cell));
+    paths.push(`<path d="${outerPath} ${innerPath}" fill="${colors.foreground}" fill-rule="evenodd"/>`);
+    paths.push(`<circle cx="${(x + (3.5 * cell)).toFixed(3)}" cy="${(y + (3.5 * cell)).toFixed(3)}" r="${(1.5 * cell).toFixed(3)}" fill="${colors.accent || style.finderCore}"/>`);
   });
 
   const centre = pixelSize / 2;
@@ -139,9 +141,9 @@ export function renderBrandedQrSvg(
   const stroke = Math.max(2, pixelSize * 0.004);
   const medallion: string[] = [];
   if (styleId === 'obsidian-ring') {
-    medallion.push(`<path d="${circleCurvePath(centre, centre, diameter * 0.58)}" fill="${PAPER}"/>`);
+    medallion.push(`<circle cx="${centre}" cy="${centre}" r="${(diameter * 0.58).toFixed(3)}" fill="${PAPER}"/>`);
   }
-  medallion.push(`<path d="${circleCurvePath(centre, centre, diameter / 2)}" fill="${style.medallionFill}" stroke="${style.medallionStroke}" stroke-width="${stroke.toFixed(3)}"/>`);
+  medallion.push(`<circle cx="${centre}" cy="${centre}" r="${(diameter / 2).toFixed(3)}" fill="${style.medallionFill}" stroke="${style.medallionStroke}" stroke-width="${stroke.toFixed(3)}"/>`);
   medallion.push(peshkashMark(centre, centre, diameter * style.medallionIconRatio, styleId === 'obsidian-ring'));
 
   const background = colors.transparent ? '' : `<rect width="${pixelSize}" height="${pixelSize}" fill="${colors.background}"/>`;
