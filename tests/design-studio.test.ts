@@ -6,6 +6,7 @@ import { preflightDesign } from '../src/features/designStudio/export/preflight.j
 import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../src/features/qrStudio/types.js';
 import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
 import { createZip } from '../src/utils/zip.js';
+import { inlineSvgImages } from '../src/features/qrStudio/corelSvg.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -29,6 +30,18 @@ const design: StudioDesign = {
   descriptor: 'Portfolio · commissions · studio visits', cta: 'SCAN MY PORTFOLIO',
   destination: 'https://pksh.in/noor', revision: 3, variables: { collection: 'Monsoon' },
 };
+
+test('CorelDRAW export expands embedded QR SVGs into editable vector groups', () => {
+  const qr = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-label="Peshkash branded QR code"><rect x="10" y="10" width="20" height="20"/></svg>';
+  const source = `<image href="data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr)}" x="40" y="50" width="200" height="200"/>`;
+  const output = inlineSvgImages(source);
+  assert.equal(output.includes('<image'), false);
+  assert.equal(output.includes('data:image'), false);
+  assert.equal(output.includes('data-object-type="qr-code"'), true);
+  assert.equal(output.includes('translate(40.000 50.000)'), true);
+  assert.equal(output.includes('scale(2.00000000 2.00000000)'), true);
+  assert.equal(output.includes('<rect x="10" y="10" width="20" height="20"/>'), true);
+});
 
 test('preflight accepts an approved HTTPS destination and print-safe QR', () => {
   const report = preflightDesign(design, template, layout);

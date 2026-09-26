@@ -9,6 +9,7 @@ import { svgDataUri } from '../../features/qrStudio/qrRenderer';
 import { qrManifest, type FixedElementLayout, type QrTemplateDefinition, type StudioDesign, type QrStyleId, type StudioTheme } from '../../features/qrStudio/types';
 import { DYNAMIC_FIELD_OPTIONS, missingDynamicFields, requiredDynamicFields, resolveDesignBindings, type DynamicValues } from '../../features/qrStudio/dynamicFields';
 import { synthesizeCustomTemplate } from '../../features/qrStudio/customTemplate';
+import { inlineSvgImages } from '../../features/qrStudio/corelSvg';
 import { designFromDocument, readStudioDocument } from '../../features/designStudio/document/migrations';
 import { preflightDesign } from '../../features/designStudio/export/preflight';
 import { API_BASE_URL } from '../../config';
@@ -222,7 +223,11 @@ async function generatePreviews() { if (!selectedTemplate.value || !previewTarge
 async function retryFailedPreviews() { if (!failedPreviewTargets.value.length) return; isGenerating.value = true; const recovered = await renderBatch(failedPreviewTargets.value, 6, true); previews.value = { ...previews.value, ...recovered }; isGenerating.value = false; }
 function safeFilename(v: string) { return v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'qr'; }
 function uniqueFilename(t: QrTarget, i: number) { return `${String(i + 1).padStart(2, '0')}-${safeFilename(t.label)}-${safeFilename(mappingForTarget(t)?.qrHash || t.key)}.png`; }
-function downloadBlob(blob: Blob, filename: string) { const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(href), 1000); }
+function downloadBlob(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob); const link = document.createElement('a');
+  link.href = href; link.download = filename; link.style.display = 'none'; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+}
 async function exportZip() { if (!selectedTemplate.value || !canExport.value) return; isExporting.value = true; const images = await renderBatch(selectedTargets.value, EXPORT_SCALE, true); const files = selectedTargets.value.filter(t => images[t.key]).map((t, i) => ({ name: uniqueFilename(t, i), data: dataUrlBytes(images[t.key]) })); if (files.length) downloadBlob(createZip(files), zipFilename.value); isExporting.value = false; }
 function escapeXml(v: string) { return v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c] ?? c); }
 function placeSvgOnSheet(svg: string, x: number, y: number, width: number, height: number, prefix: string): string {
@@ -230,7 +235,7 @@ function placeSvgOnSheet(svg: string, x: number, y: number, width: number, heigh
   if (!root) return '';
   const viewBox = root[1].match(/viewBox="([^"]+)"/i)?.[1] || '0 0 1000 1000';
   const [viewX, viewY, viewWidth, viewHeight] = viewBox.split(/[ ,]+/).map(Number);
-  const body = root[2]
+  const body = inlineSvgImages(root[2])
     // CorelDRAW treats CSS fallback lists as separate font variants (for example
     // Arial-Normal) and prompts even when the first face is available. Keep the
     // authored primary face only in the production SVG.
@@ -259,9 +264,10 @@ function corelDrawPages(): string[] {
       const y = margin + row * (artworkHeight + captionHeight + gap);
       const placed = placeSvgOnSheet(renderToSvg(design, target), x, y, artworkWidth, artworkHeight, `p${pages.length + 1}-c${index + 1}`);
       const caption = printCaptions.value ? `<text x="${(columnX + artworkWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Noto Sans" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
-      return `<g id="qr-card-page-${pages.length + 1}-item-${index + 1}" data-object-type="qr-card" data-qr-name="${escapeXml(displayTargetLabel(target))}"><title>${escapeXml(displayTargetLabel(target))}</title>${placed}${caption}</g>`;
+      const label = escapeXml(displayTargetLabel(target));
+      return `<g id="qr-card-page-${pages.length + 1}-item-${index + 1}" inkscape:groupmode="layer" inkscape:label="${label}" data-object-type="qr-card" data-qr-name="${label}"><title>${label}</title>${placed}${caption}</g>`;
     }).join('');
-    pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
+    pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect id="page-background" width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
   }
   return pages;
 }
@@ -270,8 +276,10 @@ function exportForCorelDraw() {
   isExporting.value = true;
   try {
     const pages = corelDrawPages(); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
-    if (pages.length === 1) downloadBlob(new Blob([pages[0]], { type: 'image/svg+xml;charset=utf-8' }), `${base}.svg`);
-    else downloadBlob(createZip(pages.map((page, index) => ({ name: `${base}-page-${String(index + 1).padStart(2, '0')}.svg`, data: new TextEncoder().encode(page) }))), `${base}-pages.zip`);
+    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract this ZIP file.\r\n2. In CorelDRAW, choose File > Import and select an SVG page.\r\n3. Each QR card is a named top-level layer/group and can be selected and moved independently.\r\n4. QR codes are expanded inline as vector shapes, so they do not depend on linked or embedded browser images.\r\n\r\nCanvas: ${sheetLayout.value.pageWidth} x ${sheetLayout.value.pageHeight} mm\r\nQR artwork: ${sheetLayout.value.width.toFixed(2)} x ${sheetLayout.value.height.toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
+    const files = pages.map((page, index) => ({ name: `${base}-page-${String(index + 1).padStart(2, '0')}.svg`, data: new TextEncoder().encode(page) }));
+    files.push({ name: 'README.txt', data: new TextEncoder().encode(instructions) });
+    downloadBlob(createZip(files), `${base}-package.zip`);
     showPrintSetup.value = false;
   } finally { isExporting.value = false; }
 }
@@ -360,7 +368,7 @@ onMounted(loadTemplates);
             <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas</p>
           </aside>
         </div>
-        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-vector-pen"></i> Export grouped SVG for CorelDRAW</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
+        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-file-earmark-zip"></i> Download CorelDRAW package</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
       </div>
     </div>
   </div>
