@@ -6,7 +6,8 @@ import { preflightDesign } from '../src/features/designStudio/export/preflight.j
 import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../src/features/qrStudio/types.js';
 import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
 import { createZip } from '../src/utils/zip.js';
-import { inlineSvgImages } from '../src/features/qrStudio/corelSvg.js';
+import { inlineSvgImages, normaliseCorelGeometry } from '../src/features/qrStudio/corelSvg.js';
+import { circleCurvePath, roundedRectCurvePath } from '../src/features/qrStudio/vectorGeometry.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -38,9 +39,29 @@ test('CorelDRAW export expands embedded QR SVGs into editable vector groups', ()
   assert.equal(output.includes('<image'), false);
   assert.equal(output.includes('data:image'), false);
   assert.equal(output.includes('data-object-type="qr-code"'), true);
+  assert.equal(output.includes('data-object-name="Editable QR vector curves"'), true);
   assert.equal(output.includes('translate(40.000 50.000)'), true);
   assert.equal(output.includes('scale(2.00000000 2.00000000)'), true);
   assert.equal(output.includes('<rect x="10" y="10" width="20" height="20"/>'), true);
+});
+
+test('QR artwork uses Corel-safe closed curves for rounded geometry', () => {
+  const module = roundedRectCurvePath(10, 20, 30, 5);
+  const knockout = roundedRectCurvePath(15, 25, 20, 3, true);
+  const finderCore = circleCurvePath(50, 50, 12);
+  assert.match(module, /^M.+C.+Z$/);
+  assert.match(knockout, /^M.+C.+Z$/);
+  assert.equal((finderCore.match(/C/g) || []).length, 4);
+  assert.match(finderCore, /^M.+Z$/);
+  assert.notEqual(module, knockout);
+});
+
+test('CorelDRAW export converts rounded card edges and circles to explicit curves', () => {
+  const output = normaliseCorelGeometry('<rect id="card" x="2" y="3" width="800" height="1200" rx="32" fill="#fff"/><circle id="seal" cx="50" cy="60" r="12" fill="#000"/>');
+  assert.equal(output.includes('<rect'), false);
+  assert.equal(output.includes('<circle'), false);
+  assert.match(output, /<path d="M34 3.+" id="card" fill="#fff"\/>/);
+  assert.match(output, /<path d="M50 48.+" id="seal" fill="#000"\/>/);
 });
 
 test('preflight accepts an approved HTTPS destination and print-safe QR', () => {
