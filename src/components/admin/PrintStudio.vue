@@ -56,6 +56,7 @@ const printGapMm = ref(6);
 const printUnit = ref<PrintUnit>('mm');
 const customPaperWidthMm = ref(210);
 const customPaperHeightMm = ref(297);
+const artworkWidthMm = ref(90);
 const printColumns = ref(2);
 const printCaptions = ref(true);
 const thumbnailCache = new Map<string, string>();
@@ -95,12 +96,47 @@ const displayUnit = computed(() => printUnit.value === 'in' ? 'in' : printUnit.v
 function mmValue(model: typeof customPaperWidthMm) { return computed<number>({ get: () => Number((model.value / unitFactor.value).toFixed(printUnit.value === 'mm' ? 1 : 2)), set: value => { model.value = Math.max(0, Number(value) || 0) * unitFactor.value; } }); }
 const customPaperWidth = mmValue(customPaperWidthMm);
 const customPaperHeight = mmValue(customPaperHeightMm);
+const artworkWidth = mmValue(artworkWidthMm);
 const printMargin = mmValue(printMarginMm);
 const printGap = mmValue(printGapMm);
 const printPageDimensions = computed(() => printOrientation.value === 'portrait'
   ? { widthMm: selectedPaper.value.widthMm, heightMm: selectedPaper.value.heightMm }
   : { widthMm: selectedPaper.value.heightMm, heightMm: selectedPaper.value.widthMm });
-const printSheetSummary = computed(() => `${selectedPaper.value.label} · ${printOrientation.value === 'portrait' ? 'Portrait' : 'Landscape'} · ${printColumns.value} column${printColumns.value === 1 ? '' : 's'} · ${printMargin.value} ${displayUnit.value} margin · ${printGap.value} ${displayUnit.value} gap`);
+const artworkHeightMm = computed(() => selectedTemplate.value && selectedTemplate.value.widthMm > 0
+  ? artworkWidthMm.value * (selectedTemplate.value.heightMm / selectedTemplate.value.widthMm)
+  : artworkWidthMm.value);
+const artworkHeight = computed(() => Number((artworkHeightMm.value / unitFactor.value).toFixed(printUnit.value === 'mm' ? 1 : 2)));
+const artworkScalePercent = computed<number>({
+  get: () => selectedTemplate.value?.widthMm ? Math.round((artworkWidthMm.value / selectedTemplate.value.widthMm) * 100) : 100,
+  set: value => { if (selectedTemplate.value) artworkWidthMm.value = Math.max(1, selectedTemplate.value.widthMm * (Number(value) || 100) / 100); },
+});
+const sheetLayout = computed(() => {
+  const { widthMm: pageWidth, heightMm: pageHeight } = printPageDimensions.value;
+  const margin = Math.max(0, printMarginMm.value); const gap = Math.max(0, printGapMm.value);
+  const width = Math.max(1, artworkWidthMm.value); const height = Math.max(1, artworkHeightMm.value); const captionHeight = printCaptions.value ? 6 : 0;
+  const availableWidth = Math.max(0, pageWidth - (margin * 2)); const availableHeight = Math.max(0, pageHeight - (margin * 2));
+  const fitColumns = Math.max(0, Math.floor((availableWidth + gap) / (width + gap)));
+  const columns = Math.min(Math.max(1, printColumns.value), Math.max(1, fitColumns));
+  const rows = Math.max(0, Math.floor((availableHeight + gap) / (height + captionHeight + gap)));
+  const fits = fitColumns > 0 && rows > 0;
+  const perPage = fits ? columns * rows : 0; const pageCount = perPage ? Math.ceil(selectedTargets.value.length / perPage) : 0;
+  const usedWidth = columns * width + Math.max(0, columns - 1) * gap;
+  return { pageWidth, pageHeight, margin, gap, width, height, captionHeight, columns, rows, perPage, pageCount, fits, startX: margin + Math.max(0, (availableWidth - usedWidth) / 2) };
+});
+const printSheetSummary = computed(() => `${selectedPaper.value.label} · ${printOrientation.value === 'portrait' ? 'Portrait' : 'Landscape'} · ${sheetLayout.value.columns} across · ${sheetLayout.value.pageCount} page${sheetLayout.value.pageCount === 1 ? '' : 's'}`);
+const printPreviewPages = computed(() => Array.from({ length: Math.min(sheetLayout.value.pageCount, 4) }, (_, pageIndex) => ({
+  number: pageIndex + 1,
+  targets: selectedTargets.value.slice(pageIndex * sheetLayout.value.perPage, (pageIndex + 1) * sheetLayout.value.perPage),
+})));
+function previewCardStyle(index: number): Record<string, string> {
+  const layout = sheetLayout.value; const column = index % layout.columns; const row = Math.floor(index / layout.columns);
+  return {
+    left: `${((layout.startX + column * (layout.width + layout.gap)) / layout.pageWidth) * 100}%`,
+    top: `${((layout.margin + row * (layout.height + layout.captionHeight + layout.gap)) / layout.pageHeight) * 100}%`,
+    width: `${(layout.width / layout.pageWidth) * 100}%`,
+    height: `${(layout.height / layout.pageHeight) * 100}%`,
+  };
+}
 
 function mappingForTarget(target: QrTarget): QrMapping | null {
   if (target.mappingId) return props.qrMappings.find(m => m.id === target.mappingId) ?? null;
@@ -193,6 +229,7 @@ function placeSvgOnSheet(svg: string, x: number, y: number, width: number, heigh
   const root = svg.match(/<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/i);
   if (!root) return '';
   const viewBox = root[1].match(/viewBox="([^"]+)"/i)?.[1] || '0 0 1000 1000';
+  const [viewX, viewY, viewWidth, viewHeight] = viewBox.split(/[ ,]+/).map(Number);
   const body = root[2]
     // CorelDRAW treats CSS fallback lists as separate font variants (for example
     // Arial-Normal) and prompts even when the first face is available. Keep the
@@ -205,35 +242,31 @@ function placeSvgOnSheet(svg: string, x: number, y: number, width: number, heigh
     .replace(/id="([^"]+)"/g, (_match, id: string) => `id="${prefix}-${id}"`)
     .replace(/url\(#([^)]+)\)/g, (_match, id: string) => `url(#${prefix}-${id})`)
     .replace(/(href|xlink:href)="#([^"]+)"/g, (_match, attr: string, id: string) => `${attr}="#${prefix}-${id}"`);
-  return `<svg x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${width.toFixed(3)}" height="${height.toFixed(3)}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${body}</svg>`;
+  const scaleX = width / (viewWidth || 1000); const scaleY = height / (viewHeight || 1000);
+  return `<g id="${prefix}" data-object-type="qr-artwork" transform="translate(${x.toFixed(3)} ${y.toFixed(3)})"><g transform="scale(${scaleX.toFixed(8)} ${scaleY.toFixed(8)})"><g transform="translate(${(-viewX || 0).toFixed(3)} ${(-viewY || 0).toFixed(3)})">${body}</g></g></g>`;
 }
 function corelDrawPages(): string[] {
   const design = selectedTemplate.value;
   if (!design) return [];
-  const { widthMm: pageWidth, heightMm: pageHeight } = printPageDimensions.value;
-  const margin = Math.max(0, printMarginMm.value); const gap = Math.max(0, printGapMm.value); const columns = Math.max(1, printColumns.value);
-  const availableWidth = Math.max(1, pageWidth - (margin * 2)); const availableHeight = Math.max(1, pageHeight - (margin * 2));
-  const columnWidth = Math.max(1, (availableWidth - (gap * (columns - 1))) / columns);
-  const captionHeight = printCaptions.value ? 6 : 0; const naturalHeight = columnWidth * (design.heightMm / design.widthMm);
-  const rows = Math.max(1, Math.floor((availableHeight + gap) / (naturalHeight + captionHeight + gap)));
-  const maxArtworkHeight = Math.max(1, ((availableHeight - (gap * (rows - 1))) / rows) - captionHeight);
-  const artworkHeight = Math.min(naturalHeight, maxArtworkHeight); const artworkWidth = artworkHeight * (design.widthMm / design.heightMm);
-  const perPage = rows * columns; const pages: string[] = [];
+  const layout = sheetLayout.value;
+  if (!layout.fits || !layout.perPage) return [];
+  const { pageWidth, pageHeight, margin, gap, columns, width: artworkWidth, height: artworkHeight, captionHeight, perPage, startX } = layout;
+  const pages: string[] = [];
   for (let start = 0; start < selectedTargets.value.length; start += perPage) {
     const cards = selectedTargets.value.slice(start, start + perPage).map((target, index) => {
       const column = index % columns; const row = Math.floor(index / columns);
-      const columnX = margin + column * (columnWidth + gap); const x = columnX + (columnWidth - artworkWidth) / 2;
+      const columnX = startX + column * (artworkWidth + gap); const x = columnX;
       const y = margin + row * (artworkHeight + captionHeight + gap);
       const placed = placeSvgOnSheet(renderToSvg(design, target), x, y, artworkWidth, artworkHeight, `p${pages.length + 1}-c${index + 1}`);
-      const caption = printCaptions.value ? `<text x="${(columnX + columnWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Noto Sans" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
-      return `<g data-qr-name="${escapeXml(displayTargetLabel(target))}">${placed}${caption}</g>`;
+      const caption = printCaptions.value ? `<text x="${(columnX + artworkWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Noto Sans" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
+      return `<g id="qr-card-page-${pages.length + 1}-item-${index + 1}" data-object-type="qr-card" data-qr-name="${escapeXml(displayTargetLabel(target))}"><title>${escapeXml(displayTargetLabel(target))}</title>${placed}${caption}</g>`;
     }).join('');
     pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
   }
   return pages;
 }
 function exportForCorelDraw() {
-  if (!selectedTemplate.value || !canExport.value || printPageDimensions.value.widthMm <= 0 || printPageDimensions.value.heightMm <= 0) return;
+  if (!selectedTemplate.value || !canExport.value || !sheetLayout.value.fits) return;
   isExporting.value = true;
   try {
     const pages = corelDrawPages(); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
@@ -244,17 +277,25 @@ function exportForCorelDraw() {
 }
 function escapeHtml(v: string) { return v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] ?? c); }
 async function printSheet() {
-  if (!selectedTemplate.value || !canExport.value) return; const win = window.open('', '_blank'); if (!win) return; win.opener = null; win.document.write('<!doctype html><title>Preparing QR print…</title><p style="font:16px sans-serif;padding:24px">Preparing print-quality QR assets…</p>'); isExporting.value = true;
+  if (!selectedTemplate.value || !canExport.value || !sheetLayout.value.fits) return; const win = window.open('', '_blank'); if (!win) return; win.opener = null; win.document.write('<!doctype html><title>Preparing QR print…</title><p style="font:16px sans-serif;padding:24px">Preparing print-quality QR assets…</p>'); isExporting.value = true;
   const images = await renderBatch(selectedTargets.value, EXPORT_SCALE, true);
-  const cards = selectedTargets.value.map(t => images[t.key] ? `<figure><img src="${images[t.key]}" alt="${escapeHtml(t.label)}">${printCaptions.value ? `<figcaption>${escapeHtml(t.label)}</figcaption>` : ''}</figure>` : '').join('');
+  const layout = sheetLayout.value; const sheets: string[] = [];
+  for (let start = 0; start < selectedTargets.value.length; start += layout.perPage) {
+    const cards = selectedTargets.value.slice(start, start + layout.perPage).map(t => images[t.key] ? `<figure><img src="${images[t.key]}" alt="${escapeHtml(t.label)}">${printCaptions.value ? `<figcaption>${escapeHtml(displayTargetLabel(t))}</figcaption>` : ''}</figure>` : '').join('');
+    sheets.push(`<main class="sheet">${cards}</main>`);
+  }
   const pageSize = `${printPageDimensions.value.widthMm}mm ${printPageDimensions.value.heightMm}mm`;
-  win.document.open(); win.document.write(`<!doctype html><html><head><title>Peshkash QR sheet</title><style>@page{size:${pageSize};margin:${printMarginMm.value}mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.sheet{display:grid;grid-template-columns:repeat(${printColumns.value},minmax(0,1fr));gap:${printGapMm.value}mm;align-items:start}figure{break-inside:avoid;margin:0;text-align:center}img{display:block;width:100%;height:auto;object-fit:contain}figcaption{font-size:8pt;margin-top:2mm}</style></head><body><main class="sheet">${cards}</main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),150))<\/script></body></html>`); win.document.close(); showPrintSetup.value = false; isExporting.value = false;
+  win.document.open(); win.document.write(`<!doctype html><html><head><title>Peshkash QR sheet</title><style>@page{size:${pageSize};margin:${printMarginMm.value}mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.sheet{align-content:start;display:grid;grid-template-columns:repeat(${layout.columns},${layout.width}mm);gap:${layout.gap}mm;justify-content:center;min-height:${Math.max(0, layout.pageHeight - layout.margin * 2)}mm;page-break-after:always}.sheet:last-of-type{page-break-after:auto}figure{break-inside:avoid;margin:0;text-align:center;width:${layout.width}mm}img{display:block;height:${layout.height}mm;object-fit:contain;width:${layout.width}mm}figcaption{font-size:8pt;height:${layout.captionHeight}mm;padding-top:2mm}</style></head><body>${sheets.join('')}<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),150))<\/script></body></html>`); win.document.close(); showPrintSetup.value = false; isExporting.value = false;
 }
 function toggleAllVisible() { const keys = visibleTargets.value.map(t => t.key); const all = keys.length > 0 && keys.every(k => selectedTargetKeys.value.includes(k)); selectedTargetKeys.value = all ? selectedTargetKeys.value.filter(k => !keys.includes(k)) : [...new Set([...selectedTargetKeys.value, ...keys])]; }
 async function nextStep() { if (step.value === 1 && selectedTemplate.value) step.value = 2; else if (step.value === 2 && selectedTargets.value.length) { previewTargetKeys.value = [...selectedTargetKeys.value]; step.value = 3; await generatePreviews(); } }
 function previousStep() { if (step.value > 1) step.value = (step.value - 1) as 1 | 2; }
 watch(() => props.targets, targets => { selectedTargetKeys.value = targets.map(t => t.key); }, { deep: true, immediate: true });
-watch(selectedTemplateId, () => { previews.value = {}; if (step.value === 3) void generatePreviews(); });
+watch(selectedTemplateId, () => {
+  previews.value = {};
+  if (selectedTemplate.value) artworkWidthMm.value = selectedTemplate.value.widthMm;
+  if (step.value === 3) void generatePreviews();
+});
 onMounted(loadTemplates);
 </script>
 
@@ -289,7 +330,39 @@ onMounted(loadTemplates);
     </section>
     <footer class="ps-footer"><div><button v-if="step > 1" class="btn btn-outline-secondary" type="button" :disabled="isGenerating || isExporting" @click="previousStep"><i class="bi bi-arrow-left"></i> Back</button></div><span v-if="step === 3 && exportPixelSize"><b>{{ selectedTargets.length }} included</b> · {{ previewTargets.length - selectedTargets.length }} excluded · {{ exportPixelSize.w }} × {{ exportPixelSize.h }} px at 300 DPI</span><button v-if="step < 3" class="btn btn-primary" type="button" :disabled="(step === 1 && !selectedTemplate) || (step === 2 && !selectedTargets.length)" @click="nextStep">Continue <i class="bi bi-arrow-right"></i></button><div v-else class="ps-actions"><button class="btn btn-outline-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="showPrintSetup = true"><i class="bi bi-printer"></i> Print setup</button><button class="btn btn-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="exportZip"><i class="bi bi-file-earmark-zip"></i> {{ isExporting ? `Preparing ${progress}/${progressTotal}` : `Export ZIP (${selectedTargets.length})` }}</button></div></footer>
     <div v-if="zoomedTarget" class="ps-overlay" role="dialog" aria-modal="true" :aria-label="`Inspect ${displayTargetLabel(zoomedTarget)}`" @click.self="zoomedTargetKey = null"><div class="ps-proof-modal"><header><div><small>Actual rendered proof</small><h4>{{ displayTargetLabel(zoomedTarget) }}</h4><code>{{ mappingForTarget(zoomedTarget)?.shortQrUrl }}</code></div><button type="button" aria-label="Close proof" @click="zoomedTargetKey = null"><i class="bi bi-x-lg"></i></button></header><div class="ps-proof-image"><img :src="previews[zoomedTarget.key]" :alt="`Full proof for ${displayTargetLabel(zoomedTarget)}`"></div><footer><span><i class="bi bi-zoom-in"></i> Review copy, spacing and QR quiet zone at full size.</span><label><input v-model="selectedTargetKeys" type="checkbox" :value="zoomedTarget.key"> Include in export</label></footer></div></div>
-    <div v-if="showPrintSetup" class="ps-overlay" role="dialog" aria-modal="true" aria-label="Print setup" @click.self="showPrintSetup = false"><div class="ps-print-modal"><header><div><small>Print &amp; vector export</small><h4>{{ selectedPaper.label }} sheet</h4></div><button type="button" aria-label="Close print setup" @click="showPrintSetup = false"><i class="bi bi-x-lg"></i></button></header><div class="ps-print-body"><div class="ps-print-controls"><label>Paper size<select v-model="printPaperSize"><option v-for="paper in paperSizes" :key="paper.id" :value="paper.id">{{ paper.label }} · {{ paper.widthMm }} × {{ paper.heightMm }} mm</option><option value="custom">Custom size</option></select></label><label>Measurement unit<select v-model="printUnit"><option value="mm">Millimetres</option><option value="cm">Centimetres</option><option value="in">Inches</option></select></label><template v-if="printPaperSize === 'custom'"><label>Paper width<input v-model.number="customPaperWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label><label>Paper height<input v-model.number="customPaperHeight" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label></template><label>Orientation<select v-model="printOrientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Cards per row<select v-model.number="printColumns"><option v-for="columns in 6" :key="columns" :value="columns">{{ columns }}</option></select></label><label>Page margin<input v-model.number="printMargin" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label><label>Card gap<input v-model.number="printGap" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label><label class="ps-check"><input v-model="printCaptions" type="checkbox"> Print card names below artwork</label></div><div class="ps-sheet-summary" :style="{ '--sheet-ratio': `${printPageDimensions.widthMm}/${printPageDimensions.heightMm}` }"><i class="bi bi-file-earmark-text"></i><b>{{ selectedTargets.length }} cards</b><span>{{ printSheetSummary }}</span><small>{{ (printPageDimensions.widthMm / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (printPageDimensions.heightMm / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }}. Print directly or export editable SVG pages that open in CorelDRAW.</small></div></div><footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || printPageDimensions.widthMm <= 0 || printPageDimensions.heightMm <= 0" @click="exportForCorelDraw"><i class="bi bi-vector-pen"></i> Export for CorelDRAW</button><button class="btn btn-primary" type="button" :disabled="isExporting || printPageDimensions.widthMm <= 0 || printPageDimensions.heightMm <= 0" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer></div></div>
+    <div v-if="showPrintSetup" class="ps-overlay" role="dialog" aria-modal="true" aria-label="Print setup" @click.self="showPrintSetup = false">
+      <div class="ps-print-modal">
+        <header><div><small>Print &amp; vector export</small><h4>{{ selectedPaper.label }} canvas</h4></div><button type="button" aria-label="Close print setup" @click="showPrintSetup = false"><i class="bi bi-x-lg"></i></button></header>
+        <div class="ps-print-body">
+          <div class="ps-print-controls">
+            <label>Canvas size<select v-model="printPaperSize"><option v-for="paper in paperSizes" :key="paper.id" :value="paper.id">{{ paper.label }} · {{ paper.widthMm }} × {{ paper.heightMm }} mm</option><option value="custom">Custom canvas…</option></select></label>
+            <label>Measurement unit<select v-model="printUnit"><option value="mm">Millimetres</option><option value="cm">Centimetres</option><option value="in">Inches</option></select></label>
+            <template v-if="printPaperSize === 'custom'"><label>Canvas width<input v-model.number="customPaperWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label><label>Canvas height<input v-model.number="customPaperHeight" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label></template>
+            <label>Orientation<select v-model="printOrientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+            <label>Maximum cards per row<select v-model.number="printColumns"><option v-for="columns in 6" :key="columns" :value="columns">{{ columns }}</option></select></label>
+            <fieldset class="ps-size-control">
+              <legend>QR artwork size <span><i class="bi bi-lock-fill"></i> Aspect ratio locked</span></legend>
+              <label>Width<input v-model.number="artworkWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label>
+              <label>Height<input :value="artworkHeight" type="number" readonly><span>{{ displayUnit }}</span></label>
+              <label class="ps-scale">Scale<input v-model.number="artworkScalePercent" type="range" min="25" max="400" step="5"><output>{{ artworkScalePercent }}%</output></label>
+            </fieldset>
+            <label>Page margin<input v-model.number="printMargin" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label>
+            <label>Card gap<input v-model.number="printGap" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label>
+            <label class="ps-check"><input v-model="printCaptions" type="checkbox"> Print card names below artwork</label>
+          </div>
+          <aside class="ps-layout-preview">
+            <div class="ps-layout-heading"><span>LIVE PLACEMENT</span><b>{{ sheetLayout.pageCount || '—' }} page{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ artworkWidth.toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ artworkHeight.toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} per QR</small></div>
+            <div v-if="!sheetLayout.fits" class="ps-layout-error"><i class="bi bi-exclamation-triangle"></i> This artwork size does not fit inside the selected canvas and margins.</div>
+            <div v-else class="ps-page-list">
+              <article v-for="page in printPreviewPages" :key="page.number"><header>Page {{ page.number }} <span>{{ page.targets.length }} QR{{ page.targets.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="(target, index) in page.targets" :key="target.key" class="ps-mini-card" :style="previewCardStyle(index)" :title="displayTargetLabel(target)"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Placed preview for ${displayTargetLabel(target)}`"><i v-else class="bi bi-qr-code"></i></div></div></article>
+              <small v-if="sheetLayout.pageCount > printPreviewPages.length">+ {{ sheetLayout.pageCount - printPreviewPages.length }} more page{{ sheetLayout.pageCount - printPreviewPages.length === 1 ? '' : 's' }}</small>
+            </div>
+            <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas</p>
+          </aside>
+        </div>
+        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-vector-pen"></i> Export grouped SVG for CorelDRAW</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -298,6 +371,6 @@ onMounted(loadTemplates);
 </style>
 
 <style scoped>
-.ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:720px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 230px;padding:22px}.ps-print-controls{display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
+.ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:980px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 340px;overflow:auto;padding:22px}.ps-print-controls{align-content:start;display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-size-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;grid-template-columns:1fr 1fr;margin:2px 0;padding:12px}.ps-size-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-size-control legend span{color:#8a7767;font-size:9px;font-weight:500;letter-spacing:0;margin-left:8px;text-transform:none}.ps-size-control .ps-scale{align-items:center;grid-column:1/-1;grid-template-columns:auto minmax(100px,1fr) auto}.ps-size-control .ps-scale input{min-height:auto;padding:0}.ps-size-control .ps-scale output{color:#ad7d43;font-size:11px;min-width:38px;text-align:right}.ps-layout-preview{background:#f1ebe4;display:flex;flex-direction:column;gap:12px;min-height:420px;padding:16px}.ps-layout-heading{display:grid;gap:3px}.ps-layout-heading>span{color:#ad7d43;font-size:9px;font-weight:800;letter-spacing:.12em}.ps-layout-heading b{font:400 20px Rufina,serif}.ps-layout-heading small{color:#6e5f53;font-size:10px}.ps-page-list{display:grid;gap:10px;max-height:330px;overflow:auto;padding-right:4px}.ps-page-list article{display:grid;gap:4px}.ps-page-list article>header{color:#6b5c50;display:flex;font-size:9px;font-weight:700;justify-content:space-between}.ps-mini-page{background:#fff;border:1px solid #d2c5b8;box-shadow:0 2px 8px #3b2a1d1a;position:relative;width:100%}.ps-mini-card{align-items:center;background:#241a15;border:1px solid #bc915d;color:#f4eadf;display:flex;justify-content:center;overflow:hidden;position:absolute}.ps-mini-card img{display:block;height:100%;object-fit:fill;width:100%}.ps-mini-card i{font-size:clamp(5px,1vw,10px)}.ps-layout-error{background:#fff3e4;border-left:3px solid #b66d28;color:#744819;font-size:10px;padding:10px}.ps-layout-preview>p{color:#716156;font-size:9px;line-height:1.55;margin:auto 0 0}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
 @media(max-width:850px){.ps-toolbar,.ps-toolbar--targets{grid-template-columns:1fr}.ps-template-card{grid-template-columns:76px minmax(0,1fr) auto}.ps-template-shape{height:74px;width:76px}.ps-print-body{grid-template-columns:1fr}.ps-grid{grid-template-columns:1fr}}
 </style>
