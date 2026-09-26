@@ -4209,7 +4209,7 @@ function closeQrEditor() {
 function qrTargetLabel(mapping: QrMapping) {
   if (mapping.type === 'event') {
     const event = events.value.find((e) => e.id === mapping.eventId);
-    return `${event?.displayName || 'Event'} (dynamic)`;
+    return event?.displayName || 'Event';
   }
   if (mapping.url?.startsWith('/vendor/')) {
     const slug = mapping.url.split('/').pop();
@@ -4223,7 +4223,7 @@ function qrTargetLabel(mapping: QrMapping) {
     const parts = mapping.url.split('/');
     const menuSlug = parts[4];
     const menu = menuSlug ? menus.value.find((m) => m.name === menuSlug) : null;
-    return menu ? `${menu.displayName} (static)` : 'Event menu';
+    return menu?.displayName || 'Event menu';
   }
   return mapping.url || 'Custom path';
 }

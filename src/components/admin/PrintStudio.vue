@@ -144,9 +144,22 @@ function mappingForTarget(target: QrTarget): QrMapping | null {
   const path = target.path.replace(/\/$/, '');
   return props.qrMappings.find(m => m.url.replace(/\/$/, '') === path) ?? null;
 }
-function displayTargetLabel(target: QrTarget): string { return target.label.replace(/\s*\(dynamic\)$/i, '').trim(); }
+function displayTargetLabel(target: QrTarget): string { return target.label.replace(/\s*\((?:dynamic|static)\)$/i, '').trim(); }
+function stripModeMarker(value: string): string { return value.replace(/(?:\s|\n)*\((?:dynamic|static)\)\s*$/i, '').trim(); }
+function resolvePrintableDesign(design: StudioDesign, values: DynamicValues): StudioDesign {
+  const resolved = resolveDesignBindings(design, values);
+  for (const field of ['merchantName', 'eyebrow', 'headline', 'descriptor', 'cta'] as const) {
+    resolved[field] = stripModeMarker(resolved[field]);
+  }
+  resolved.canvasElements = (resolved.canvasElements ?? []).map(element =>
+    element.kind === 'text' || element.kind === 'cta'
+      ? { ...element, text: stripModeMarker(element.text) }
+      : element,
+  );
+  return resolved;
+}
 function targetValues(target: QrTarget, mapping: QrMapping): DynamicValues {
-  return { 'target.name': target.label, 'target.type': target.type, 'qr.hash': mapping.qrHash, 'qr.shortUrl': mapping.shortQrUrl, ...target.variables };
+  return { 'target.name': displayTargetLabel(target), 'target.type': target.type, 'qr.hash': mapping.qrHash, 'qr.shortUrl': mapping.shortQrUrl, ...target.variables };
 }
 function targetProblem(design: StudioDesign, target: QrTarget): string {
   const mapping = mappingForTarget(target);
@@ -175,7 +188,7 @@ const printPreflight = computed(() => {
   const mapping = mappingForTarget(firstTarget)!; const definition = templateDefinition(design); if (!definition) return null;
   const isLocalPreview = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const destination = import.meta.env.DEV || isLocalPreview ? `https://peshkash.app/${mapping.qrHash}` : mapping.shortQrUrl;
-  return preflightDesign({ ...resolveDesignBindings(design, targetValues(firstTarget, mapping)), destination }, definition, layoutFor(design, definition));
+  return preflightDesign({ ...resolvePrintableDesign(design, targetValues(firstTarget, mapping)), destination }, definition, layoutFor(design, definition));
 });
 const canExport = computed(() => Boolean(selectedTemplate.value && selectedTargets.value.length && !unmappedTargets.value.length && !blockingProblems.value.length && printPreflight.value?.canExport));
 
@@ -194,7 +207,7 @@ function templateThumbnail(design: StudioDesign): string {
   const cached = thumbnailCache.get(key); if (cached) return cached;
   const definition = templateDefinition(design); if (!definition) return '';
   const samples = Object.fromEntries(DYNAMIC_FIELD_OPTIONS.map(option => [option.value, option.sample])) as DynamicValues;
-  const resolved = resolveDesignBindings(design, samples); const layout = resolved.layout; const short = Math.min(definition.canvas.width, definition.canvas.height);
+  const resolved = resolvePrintableDesign(design, samples); const layout = resolved.layout; const short = Math.min(definition.canvas.width, definition.canvas.height);
   const overrides = layout ? { qr: { x: layout.qr.x / definition.canvas.width, y: layout.qr.y / definition.canvas.height, size: layout.qr.w / short }, copy: { ...layout.copy }, merchant: { ...layout.merchant }, brandmark: { ...layout.brandmark } } : {};
   const uri = svgDataUri(renderTemplateSvg(definition, resolved, overrides)); thumbnailCache.set(key, uri); return uri;
 }
@@ -208,7 +221,7 @@ async function renderToPng(design: StudioDesign, target: QrTarget, pixelScale: n
 function renderToSvg(design: StudioDesign, target: QrTarget): string {
   const mapping = mappingForTarget(target); const definition = templateDefinition(design);
   if (!mapping || !definition) throw new Error('A permanent QR mapping or template is missing.');
-  const resolved = resolveDesignBindings(design, targetValues(target, mapping)); const layout = resolved.layout; const short = Math.min(definition.canvas.width, definition.canvas.height);
+  const resolved = resolvePrintableDesign(design, targetValues(target, mapping)); const layout = resolved.layout; const short = Math.min(definition.canvas.width, definition.canvas.height);
   const overrides = layout ? { qr: { x: layout.qr.x / definition.canvas.width, y: layout.qr.y / definition.canvas.height, size: layout.qr.w / short }, copy: { ...layout.copy }, merchant: { ...layout.merchant }, brandmark: { ...layout.brandmark } } : {};
   return renderTemplateSvg(definition, { ...resolved, destination: mapping.shortQrUrl }, overrides);
 }
@@ -222,7 +235,7 @@ async function renderBatch(targets: QrTarget[], pixelScale: number, report = fal
 async function generatePreviews() { if (!selectedTemplate.value || !previewTargets.value.length) { previews.value = {}; return; } isGenerating.value = true; previewErrors.value = {}; previews.value = await renderBatch(previewTargets.value, 6, true); isGenerating.value = false; }
 async function retryFailedPreviews() { if (!failedPreviewTargets.value.length) return; isGenerating.value = true; const recovered = await renderBatch(failedPreviewTargets.value, 6, true); previews.value = { ...previews.value, ...recovered }; isGenerating.value = false; }
 function safeFilename(v: string) { return v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'qr'; }
-function uniqueFilename(t: QrTarget, i: number) { return `${String(i + 1).padStart(2, '0')}-${safeFilename(t.label)}-${safeFilename(mappingForTarget(t)?.qrHash || t.key)}.png`; }
+function uniqueFilename(t: QrTarget, i: number) { return `${String(i + 1).padStart(2, '0')}-${safeFilename(displayTargetLabel(t))}-${safeFilename(mappingForTarget(t)?.qrHash || t.key)}.png`; }
 function downloadBlob(blob: Blob, filename: string) {
   const href = URL.createObjectURL(blob); const link = document.createElement('a');
   link.href = href; link.download = filename; link.style.display = 'none'; document.body.appendChild(link); link.click(); link.remove();
