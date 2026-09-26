@@ -194,6 +194,14 @@ function placeSvgOnSheet(svg: string, x: number, y: number, width: number, heigh
   if (!root) return '';
   const viewBox = root[1].match(/viewBox="([^"]+)"/i)?.[1] || '0 0 1000 1000';
   const body = root[2]
+    // CorelDRAW treats CSS fallback lists as separate font variants (for example
+    // Arial-Normal) and prompts even when the first face is available. Keep the
+    // authored primary face only in the production SVG.
+    .replace(/font-family="([^"]+)"/g, (_match, familyList: string) => {
+      const primary = familyList.split(',')[0].trim().replace(/^&quot;|&quot;$/g, '').replace(/^['"]|['"]$/g, '');
+      const corelFamily = /^arial(?: black)?$/i.test(primary) ? 'Noto Sans' : (primary || 'Urbanist');
+      return `font-family="${corelFamily}"`;
+    })
     .replace(/id="([^"]+)"/g, (_match, id: string) => `id="${prefix}-${id}"`)
     .replace(/url\(#([^)]+)\)/g, (_match, id: string) => `url(#${prefix}-${id})`)
     .replace(/(href|xlink:href)="#([^"]+)"/g, (_match, attr: string, id: string) => `${attr}="#${prefix}-${id}"`);
@@ -217,7 +225,7 @@ function corelDrawPages(): string[] {
       const columnX = margin + column * (columnWidth + gap); const x = columnX + (columnWidth - artworkWidth) / 2;
       const y = margin + row * (artworkHeight + captionHeight + gap);
       const placed = placeSvgOnSheet(renderToSvg(design, target), x, y, artworkWidth, artworkHeight, `p${pages.length + 1}-c${index + 1}`);
-      const caption = printCaptions.value ? `<text x="${(columnX + columnWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
+      const caption = printCaptions.value ? `<text x="${(columnX + columnWidth / 2).toFixed(3)}" y="${(y + artworkHeight + 4).toFixed(3)}" text-anchor="middle" font-family="Noto Sans" font-size="3.2" fill="#2b211a">${escapeXml(displayTargetLabel(target))}</text>` : '';
       return `<g data-qr-name="${escapeXml(displayTargetLabel(target))}">${placed}${caption}</g>`;
     }).join('');
     pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
