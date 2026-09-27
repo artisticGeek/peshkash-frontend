@@ -226,7 +226,21 @@ function resolvePrintableDesign(design: StudioDesign, values: DynamicValues): St
   return resolved;
 }
 function targetValues(target: QrTarget, mapping: QrMapping): DynamicValues {
-  return { 'target.name': displayTargetLabel(target), 'target.type': target.type, 'qr.hash': mapping.qrHash, 'qr.shortUrl': mapping.shortQrUrl, ...target.variables };
+  const targetName = displayTargetLabel(target);
+  const values: DynamicValues = {
+    'target.name': targetName,
+    'target.type': target.type,
+    'qr.hash': mapping.qrHash,
+    'qr.shortUrl': mapping.shortQrUrl,
+    ...target.variables,
+  };
+  if (/event/i.test(target.type) && !values['menu.name']?.trim()) {
+    values['menu.name'] = values['event.name']?.trim() || targetName;
+  }
+  if (/event/i.test(target.type) && !values['menu.description']?.trim()) {
+    values['menu.description'] = values['event.description']?.trim() || values['target.description']?.trim() || '';
+  }
+  return values;
 }
 function targetProblem(design: StudioDesign, target: QrTarget): string {
   const mapping = mappingForTarget(target);
