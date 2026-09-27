@@ -157,6 +157,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
+    path: '/dashboard/collections',
+    name: 'DashboardPrintCollections',
+    component: () => import('./pages/WorkspaceDashboard.vue'),
+  },
+  {
     path: '/dashboard/engagement',
     name: 'DashboardEngagement',
     component: () => import('./pages/WorkspaceDashboard.vue'),

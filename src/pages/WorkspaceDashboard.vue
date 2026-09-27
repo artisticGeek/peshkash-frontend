@@ -1083,6 +1083,7 @@
           :event="selectedEventForItems ?? null"
           :targets="selectedEventForItems ? eventQrTargets(selectedEventForItems) : []"
           :qr-mappings="vendorQrMappings"
+          :vendor-id="selectedVendorId || undefined"
         />
       </section>
 
@@ -1565,8 +1566,24 @@
               :event="{ id: 0, name: 'qr-bank', displayName: 'QR Bank selection' }"
               :targets="qrBatchTargets"
               :qr-mappings="selectedQrMappings"
+              :vendor-id="selectedVendorId || undefined"
             />
           </div>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'collections'" class="collections-workspace">
+        <div class="panel collections-intro">
+          <div><span>PRINT PRODUCTION</span><h3>Collections</h3><p>Combine any QR assets into a reusable production job. Add copies, remove objects, set their order, and open a saved collection directly into its automatically prepared layout.</p></div>
+          <RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr"><i class="bi bi-qr-code"></i> Manage QR assets</RouterLink>
+        </div>
+        <div class="panel collections-studio">
+          <PrintStudio
+            :event="{ id: 0, name: 'workspace-collections', displayName: 'Workspace collections' }"
+            :targets="collectionQrTargets"
+            :qr-mappings="vendorQrMappings"
+            :vendor-id="selectedVendorId || undefined"
+          />
         </div>
       </section>
 
@@ -2166,6 +2183,7 @@ const sections = [
   { key: 'events',        label: 'Event Creator',     icon: 'bi bi-calendar-event' },
   { key: 'designer',      label: 'Menu Designer',     icon: 'bi bi-layout-three-columns' },
   { key: 'qr',            label: 'QR Bank',           icon: 'bi bi-qr-code' },
+  { key: 'collections',   label: 'Collections',       icon: 'bi bi-collection' },
   { key: 'qr-templates',  label: 'QR Studio',         icon: 'bi bi-qr-code' },
   { key: 'resources',     label: 'Brochures',         icon: 'bi bi-file-earmark-richtext' },
   { key: 'insights',      label: 'Analytics',         icon: 'bi bi-bar-chart-line' },
@@ -2179,7 +2197,7 @@ const sections = [
 // separate behavior — grants are an admin-only concept.
 const visibleSections = computed(() =>
   authStore.isAdmin
-    ? sections.filter(s => s.key === 'home' || s.key === 'engagement' || authStore.hasSection(s.key))
+    ? sections.filter(s => s.key === 'home' || s.key === 'engagement' || authStore.hasSection(s.key === 'collections' ? 'qr' : s.key))
     : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
 );
 
@@ -2198,6 +2216,7 @@ const dashboardRouteBySection: Record<SectionKey, string> = {
   preview:        '/dashboard/menus/preview',
   publish:        '/dashboard/events',
   qr:             '/dashboard/qr',
+  collections:    '/dashboard/collections',
   'qr-templates': '/dashboard/qr-templates',
   resources:      '/dashboard/resources',
   menus:          '/dashboard/menus/studio',
@@ -2710,6 +2729,7 @@ const activeSubtitle = computed(() => {
     menus:          'Vendor menus — generic templates and personalized event copies.',
     items:          'Items for the selected menu.',
     qr:             'View and edit QR mappings. Physical QRs are printed once and remapped per event.',
+    collections:    'Build reusable print jobs from every QR asset, arrange copies, and prepare the production layout automatically.',
     'qr-templates': 'Create scan-safe branded collateral from a complete use-case template library.',
     resources:      'Preview, share and download the approved Peshkash brochure collection.',
     insights:       'QR scan counts, user actions, device breakdown, and engagement trends.',
@@ -4558,7 +4578,7 @@ const filteredUnmappedQrTargets = computed(() => {
 });
 
 const selectedQrMappings = computed(() => vendorQrMappings.value.filter((mapping) => selectedQrIds.value.includes(mapping.id)));
-const qrBatchTargets = computed(() => selectedQrMappings.value.map((mapping) => {
+function printTargetForMapping(mapping: QrMapping) {
   const event = events.value.find((candidate) => candidate.id === mapping.eventId)
     || events.value.find((candidate) => mapping.url?.includes(`/event/${candidate.name}`));
   const menu = menus.value.find((candidate) => mapping.url?.includes(`/menu/${candidate.name}`));
@@ -4586,7 +4606,9 @@ const qrBatchTargets = computed(() => selectedQrMappings.value.map((mapping) => 
       'vendor.description': vendor?.description || '',
     },
   };
-}));
+}
+const qrBatchTargets = computed(() => selectedQrMappings.value.map(printTargetForMapping));
+const collectionQrTargets = computed(() => vendorQrMappings.value.map(printTargetForMapping));
 
 function toggleAllVisibleQrs() {
   const visibleIds = filteredQrMappings.value.map((mapping) => mapping.id);
@@ -8783,9 +8805,12 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
   color: #3a2010;
 }
 
+.collections-workspace{display:grid;gap:16px;padding:0 24px 28px}.collections-intro{align-items:center;background:linear-gradient(115deg,#f7f0e7,#fff);display:flex;justify-content:space-between;padding:18px 20px}.collections-intro>div{max-width:760px}.collections-intro span{color:#ad7d43;font-size:.62rem;font-weight:800;letter-spacing:.14em}.collections-intro h3{font-family:Rufina,serif;font-size:1.45rem;margin:3px 0}.collections-intro p{color:#766657;font-size:.78rem;line-height:1.55;margin:0}.collections-studio{padding:18px 20px}.ps-order li button.danger{color:#a3443c}
+
 @media (max-width: 700px) {
   .qr-filters-bar { flex-direction: column; align-items: stretch; }
   .qr-type-tabs { flex-wrap: wrap; }
   .qr-target-cell { max-width: 120px; }
+  .collections-workspace{padding:0 12px 20px}.collections-intro{align-items:flex-start;flex-direction:column;gap:12px}.collections-studio{padding:12px}
 }
 </style>
