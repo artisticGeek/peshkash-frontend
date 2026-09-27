@@ -1579,6 +1579,7 @@
         </div>
         <div class="panel collections-studio">
           <PrintStudio
+            collection-mode
             :event="{ id: 0, name: 'workspace-collections', displayName: 'Workspace collections' }"
             :targets="collectionQrTargets"
             :qr-mappings="vendorQrMappings"
