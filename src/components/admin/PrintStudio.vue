@@ -12,6 +12,7 @@ import { synthesizeCustomTemplate } from '../../features/qrStudio/customTemplate
 import { corelPngCardObject } from '../../features/qrStudio/corelSvg';
 import { designFromDocument, readStudioDocument } from '../../features/designStudio/document/migrations';
 import { preflightDesign } from '../../features/designStudio/export/preflight';
+import { packSheets, type PackingGrouping } from '../../features/qrStudio/sheetPacking';
 import { API_BASE_URL } from '../../config';
 
 const COREL_EXPORT_SCALE = 600 / 25.4;
@@ -84,6 +85,7 @@ const customPaperHeightMm = ref(297);
 const artworkScalePercent = ref(100);
 const printColumns = ref(2);
 const printCaptions = ref(true);
+const printGrouping = ref<PackingGrouping>('optimized');
 const thumbnailCache = new Map<string, string>();
 const selectedTemplate = computed(() => templates.value.find(t => String(t.id) === String(selectedTemplateId.value)) ?? null);
 const availableTargets = computed(() => [...props.targets, ...collectionCopies.value]);
@@ -160,36 +162,20 @@ const artworkSizeSummary = computed(() => {
 const sheetLayout = computed<SheetLayout>(() => {
   const { widthMm: pageWidth, heightMm: pageHeight } = printPageDimensions.value;
   const margin = Math.max(0, printMarginMm.value); const gap = Math.max(0, printGapMm.value);
-  const availableWidth = Math.max(0, pageWidth - (margin * 2)); const availableHeight = Math.max(0, pageHeight - (margin * 2));
-  const items = selectedTargets.value.map((target, index) => ({ target, index, ...artworkSizeFor(target) }));
-  const pages: SheetPage[] = []; let cursor = 0; let fits = availableWidth > 0 && availableHeight > 0; let columns = 0; let rows = 0;
-  while (cursor < items.length) {
-    const placements: SheetPlacement[] = []; let y = margin; let row = 0;
-    while (cursor < items.length) {
-      const rowItems: typeof items = []; let rowWidth = 0; let lookahead = cursor;
-      while (lookahead < items.length && rowItems.length < Math.max(1, printColumns.value)) {
-        const item = items[lookahead]; const nextWidth = rowWidth + (rowItems.length ? gap : 0) + item.width;
-        if (rowItems.length && nextWidth > availableWidth) break;
-        rowItems.push(item); rowWidth = nextWidth; lookahead += 1;
-        if (item.width > availableWidth) break;
-      }
-      const rowHeight = Math.max(...rowItems.map(item => item.height + item.captionHeight));
-      if (placements.length && y + rowHeight > pageHeight - margin) break;
-      const startX = margin + Math.max(0, (availableWidth - rowWidth) / 2); let x = startX;
-      rowItems.forEach(item => {
-        placements.push({ ...item, x, mirroredX: pageWidth - x - item.width, y, row });
-        fits &&= item.width <= availableWidth && item.height + item.captionHeight <= availableHeight;
-        x += item.width + gap;
-      });
-      columns = Math.max(columns, rowItems.length); row += 1; rows = Math.max(rows, row); cursor = lookahead; y += rowHeight + gap;
-      if (y > pageHeight - margin && cursor < items.length) break;
-    }
-    pages.push({ number: pages.length + 1, placements });
-  }
-  return { pageWidth, pageHeight, margin, gap, columns, rows, pageCount: pages.length, fits, pages };
+  const items = selectedTargets.value.map((target, index) => {
+    const size = artworkSizeFor(target);
+    return { value: { target, index, ...size }, index, width: size.width, height: size.height + size.captionHeight, groupKey: targetTemplateId(target) };
+  });
+  const packed = packSheets(items, { pageWidth, pageHeight, margin, gap, maxPerRow: printColumns.value, grouping: printGrouping.value });
+  const pages: SheetPage[] = packed.pages.map(page => ({
+    number: page.number,
+    placements: page.items.map(item => ({ ...item.value, x: item.x, mirroredX: pageWidth - item.x - item.value.width, y: item.y, row: item.row })),
+  }));
+  return { pageWidth, pageHeight, margin, gap, columns: packed.columns, rows: packed.rows, pageCount: packed.pageCount, fits: packed.fits, pages };
 });
 const productionCanvasCount = computed(() => sheetLayout.value.pageCount * (1 + (printSides.value === 'double' ? 1 : 0) + (includeCutContour.value ? 1 : 0)));
-const printSheetSummary = computed(() => `${selectedPaper.value.label} · ${printOrientation.value === 'portrait' ? 'Portrait' : 'Landscape'} · ${printSides.value === 'double' ? 'Duplex' : 'Single-sided'} · ${sheetLayout.value.columns} across · ${sheetLayout.value.pageCount} sheet${sheetLayout.value.pageCount === 1 ? '' : 's'}`);
+const groupingLabel = computed(() => ({ optimized: 'Best fit', size: 'Grouped by size', template: 'Grouped by template', order: 'Collection order' })[printGrouping.value]);
+const printSheetSummary = computed(() => `${selectedPaper.value.label} · ${printOrientation.value === 'portrait' ? 'Portrait' : 'Landscape'} · ${printSides.value === 'double' ? 'Duplex' : 'Single-sided'} · ${groupingLabel.value} · ${sheetLayout.value.columns} across · ${sheetLayout.value.pageCount} sheet${sheetLayout.value.pageCount === 1 ? '' : 's'}`);
 const printPreviewPages = computed(() => sheetLayout.value.pages.slice(0, 4));
 const printPreviewSurfaces = computed(() => printPreviewPages.value.flatMap(page => [
   { ...page, kind: 'front' as const, label: 'Front print' },
@@ -345,7 +331,7 @@ function collectionConfiguration(): PrintCollectionConfiguration {
       marginMm: printMarginMm.value, gapMm: printGapMm.value, cutCornerRadiusMm: cutCornerRadiusMm.value,
       cutOffsetMm: cutOffsetMm.value, unit: printUnit.value, customPaperWidthMm: customPaperWidthMm.value,
       customPaperHeightMm: customPaperHeightMm.value, artworkScalePercent: artworkScalePercent.value,
-      columns: printColumns.value, captions: printCaptions.value,
+      columns: printColumns.value, captions: printCaptions.value, grouping: printGrouping.value,
     },
   };
 }
@@ -409,6 +395,7 @@ async function openCollection(collection: PrintCollectionRow): Promise<void> {
   if (Number.isFinite(Number(settings.artworkScalePercent))) artworkScalePercent.value = Number(settings.artworkScalePercent);
   if (Number.isFinite(Number(settings.columns))) printColumns.value = Number(settings.columns);
   if (typeof settings.captions === 'boolean') printCaptions.value = settings.captions;
+  if (['optimized', 'size', 'template', 'order'].includes(String(settings.grouping))) printGrouping.value = String(settings.grouping) as PackingGrouping;
   activeCollectionId.value = collection.id; collectionName.value = collection.name;
   const missing = (config.orderedTargetKeys || []).length - keys.length;
   collectionNotice.value = missing ? `${missing} saved artwork${missing === 1 ? '' : 's'} no longer exists and was skipped.` : `Loaded “${collection.name}”.`;
@@ -542,7 +529,7 @@ async function exportForCorelDraw() {
     const sizeLines = selectedTargets.value.map((target, index) => { const size = artworkSizeFor(target); return `${index + 1}. ${displayTargetLabel(target)}: ${size.width.toFixed(3)} x ${size.height.toFixed(3)} mm`; }).join('\r\n');
     const instructions = `PESHKASH PRINT-SHOP PACKAGE\r\n\r\nPREFERRED: BUILD ONE MULTI-PAGE CDR\r\n1. Extract this ZIP without moving or renaming its contents.\r\n2. In CorelDRAW open the Visual Basic editor (Alt+F11), import BUILD-CORELDRAW-JOB.bas, and run BuildPeshkashPrintJob.\r\n3. Choose this extracted folder. The macro creates ${cdrOutputName} with one named CorelDRAW page per production surface. This requires CorelDRAW because CDR is a proprietary native format.\r\n\r\nDIRECT SVG FALLBACK\r\n4. Open the sheet SVG files directly at their original physical dimensions. All files use one shared placement manifest and identical registration marks. Do not reposition only one page.\r\n5. FRONT files contain the print artwork. Every card is a separate named, movable top-level object.\r\n6. BACK files are included only for duplex jobs. Card positions are reflected horizontally across the sheet; artwork itself is not mirrored. Keep vertical placement unchanged and print using long-edge registration.\r\n7. CUT-CONTOUR files contain vector-only plotter paths on a layer named CutContour. The contour uses #FF00FF at 0.0762 mm. Map that named layer/color to the print shop's plotter preset if required.\r\n8. RegistrationMarks is a separate vector group repeated at exactly the same coordinates on every page. Use it to register duplex printing and the cutter, then omit it from the final cut operation if the plotter workflow requires.\r\n9. CorelDRAW may wrap an imported SVG in one container; use Ungroup once to expose separate card objects. Do not ungroup an individual card.\r\n10. Every artwork retains its assigned template dimensions and aspect ratio. The global scale is ${artworkScalePercent.value}%. Card artwork is 600 DPI.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nPrint mode: ${printSides.value === 'double' ? 'Double-sided' : 'Single-sided'}\r\nCutContour: ${includeCutContour.value ? `Included, ${cutCornerRadiusMm.value.toFixed(3)} mm corner radius, ${cutOffsetMm.value.toFixed(3)} mm offset` : 'Not included'}\r\nRegistration marks: ${includeRegistrationMarks.value ? 'Included at identical coordinates on every surface' : 'Not included'}\r\nPhysical sheets: ${layout.pageCount}\r\nCorelDRAW pages: ${surfaces.length}\r\n\r\nARTWORK SIZES\r\n${sizeLines}\r\n`;
     const files = surfaceFiles.map(file => ({ name: file.name, data: new TextEncoder().encode(file.surface.svg) }));
-    const manifest = { version: 2, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artworkScalePercent: artworkScalePercent.value, artworks: selectedTargets.value.map(target => { const size = artworkSizeFor(target); return { key: target.key, name: displayTargetLabel(target), templateId: targetTemplateId(target), width: size.width, height: size.height, captionHeight: size.captionHeight }; }), placements: layout.pages.map(page => ({ sheet: page.number, items: page.placements.map(({ target, x, mirroredX, y, width, height, captionHeight }) => ({ key: target.key, x, backX: mirroredX, y, width, height, captionHeight })) })), margin: layout.margin, gap: layout.gap, maxColumns: printColumns.value, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour' } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
+    const manifest = { version: 2, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artworkScalePercent: artworkScalePercent.value, grouping: printGrouping.value, artworks: selectedTargets.value.map(target => { const size = artworkSizeFor(target); return { key: target.key, name: displayTargetLabel(target), templateId: targetTemplateId(target), width: size.width, height: size.height, captionHeight: size.captionHeight }; }), placements: layout.pages.map(page => ({ sheet: page.number, items: page.placements.map(({ target, x, mirroredX, y, width, height, captionHeight }) => ({ key: target.key, x, backX: mirroredX, y, width, height, captionHeight })) })), margin: layout.margin, gap: layout.gap, maxColumns: printColumns.value, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour' } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
     files.push({ name: 'BUILD-CORELDRAW-JOB.bas', data: new TextEncoder().encode(corelBuildMacro(surfaceFiles, layout.pageWidth, layout.pageHeight, cdrOutputName)) });
     files.push({ name: 'JOB-MANIFEST.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
     selectedTargets.value.forEach((target, index) => {
@@ -737,6 +724,7 @@ onMounted(async () => { await loadTemplates(); await loadSavedCollections(); if 
             <label>Orientation<select v-model="printOrientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
             <label>Print sides<select v-model="printSides"><option value="single">Single-sided</option><option value="double">Double-sided · flip on long edge</option></select></label>
             <label>Maximum cards per row<select v-model.number="printColumns"><option v-for="columns in 6" :key="columns" :value="columns">{{ columns }}</option></select></label>
+            <label>Artwork arrangement<select v-model="printGrouping"><option value="optimized">Best fit · fewest sheets</option><option value="size">Group matching sizes</option><option value="template">Group matching templates</option><option value="order">Keep collection order</option></select></label>
             <fieldset class="ps-size-control">
               <legend>Artwork sizing <span><i class="bi bi-lock-fill"></i> Individual aspect ratios locked</span></legend>
               <small>Every QR uses its assigned template's physical dimensions. Scaling applies proportionally to the whole collection.</small>

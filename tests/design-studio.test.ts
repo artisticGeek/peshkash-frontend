@@ -7,6 +7,7 @@ import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../
 import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
 import { createZip } from '../src/utils/zip.js';
 import { corelPngCardObject } from '../src/features/qrStudio/corelSvg.js';
+import { packSheets } from '../src/features/qrStudio/sheetPacking.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -30,6 +31,40 @@ const design: StudioDesign = {
   descriptor: 'Portfolio · commissions · studio visits', cta: 'SCAN MY PORTFOLIO',
   destination: 'https://pksh.in/noor', revision: 3, variables: { collection: 'Monsoon' },
 };
+
+test('generic best-fit packing reduces sheets for mixed artwork dimensions', () => {
+  const items = [
+    { value: 'large-square', index: 0, width: 60, height: 60, groupKey: 'a' },
+    { value: 'wide', index: 1, width: 60, height: 40, groupKey: 'b' },
+    { value: 'tall', index: 2, width: 40, height: 60, groupKey: 'c' },
+    { value: 'small-square', index: 3, width: 40, height: 40, groupKey: 'd' },
+  ];
+  const options = { pageWidth: 100, pageHeight: 100, margin: 0, gap: 0, maxPerRow: 3 };
+  assert.equal(packSheets(items, { ...options, grouping: 'order' }).pageCount, 2);
+  const optimized = packSheets(items, { ...options, grouping: 'optimized' });
+  assert.equal(optimized.pageCount, 1);
+  assert.equal(optimized.pages[0].items.length, 4);
+  assert.equal(packSheets(items, { ...options, grouping: 'size' }).pageCount, optimized.pageCount);
+  assert.equal(packSheets(items, { ...options, grouping: 'template' }).pageCount, optimized.pageCount);
+});
+
+test('template grouping keeps each packed row homogeneous', () => {
+  const items = [
+    { value: 'a1', index: 0, width: 30, height: 30, groupKey: 'portrait' },
+    { value: 'b1', index: 1, width: 30, height: 30, groupKey: 'square' },
+    { value: 'a2', index: 2, width: 30, height: 30, groupKey: 'portrait' },
+    { value: 'b2', index: 3, width: 30, height: 30, groupKey: 'square' },
+  ];
+  const packed = packSheets(items, { pageWidth: 100, pageHeight: 100, margin: 0, gap: 2, maxPerRow: 3, grouping: 'template' });
+  for (const page of packed.pages) {
+    const rows = new Map<number, Set<string>>();
+    for (const item of page.items) {
+      const groups = rows.get(item.row) ?? new Set<string>();
+      groups.add(item.groupKey || ''); rows.set(item.row, groups);
+    }
+    assert.equal([...rows.values()].every(groups => groups.size === 1), true);
+  }
+});
 
 test('CorelDRAW grid export exposes each finished card as one movable object', () => {
   const png = `data:image/png;base64,${Buffer.from('card').toString('base64')}`;
