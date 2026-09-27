@@ -15,14 +15,14 @@ export default defineConfig({
     }),
     VitePWA({
       strategies: 'generateSW',
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       filename: 'peshkash-sw.js',
       manifest: false,
       workbox: {
         importScripts: ['/peshkash-push-sw.js'],
         cleanupOutdatedCaches: true,
-        clientsClaim: false,
-        skipWaiting: false,
+        clientsClaim: true,
+        skipWaiting: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         // Keep the install/update payload to the app shell. Editorial images and

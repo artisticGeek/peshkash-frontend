@@ -88,6 +88,8 @@ export interface CustomTemplateSpec {
   canvas: { width: number; height: number };
   qr: { x: number; y: number; size: number };
   ratio: string;
+  sourceFileName?: string;
+  sourceFileSize?: number;
 }
 
 // ── Freeform element bank: shapes and CTA badges the user drops onto the canvas ────────────────
@@ -125,6 +127,7 @@ export interface CtaElement extends CanvasElementBase {
   text: string;
   fill: string;
   textColor: string;
+  dynamicField?: string;
 }
 
 // A freestanding, fully independent text box — separate from the template's fixed eyebrow/
@@ -138,6 +141,7 @@ export interface TextElement extends CanvasElementBase {
   fontSize: number;
   fontWeight: '400' | '700';
   align: 'left' | 'center' | 'right';
+  dynamicField?: string;
 }
 
 // A user-uploaded image (logo, photo) — src is a data: URI, stored inline since there's no asset
@@ -215,6 +219,7 @@ export interface StudioDesign extends StudioContent {
   revision?: number;
   layout?: FixedElementLayout;
   variables?: Record<string, string>;
+  fieldBindings?: Partial<Record<'merchantName' | 'eyebrow' | 'headline' | 'descriptor' | 'cta', string>>;
   updatedAt?: string;
 }
 

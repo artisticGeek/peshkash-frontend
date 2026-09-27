@@ -41,6 +41,7 @@ export interface StudioPageDocument {
   layout: FixedElementLayout;
   elements: CanvasElement[];
   copy: Pick<StudioDesign, 'merchantName' | 'eyebrow' | 'headline' | 'descriptor' | 'cta' | 'destination'>;
+  fieldBindings?: StudioDesign['fieldBindings'];
   safeArea: StudioInsets;
   bleed: StudioInsets;
 }

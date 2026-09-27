@@ -1,28 +1,16 @@
 <template>
   <div class="studio" :class="{ 'studio--embedded': embedded, 'studio--editor': mode === 'editor' }">
     <template v-if="mode === 'library'">
-      <section v-if="savedDesigns.length" class="saved-section">
-        <div class="section-heading">
-          <div><p class="eyebrow">YOUR WORK</p><h2>Saved designs</h2></div>
-          <span>{{ savedDesigns.length }} design{{ savedDesigns.length === 1 ? '' : 's' }}</span>
-        </div>
-        <div class="saved-strip">
-          <div v-for="saved in savedDesigns" :key="saved.id" class="saved-card">
-            <button class="saved-card-body" @click="editSaved(saved)">
-              <span class="saved-monogram">{{ saved.name.slice(0, 1).toUpperCase() }}</span>
-              <span><b>{{ saved.name }}</b><small>{{ templateLabelFor(saved) }}</small></span>
-              <i class="bi bi-arrow-up-right"></i>
-            </button>
-            <button class="saved-delete" :disabled="deleting === saved.id" @click.stop="deleteDesign(saved.id!)" title="Delete design"><i class="bi bi-trash"></i></button>
-          </div>
-        </div>
-      </section>
-
       <section class="library-section">
         <div class="library-heading">
-          <div><p class="eyebrow">THE LIBRARY</p><h2>Choose by purpose, not dimensions.</h2></div>
-          <div class="library-count"><strong>{{ filteredTemplates.length }}</strong><span>of {{ qrManifest.librarySize }}<br>templates</span></div>
+          <div><p class="eyebrow">QR STUDIO</p><h2>{{ libraryTab === 'default' ? 'Choose by purpose, not dimensions.' : 'Your reusable templates.' }}</h2></div>
+          <div class="library-count"><strong>{{ libraryTab === 'default' ? filteredTemplates.length : savedDesigns.length }}</strong><span>{{ libraryTab === 'default' ? `of ${qrManifest.librarySize}` : 'saved' }}<br>templates</span></div>
         </div>
+        <div class="library-tabs" role="tablist" aria-label="Template source">
+          <button role="tab" :aria-selected="libraryTab === 'default'" :class="{ active: libraryTab === 'default' }" @click="libraryTab = 'default'">Default library</button>
+          <button role="tab" :aria-selected="libraryTab === 'custom'" :class="{ active: libraryTab === 'custom' }" @click="libraryTab = 'custom'">My templates <span>{{ savedDesigns.length }}</span></button>
+        </div>
+        <template v-if="libraryTab === 'default'">
         <div class="library-toolbar">
           <label class="search-box"><i class="bi bi-search"></i><input v-model="search" type="search" placeholder="Search artist, table menu, product tag…"></label>
           <div class="style-switch" aria-label="Preview QR signature">
@@ -39,11 +27,6 @@
           <button :class="{ active: activeFormat === 'all' }" @click="activeFormat = 'all'">All formats</button>
           <button v-for="format in formatOptions" :key="format" :class="{ active: activeFormat === format }" @click="activeFormat = format">{{ format }}</button>
         </div>
-        <button class="create-template-cta" @click="showCreator = true">
-          <span class="cta-icon"><i class="bi bi-plus-lg"></i></span>
-          <span class="cta-text"><b>Create a custom template</b><small>Pick a shape and size — it works just like the library, start to finish.</small></span>
-          <i class="bi bi-arrow-up-right"></i>
-        </button>
         <div v-if="filteredTemplates.length" class="template-grid">
           <article v-for="template in filteredTemplates" :key="template.id" class="template-card">
             <div class="template-preview">
@@ -61,6 +44,31 @@
           </article>
         </div>
         <div v-else class="empty-state"><i class="bi bi-search"></i><h3>No matching template</h3><p>Try a broader use case or clear the search.</p></div>
+        </template>
+        <template v-else>
+          <button class="create-template-cta" @click="showCreator = true">
+            <span class="cta-icon"><i class="bi bi-plus-lg"></i></span>
+            <span class="cta-text"><b>Create a custom template</b><small>Start from a format or attach a CorelDRAW source file.</small></span>
+            <i class="bi bi-arrow-up-right"></i>
+          </button>
+          <div v-if="savedDesigns.length" class="template-grid saved-template-grid">
+            <article v-for="saved in savedDesigns" :key="saved.id" class="template-card saved-template-card">
+              <div class="template-preview">
+                <img :src="savedPreviewDataUri(saved)" :alt="`${saved.name} preview`">
+                <div class="template-card-actions">
+                  <button @click="previewSavedDesign = saved"><i class="bi bi-eye"></i> Preview</button>
+                  <button class="use-template" @click="editSaved(saved)">Edit template <i class="bi bi-arrow-up-right"></i></button>
+                </div>
+              </div>
+              <div class="template-meta">
+                <div><p>{{ templateLabelFor(saved) }}</p><button class="saved-name-button" title="Rename template" @click="beginRename(saved)">{{ saved.name }} <i class="bi bi-pencil"></i></button></div>
+                <button class="saved-delete" :disabled="deleting === saved.id" @click="deleteDesign(saved.id!)" title="Delete design"><i class="bi bi-trash"></i></button>
+              </div>
+              <div class="tag-row"><span>{{ saved.widthMm.toFixed(0) }} × {{ saved.heightMm.toFixed(0) }} mm</span><span v-if="saved.customTemplate?.sourceFileName">CorelDRAW source</span></div>
+            </article>
+          </div>
+          <div v-else class="empty-state"><i class="bi bi-layout-wtf"></i><h3>No custom templates yet</h3><p>Create one here, then reuse it for any QR batch.</p></div>
+        </template>
       </section>
     </template>
 
@@ -68,7 +76,7 @@
       <header class="editor-bar">
         <button class="back-button" @click="closeEditor"><i class="bi bi-arrow-left"></i><span>Template library</span></button>
         <div class="editor-title">
-          <input v-model="design.name" maxlength="80" aria-label="Design name">
+          <strong>{{ design.name }}</strong>
           <span class="save-status" role="status"><i :class="saveStatusIcon"></i>{{ saveStatusLabel }}</span>
         </div>
         <div class="editor-actions">
@@ -100,7 +108,7 @@
 
           <section v-if="activeRailPanel === 'design'">
             <p class="panel-kicker">DESIGN</p>
-            <label>Design name<input v-model="design.name" maxlength="80"></label>
+            <div class="readonly-name"><span>Template name</span><b>{{ design.name }}</b><small>Rename it from My templates.</small></div>
             <label>Scan destination<input v-model="design.destination" inputmode="url" placeholder="https://pksh.in/your-link"></label>
             <p :class="['field-note', { invalid: !destinationValid }]">
               <i :class="destinationValid ? 'bi bi-shield-check' : 'bi bi-exclamation-circle'"></i>
@@ -314,6 +322,7 @@
                    class="canvas-el--back-hit"
                    :class="{ 'canvas-el--back-dragging': dragState?.id === el.id || resizeState?.id === el.id }"
                    :el="el" :scale="canvasScale"
+                   :preview-text="elementPreviewText(el)"
                    :selected="selectedElementId === el.id"
                    :editing="editingElementId === el.id"
                    @pointerdown="onCanvasElPointerDown"
@@ -354,54 +363,54 @@
                      gap higher in the export than on canvas, in the worst case straight into the
                      QR code above it. Requiring the text itself (not just the vis toggle) keeps
                      both renderers reserving space for exactly the same set of lines. -->
-                <div v-if="vis.eyebrow && design.eyebrow"
+                <div v-if="vis.eyebrow && displayFixedValue('eyebrow')"
                      class="t-line t-eyebrow"
                      :style="eyebrowStyle"
                      :key="'ey-' + designKey"
                      ref="eyebrowEl"
-                     :contenteditable="editingKey === 'eyebrow'"
+                     :contenteditable="editingKey === 'eyebrow' && !fixedBinding('eyebrow')"
                      spellcheck="false"
                      @dblclick.stop="startTextEdit('eyebrow', $event)"
                      @blur="endTextEdit"
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.eyebrow = ($event.target as HTMLElement).innerText"
-                >{{ design.eyebrow }}</div>
-                <div v-if="vis.headline && design.headline"
+                >{{ displayFixedValue('eyebrow') }}</div>
+                <div v-if="vis.headline && displayFixedValue('headline')"
                      class="t-line t-headline"
                      :style="headlineStyle"
                      :key="'hl-' + designKey"
                      ref="headlineEl"
-                     :contenteditable="editingKey === 'headline'"
+                     :contenteditable="editingKey === 'headline' && !fixedBinding('headline')"
                      spellcheck="false"
                      @dblclick.stop="startTextEdit('headline', $event)"
                      @blur="endTextEdit"
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.headline = ($event.target as HTMLElement).innerText"
-                >{{ design.headline }}</div>
-                <div v-if="vis.descriptor && design.descriptor"
+                >{{ displayFixedValue('headline') }}</div>
+                <div v-if="vis.descriptor && displayFixedValue('descriptor')"
                      class="t-line t-descriptor"
                      :style="descriptorStyle"
                      :key="'ds-' + designKey"
                      ref="descriptorEl"
-                     :contenteditable="editingKey === 'descriptor'"
+                     :contenteditable="editingKey === 'descriptor' && !fixedBinding('descriptor')"
                      spellcheck="false"
                      @dblclick.stop="startTextEdit('descriptor', $event)"
                      @blur="endTextEdit"
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.descriptor = ($event.target as HTMLElement).innerText"
-                >{{ design.descriptor }}</div>
-                <div v-if="vis.cta && design.cta"
+                >{{ displayFixedValue('descriptor') }}</div>
+                <div v-if="vis.cta && displayFixedValue('cta')"
                      class="t-line t-cta"
                      :style="ctaStyle"
                      :key="'ct-' + designKey"
                      ref="ctaEl"
-                     :contenteditable="editingKey === 'cta'"
+                     :contenteditable="editingKey === 'cta' && !fixedBinding('cta')"
                      spellcheck="false"
                      @dblclick.stop="startTextEdit('cta', $event)"
                      @blur="endTextEdit"
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.cta = ($event.target as HTMLElement).innerText"
-                >{{ design.cta }}</div>
+                >{{ displayFixedValue('cta') }}</div>
                 <div v-if="selectedEl === 'copy'" class="sel-ring"></div>
                 <div v-if="selectedEl === 'copy'"
                      class="resize-handle resize-handle--h"
@@ -420,13 +429,13 @@
                      :style="merchantTextStyle"
                      :key="'mn-' + designKey"
                      ref="merchantEl"
-                     :contenteditable="editingKey === 'merchantName'"
+                     :contenteditable="editingKey === 'merchantName' && !fixedBinding('merchantName')"
                      spellcheck="false"
                      @dblclick.stop="startTextEdit('merchantName', $event)"
                      @blur="endTextEdit"
                      @keydown.escape="($event.target as HTMLElement).blur()"
                      @input="design.merchantName = ($event.target as HTMLElement).innerText"
-                >{{ design.merchantName }}</div>
+                >{{ displayFixedValue('merchantName') }}</div>
                 <div v-if="selectedEl === 'merchant'" class="sel-ring"></div>
                 <div v-if="selectedEl === 'merchant'"
                      class="resize-handle resize-handle--h"
@@ -442,7 +451,7 @@
                    @pointerdown.stop="startElDrag('brandmark', $event)"
                    @click.stop="selectedEl = 'brandmark'; selectedElementId = null">
                 <img
-                  :src="dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg'"
+                  :src="dark ? logoDarkUrl : logoLightUrl"
                   :style="bmImgStyle"
                   draggable="false">
                 <template v-if="selectedEl === 'brandmark'">
@@ -454,6 +463,7 @@
               <!-- Element bank: foreground shapes / CTA badges / text / images (above everything else) -->
               <CanvasElementView v-for="el in frontCanvasElements" :key="el.id"
                    :el="el" :scale="canvasScale"
+                   :preview-text="elementPreviewText(el)"
                    :selected="selectedElementId === el.id"
                    :editing="editingElementId === el.id"
                    @pointerdown="onCanvasElPointerDown"
@@ -520,10 +530,24 @@
               </div>
             </section>
             <section>
-              <label>Eyebrow<input v-model="design.eyebrow" maxlength="40" placeholder="e.g. ORIGINAL WORK" :disabled="!vis.eyebrow"></label>
-              <label>Headline<textarea v-model="design.headline" rows="2" maxlength="90" placeholder="e.g. Study No. 14" :disabled="!vis.headline"></textarea></label>
-              <label>Descriptor<input v-model="design.descriptor" maxlength="100" placeholder="e.g. Process · provenance · available pieces" :disabled="!vis.descriptor"></label>
-              <label>Call to action<input v-model="design.cta" maxlength="40" placeholder="e.g. Scan to explore" :disabled="!vis.cta"></label>
+              <div v-for="field in ([
+                { key: 'eyebrow', label: 'Eyebrow', max: 40, placeholder: 'e.g. ORIGINAL WORK' },
+                { key: 'headline', label: 'Headline', max: 90, placeholder: 'e.g. Study No. 14' },
+                { key: 'descriptor', label: 'Descriptor', max: 100, placeholder: 'e.g. Process · provenance · available pieces' },
+                { key: 'cta', label: 'Call to action', max: 40, placeholder: 'e.g. Scan to explore' },
+              ] as const)" :key="field.key" class="binding-field">
+                <span class="binding-label">{{ field.label }}</span>
+                <div class="source-choice" role="radiogroup" :aria-label="`${field.label} source`">
+                  <label><input type="radio" :name="`source-${field.key}`" :checked="!fixedBinding(field.key)" :disabled="!vis[field.key]" @change="setFixedBinding(field.key, '')"> Static</label>
+                  <label><input type="radio" :name="`source-${field.key}`" :checked="!!fixedBinding(field.key)" :disabled="!vis[field.key]" @change="setFixedBinding(field.key, DYNAMIC_FIELD_OPTIONS[0].value)"> Dynamic</label>
+                </div>
+                <label v-if="fixedBinding(field.key)">Choose data<select :value="fixedBinding(field.key)" :disabled="!vis[field.key]" @change="setFixedBinding(field.key, ($event.target as HTMLSelectElement).value)">
+                  <option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select></label>
+                <textarea v-if="field.key === 'headline'" v-model="design[field.key]" rows="2" :maxlength="field.max" :placeholder="field.placeholder" :disabled="!vis[field.key] || !!fixedBinding(field.key)"></textarea>
+                <input v-else v-model="design[field.key]" :maxlength="field.max" :placeholder="field.placeholder" :disabled="!vis[field.key] || !!fixedBinding(field.key)">
+                <small v-if="fixedBinding(field.key)" class="binding-preview"><i class="bi bi-eye"></i> Preview on template: <b>{{ bindingExample(fixedBinding(field.key)) }}</b></small>
+              </div>
             </section>
           </template>
 
@@ -541,7 +565,16 @@
                   Show name
                 </button>
               </div>
-              <label>Business or maker<input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName"></label>
+              <div class="binding-field">
+                <span class="binding-label">Business or maker</span>
+                <div class="source-choice" role="radiogroup" aria-label="Business or maker source">
+                  <label><input type="radio" name="source-merchant" :checked="!fixedBinding('merchantName')" @change="setFixedBinding('merchantName', '')"> Static</label>
+                  <label><input type="radio" name="source-merchant" :checked="!!fixedBinding('merchantName')" @change="setFixedBinding('merchantName', DYNAMIC_FIELD_OPTIONS[0].value)"> Dynamic</label>
+                </div>
+                <label v-if="fixedBinding('merchantName')">Choose data<select :value="fixedBinding('merchantName')" @change="setFixedBinding('merchantName', ($event.target as HTMLSelectElement).value)"><option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                <input v-model="design.merchantName" maxlength="80" placeholder="e.g. The Craft Studio" :disabled="!vis.merchantName || !!fixedBinding('merchantName')">
+                <small v-if="fixedBinding('merchantName')" class="binding-preview"><i class="bi bi-eye"></i> Preview on template: <b>{{ bindingExample(fixedBinding('merchantName')) }}</b></small>
+              </div>
             </section>
           </template>
 
@@ -587,14 +620,24 @@
               </p>
             </section>
             <section v-if="selectedElement.kind === 'shape' || selectedElement.kind === 'cta'">
-              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30"></label>
+              <template v-if="selectedElement.kind === 'cta'">
+                <span class="binding-label">Content source</span>
+                <div class="source-choice" role="radiogroup" aria-label="Badge content source"><label><input type="radio" :checked="!selectedElement.dynamicField" @change="selectedElement.dynamicField = undefined"> Static</label><label><input type="radio" :checked="!!selectedElement.dynamicField" @change="selectedElement.dynamicField = DYNAMIC_FIELD_OPTIONS[0].value"> Dynamic</label></div>
+                <label v-if="selectedElement.dynamicField">Choose data<select v-model="selectedElement.dynamicField"><option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              </template>
+              <label v-if="selectedElement.kind === 'cta'">Badge text<input v-model="selectedElement.text" maxlength="30" :disabled="!!selectedElement.dynamicField"></label>
+              <small v-if="selectedElement.kind === 'cta' && selectedElement.dynamicField" class="binding-preview"><i class="bi bi-eye"></i> Preview on template: <b>{{ bindingExample(selectedElement.dynamicField) }}</b></small>
               <label>{{ selectedElement.kind === 'shape' && selectedElement.shape === 'frame' ? 'Border color' : 'Fill color' }}<input type="color" v-model="selectedElement.fill" class="color-input"></label>
               <label v-if="selectedElement.kind === 'cta'">Text color<input type="color" v-model="selectedElement.textColor" class="color-input"></label>
               <label v-if="selectedElement.kind === 'shape' && (selectedElement.shape === 'rect' || selectedElement.shape === 'frame')">Corner radius<input type="number" min="0" max="200" v-model.number="selectedElement.radius"></label>
               <label>Opacity<input type="range" min="0.1" max="1" step="0.05" v-model.number="selectedElementOpacity"></label>
             </section>
             <section v-else-if="selectedElement.kind === 'text'">
-              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200"></textarea></label>
+              <span class="binding-label">Content source</span>
+              <div class="source-choice" role="radiogroup" aria-label="Text content source"><label><input type="radio" :checked="!selectedElement.dynamicField" @change="selectedElement.dynamicField = undefined"> Static</label><label><input type="radio" :checked="!!selectedElement.dynamicField" @change="selectedElement.dynamicField = DYNAMIC_FIELD_OPTIONS[0].value"> Dynamic</label></div>
+              <label v-if="selectedElement.dynamicField">Choose data<select v-model="selectedElement.dynamicField"><option v-for="option in DYNAMIC_FIELD_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              <label>Text content<textarea v-model="selectedElement.text" rows="2" maxlength="200" :disabled="!!selectedElement.dynamicField"></textarea></label>
+              <small v-if="selectedElement.dynamicField" class="binding-preview"><i class="bi bi-eye"></i> Preview on template: <b>{{ bindingExample(selectedElement.dynamicField) }}</b></small>
               <label>Font<select v-model="selectedElement.fontFamily" :style="{ fontFamily: selectedElement.fontFamily }">
                 <option v-for="f in TEXT_FONT_CHOICES" :key="f.value" :value="f.value" :style="{ fontFamily: f.value }">{{ f.label }}</option>
               </select></label>
@@ -634,6 +677,15 @@
         <label class="creator-name-field">Template name
           <input v-model="creatorName" maxlength="60" placeholder="e.g. Rooftop Bar Table Tent">
         </label>
+        <div class="creator-source">
+          <div><p class="creator-sub">Optional CorelDRAW source</p><small>Attach the original .cdr as a reference. The Studio uses the dimensions below for its editable canvas and print output.</small></div>
+          <label class="file-picker"><i class="bi bi-paperclip"></i>{{ creatorSourceFile?.name || 'Choose .cdr file' }}<input type="file" accept=".cdr,application/vnd.corel-draw" @change="onCorelFileChosen"></label>
+        </div>
+        <div class="creator-dimensions">
+          <label>Width<input v-model.number="creatorWidth" type="number" min="1" step="0.1"></label>
+          <label>Height<input v-model.number="creatorHeight" type="number" min="1" step="0.1"></label>
+          <label>Unit<select v-model="creatorUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">inches</option></select></label>
+        </div>
         <p class="creator-sub">Choose a shape</p>
         <div class="format-grid">
           <button v-for="preset in FORMAT_PRESETS" :key="preset.format"
@@ -674,6 +726,16 @@
         </div>
       </div>
     </div>
+    <div v-if="previewSavedDesign" class="creator-overlay" @click.self="previewSavedDesign = null">
+      <div class="preview-modal">
+        <button class="creator-close" @click="previewSavedDesign = null" title="Close preview"><i class="bi bi-x-lg"></i></button>
+        <div class="preview-modal-art"><img :src="savedPreviewDataUri(previewSavedDesign)" :alt="previewSavedDesign.name"></div>
+        <div class="preview-modal-copy"><p class="eyebrow">MY TEMPLATE</p><h3>{{ previewSavedDesign.name }}</h3><p>Rendered from the saved template with sample dynamic data.</p><div class="tag-row"><span>{{ previewSavedDesign.widthMm.toFixed(0) }} × {{ previewSavedDesign.heightMm.toFixed(0) }} mm</span><span v-if="previewSavedDesign.customTemplate?.sourceFileName">{{ previewSavedDesign.customTemplate.sourceFileName }}</span></div><button class="primary-action" @click="editSaved(previewSavedDesign); previewSavedDesign = null">Edit template <i class="bi bi-arrow-right"></i></button></div>
+      </div>
+    </div>
+    <div v-if="renamingDesign" class="creator-overlay" @click.self="renamingDesign = null">
+      <div class="rename-modal"><div class="creator-head"><div><p class="eyebrow">RENAME TEMPLATE</p><h3>Change template name</h3></div><button class="creator-close" @click="renamingDesign = null"><i class="bi bi-x-lg"></i></button></div><label class="creator-name-field">Template name<input v-model="renameValue" maxlength="80" @keydown.enter="renameDesign"></label><div class="creator-actions"><button class="secondary-action" @click="renamingDesign = null">Cancel</button><button class="primary-action" :disabled="saving || !renameValue.trim()" @click="renameDesign">Rename</button></div></div>
+    </div>
   </div>
 </template>
 
@@ -690,12 +752,14 @@ import { ELEMENT_PRESETS, BACKGROUND_PRESETS, inkForBackground, newId, TEXT_FONT
 import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioDocument } from '../features/designStudio/document/migrations';
 import { STUDIO_SCHEMA_VERSION } from '../features/designStudio/document/types';
 import { preflightDesign } from '../features/designStudio/export/preflight';
+import { DYNAMIC_FIELD_OPTIONS, dynamicFieldSample, resolveDesignBindings } from '../features/qrStudio/dynamicFields';
 import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
+import logoLightUrl from '../assets/logo/Peshkash-Primary-For-Light-Display.svg?url';
+import logoDarkUrl from '../assets/logo/Peshkash-Primary-For-Dark-Display.svg?url';
 import '../features/qrStudio/qr-template-tokens.css';
 
-// Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
-const LOGO_SVG_W = 1536, LOGO_SVG_H = 512;
-const LOGO_CX1 = 335, LOGO_CX2 = 1312, LOGO_CY1 = 164, LOGO_CY2 = 415;
+// Display logo uses a tight viewBox, including the corner mark and full wordmark.
+const LOGO_ASPECT = 1068 / 356;
 
 const props = withDefaults(defineProps<{
   embedded?: boolean;
@@ -705,21 +769,25 @@ const props = withDefaults(defineProps<{
 const embedded = computed(() => props.embedded);
 const route = useRoute();
 const mode = ref<'library' | 'editor'>('library');
+const libraryTab = ref<'default' | 'custom'>('default');
 const search = ref('');
 const activeCategory = ref('all');
 const activeFormat = ref<'all' | TemplateFormat>('all');
 const previewStyle = ref<QrStyleId>('obsidian-ring');
 const previewTemplate = ref<QrTemplateDefinition | null>(null);
+const previewSavedDesign = ref<StudioDesign | null>(null);
+const renamingDesign = ref<StudioDesign | null>(null);
+const renameValue = ref('');
 const activeTemplate = ref<QrTemplateDefinition | null>(null);
 const savedDesigns = ref<StudioDesign[]>([]);
 const saving = ref(false);
 const saveState = ref<'saved' | 'saving' | 'local' | 'unsaved' | 'error'>('saved');
 const lastSavedAt = ref('');
 const saveStatusLabel = computed(() => ({
-  saved: lastSavedAt.value ? `Saved ${lastSavedAt.value}` : 'All changes saved',
+  saved: lastSavedAt.value ? `Saved manually ${lastSavedAt.value}` : 'Saved',
   saving: 'Saving changes…',
   local: 'Saved locally',
-  unsaved: 'Unsaved draft',
+  unsaved: 'Unsaved changes — click Save design',
   error: 'Save conflict',
 })[saveState.value]);
 const saveStatusIcon = computed(() => ({
@@ -735,6 +803,20 @@ const showCreator = ref(false);
 const creatorFormat = ref<TemplateFormat>('landscape');
 const creatorName = ref('');
 const creatorStarter = ref<LayeredStarterId>('blank');
+const creatorWidth = ref(120);
+const creatorHeight = ref(70);
+const creatorUnit = ref<'mm' | 'cm' | 'in'>('mm');
+const creatorSourceFile = ref<File | null>(null);
+watch(creatorFormat, (format) => {
+  const preset = FORMAT_PRESETS.find(item => item.format === format); if (!preset) return;
+  const factor = creatorUnit.value === 'in' ? 25.4 : creatorUnit.value === 'cm' ? 10 : 1;
+  creatorWidth.value = Number((preset.defaultMm.w / factor).toFixed(2)); creatorHeight.value = Number((preset.defaultMm.h / factor).toFixed(2));
+});
+watch(creatorUnit, (next, previous) => {
+  const factor = (unit: 'mm' | 'cm' | 'in') => unit === 'in' ? 25.4 : unit === 'cm' ? 10 : 1;
+  const previousFactor = factor(previous); const nextFactor = factor(next);
+  creatorWidth.value = Number((creatorWidth.value * previousFactor / nextFactor).toFixed(2)); creatorHeight.value = Number((creatorHeight.value * previousFactor / nextFactor).toFixed(2));
+});
 
 // ── Canvas state ──────────────────────────────────────────────────────────────
 const stageRef = ref<HTMLElement>();
@@ -777,6 +859,25 @@ const selectedElementOpacity = computed<number>({
   get: () => selectedElement.value?.opacity ?? 1,
   set: (v) => { if (selectedElement.value) selectedElement.value.opacity = v; },
 });
+
+type BindableFixedField = 'merchantName' | 'eyebrow' | 'headline' | 'descriptor' | 'cta';
+function fixedBinding(field: BindableFixedField): string {
+  return design.fieldBindings?.[field] ?? '';
+}
+function setFixedBinding(field: BindableFixedField, value: string): void {
+  if (!design.fieldBindings) design.fieldBindings = {};
+  if (value) design.fieldBindings[field] = value;
+  else delete design.fieldBindings[field];
+}
+function bindingExample(value?: string): string {
+  return dynamicFieldSample(value) || 'Uses the saved text';
+}
+function displayFixedValue(field: BindableFixedField): string {
+  return fixedBinding(field) ? bindingExample(fixedBinding(field)) : design[field];
+}
+function elementPreviewText(element: CanvasElement): string | undefined {
+  return (element.kind === 'text' || element.kind === 'cta') && element.dynamicField ? bindingExample(element.dynamicField) : undefined;
+}
 
 interface ElRect { x: number; y: number; w: number; h: number }
 const elPos = ref({
@@ -953,21 +1054,12 @@ const merchantTextStyle = computed(() => ({
   color: inkColor.value, display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 
-// Brand mark: position the logo so its visual content (x:[335,1312] y:[164,415]) renders correctly
 const bmContainerStyle = computed((): Record<string, string> => {
   const { x, y, w, h } = elPos.value.brandmark; const s = canvasScale.value;
-  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'visible' };
 });
 const bmImgStyle = computed((): Record<string, string> => {
-  const { w: contentW, h: contentH } = elPos.value.brandmark; const s = canvasScale.value;
-  // Reverse the content crop: full SVG image is larger, positioned so content aligns to container
-  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
-  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
-  const imgW = (contentW / contentFracW) * s;
-  const imgH = (contentH / contentFracH) * s;
-  const offsetX = -(LOGO_CX1 / LOGO_SVG_W) * imgW;
-  const offsetY = -(LOGO_CY1 / LOGO_SVG_H) * imgH;
-  return { position: 'absolute', left: `${offsetX}px`, top: `${offsetY}px`, width: `${imgW}px`, height: `${imgH}px` };
+  return { display: 'block', height: '100%', objectFit: 'contain', width: '100%' };
 });
 
 // QR data URI for canvas display
@@ -993,20 +1085,21 @@ const previewSvg = computed(() => {
   const t = activeTemplate.value; if (!t || design.customTemplate) return '';
   const sh = Math.min(t.canvas.width, t.canvas.height);
   const { x, y, w } = elPos.value.qr;
+  const previewDesign = resolveDesignBindings({ ...design, visibility: { ...design.visibility, brandmark: false } }, Object.fromEntries(DYNAMIC_FIELD_OPTIONS.map(option => [option.value, option.sample])));
   return renderTemplateSvg(t, {
-    merchantName: design.merchantName,
-    eyebrow: design.eyebrow,
-    headline: design.headline,
-    descriptor: design.descriptor,
-    cta: design.cta,
+    merchantName: previewDesign.merchantName,
+    eyebrow: previewDesign.eyebrow,
+    headline: previewDesign.headline,
+    descriptor: previewDesign.descriptor,
+    cta: previewDesign.cta,
     destination: design.destination,
     qrStyle: design.qrStyle,
     qrColors: qrColors.value,
     theme: design.theme,
-    visibility: design.visibility,
+    visibility: previewDesign.visibility,
     background: design.background,
     typography: design.typography,
-    canvasElements: backCanvasElements.value.filter((el) => el.id !== dragState.value?.id && el.id !== resizeState.value?.id),
+    canvasElements: (previewDesign.canvasElements ?? []).filter((el) => el.visible !== false && (el.layer ?? 'front') === 'back' && el.id !== dragState.value?.id && el.id !== resizeState.value?.id),
   }, {
     qr: { x: x / t.canvas.width, y: y / t.canvas.height, size: w / sh },
     copy: { ...elPos.value.copy },
@@ -1058,13 +1151,9 @@ function initElPos(t: QrTemplateDefinition): void {
     ch = Math.min(ch, height - cy);
   }
 
-  // Brand mark: compute content size to position the SVG correctly
+  // Brand mark uses the logo's tight display viewBox so no strokes or lettering are clipped.
   const logoH = sh * 0.055; // desired content height in canvas units
-  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
-  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
-  const logoImgH = logoH / contentFracH;
-  const logoImgW = logoImgH * (LOGO_SVG_W / LOGO_SVG_H);
-  const logoContentW = contentFracW * logoImgW;
+  const logoContentW = logoH * LOGO_ASPECT;
   const bx = width - padding * 0.5 - logoContentW;
   const by = markBaseY - logoH;
 
@@ -1377,6 +1466,8 @@ function onCanvasElPointerDown(id: string, e: PointerEvent): void {
   startCanvasElDrag(id, e);
 }
 function startElementTextEdit(id: string, e: MouseEvent): void {
+  const source = findCanvasEl(id);
+  if (source && (source.kind === 'text' || source.kind === 'cta') && source.dynamicField) return;
   editingElementId.value = id;
   const clientX = e.clientX, clientY = e.clientY;
   nextTick(() => {
@@ -1406,6 +1497,7 @@ function textElFor(key: ElementKey): HTMLElement | undefined {
   }
 }
 function startTextEdit(key: ElementKey, e: MouseEvent): void {
+  if (key !== 'brandmark' && fixedBinding(key)) return;
   editingKey.value = key;
   const clientX = e.clientX, clientY = e.clientY;
   nextTick(() => {
@@ -1597,6 +1689,7 @@ const blankDesign = (): StudioDesign => ({
   typography: undefined,
   layout: undefined,
   variables: undefined,
+  fieldBindings: {},
   updatedAt: undefined,
 });
 const design = reactive<StudioDesign>(blankDesign());
@@ -1733,10 +1826,29 @@ function templateLabelFor(saved: StudioDesign): string {
   if (fromLibrary) return fromLibrary.label;
   return saved.customTemplate ? 'Custom template' : 'Library template';
 }
+const savedPreviewCache = new Map<string, string>();
+function savedPreviewDataUri(saved: StudioDesign): string {
+  const key = `${saved.id}:${saved.updatedAt || saved.revision || 0}:${saved.name}`;
+  const cached = savedPreviewCache.get(key); if (cached) return cached;
+  const template = resolveTemplate(saved);
+  const sampled = resolveDesignBindings(saved, Object.fromEntries(DYNAMIC_FIELD_OPTIONS.map(option => [option.value, option.sample])));
+  const kit = brandKitLayout(template); const short = Math.min(template.canvas.width, template.canvas.height);
+  const layout = saved.layout ?? { qr: { x: template.qr.x * template.canvas.width, y: template.qr.y * template.canvas.height, w: template.qr.size * short, h: template.qr.size * short }, copy: kit.copy, merchant: kit.merchant, brandmark: kit.brandmark };
+  const svg = renderTemplateSvg(template, sampled, { qr: { x: layout.qr.x / template.canvas.width, y: layout.qr.y / template.canvas.height, size: layout.qr.w / short }, copy: layout.copy, merchant: layout.merchant, brandmark: layout.brandmark });
+  const uri = svgDataUri(svg); savedPreviewCache.set(key, uri); return uri;
+}
+
+function onCorelFileChosen(event: Event): void {
+  const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+  if (file && !file.name.toLowerCase().endsWith('.cdr')) { notice.value = 'Choose a CorelDRAW .cdr file.'; return; }
+  creatorSourceFile.value = file;
+}
+function creatorMm(value: number): number {
+  return creatorUnit.value === 'in' ? value * 25.4 : creatorUnit.value === 'cm' ? value * 10 : value;
+}
 
 function applyDesign(next: StudioDesign): void {
   autosavePaused = true;
-  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
   Object.assign(design, blankDesign(), next);
   activeTemplate.value = resolveTemplate(design);
   mode.value = 'editor';
@@ -1763,6 +1875,7 @@ function startWithTemplate(template: QrTemplateDefinition): void {
 function startCustomTemplate(): void {
   const preset = FORMAT_PRESETS.find((p) => p.format === creatorFormat.value) ?? FORMAT_PRESETS[0];
   const spec: CustomTemplateSpec = buildCustomTemplateSpec(creatorFormat.value);
+  if (creatorSourceFile.value) { spec.sourceFileName = creatorSourceFile.value.name; spec.sourceFileSize = creatorSourceFile.value.size; }
   const id = `custom-${Date.now().toString(36)}`;
   const label = creatorName.value.trim() || 'Custom template';
   const template = synthesizeCustomTemplate(spec, { id, label, merchantType: props.vendorName });
@@ -1774,8 +1887,8 @@ function startCustomTemplate(): void {
     libraryTemplateId: id,
     customTemplate: spec,
     theme: template.defaultTheme,
-    widthMm: preset.defaultMm.w,
-    heightMm: preset.defaultMm.h,
+    widthMm: Math.max(1, creatorMm(creatorWidth.value) || preset.defaultMm.w),
+    heightMm: Math.max(1, creatorMm(creatorHeight.value) || preset.defaultMm.h),
     merchantName: props.vendorName || '',
     canvasElements: buildLayeredStarter(creatorStarter.value, spec.canvas),
     ...template.defaultCopy,
@@ -1786,6 +1899,7 @@ function startCustomTemplate(): void {
   showCreator.value = false;
   creatorName.value = '';
   creatorStarter.value = 'blank';
+  creatorSourceFile.value = null;
 }
 function editSaved(saved: StudioDesign): void {
   designKey.value++;
@@ -1803,8 +1917,7 @@ function toggleCopyVisibility(): void {
   design.visibility.cta = next;
 }
 function closeEditor(): void {
-  if (design.id == null && saveState.value === 'unsaved' && !window.confirm('Discard this unsaved draft?')) return;
-  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+  if (saveState.value === 'unsaved' && !window.confirm('Discard unsaved changes?')) return;
   mode.value = 'library'; activeTemplate.value = null; selectedEl.value = null;
   void loadDesigns();
 }
@@ -1881,7 +1994,7 @@ async function saveDesign(quiet = false): Promise<void> {
     descriptor: design.descriptor, cta: design.cta, destination: design.destination,
     displayUnit: design.displayUnit, grid: design.grid, qrColors: design.qrColors,
     background: design.background, typography: design.typography, visibility: design.visibility,
-    customTemplate: design.customTemplate, variables: design.variables,
+    customTemplate: design.customTemplate, variables: design.variables, fieldBindings: design.fieldBindings,
   };
   const payload = { name: design.name || activeTemplate.value.label, widthMm: design.widthMm, heightMm: design.heightMm,
     vendorId: props.vendorId,
@@ -1917,6 +2030,28 @@ async function saveDesign(quiet = false): Promise<void> {
   }
   if (saveQueued) { saveQueued = false; await saveDesign(true); }
 }
+function beginRename(saved: StudioDesign): void { renamingDesign.value = saved; renameValue.value = saved.name; }
+async function renameDesign(): Promise<void> {
+  const target = renamingDesign.value; const nextName = renameValue.value.trim();
+  if (!target || !nextName || nextName === target.name) { renamingDesign.value = null; return; }
+  saving.value = true;
+  const next = { ...JSON.parse(JSON.stringify(target)), name: nextName, updatedAt: new Date().toISOString() } as StudioDesign;
+  try {
+    if (typeof target.id === 'string') { upsertSavedDesign(persistLocal(next)); }
+    else {
+      const template = resolveTemplate(next); const layout = next.layout ?? elPos.value;
+      const document = createStudioDocument(next, layout);
+      const settings = { ...next, id: undefined, layout: undefined };
+      const payload = { name: nextName, widthMm: next.widthMm, heightMm: next.heightMm, vendorId: props.vendorId, elements: [], libraryTemplateId: template.id, manifestVersion: qrManifest.version, schemaVersion: STUDIO_SCHEMA_VERSION, revision: next.revision, qrStyle: next.qrStyle, theme: next.theme, settings, document };
+      const { data } = await axios.put<Record<string, unknown>>(`${API_BASE_URL}/admin/designs/${target.id}`, payload);
+      upsertSavedDesign(fromApi(data));
+    }
+    notice.value = 'Template renamed.';
+    renamingDesign.value = null;
+    window.setTimeout(() => { notice.value = ''; }, 3000);
+  } catch { notice.value = 'Couldn\'t rename this template. Try again.'; }
+  finally { saving.value = false; }
+}
 async function deleteDesign(id: number | string): Promise<void> {
   deleting.value = id;
   try {
@@ -1951,19 +2086,12 @@ async function downloadPng(): Promise<void> {
   canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height); triggerDownload(canvas.toDataURL('image/png'), safeFilename('png'));
 }
 
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
-function scheduleAutosave(): void {
+function markUnsaved(): void {
   if (autosavePaused || mode.value !== 'editor') return;
-  if (autosaveTimer) clearTimeout(autosaveTimer);
-  if (design.id == null) { saveState.value = 'unsaved'; return; }
-  saveState.value = 'saving';
-  autosaveTimer = setTimeout(() => {
-    autosaveTimer = null;
-    void saveDesign(true);
-  }, 1400);
+  if (!saving.value) saveState.value = 'unsaved';
 }
-watch(design, scheduleAutosave, { deep: true });
-watch(elPos, scheduleAutosave, { deep: true });
+watch(design, markUnsaved, { deep: true });
+watch(elPos, markUnsaved, { deep: true });
 
 watch(activeTemplate, () => {
   if (!activeTemplate.value) return;
@@ -2005,7 +2133,6 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasScale);
   window.removeEventListener('keydown', onCanvasKeydown);
   canvasResizeObserver?.disconnect();
-  if (autosaveTimer) clearTimeout(autosaveTimer);
   onWindowUp();
 });
 </script>
@@ -2027,6 +2154,7 @@ onUnmounted(() => {
 .section-heading h2,.library-heading h2{font:400 clamp(28px,3vw,40px)/1.15 Rufina,serif;margin:0}
 .section-heading>span{font-size:12px;color:var(--muted)}
 .saved-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.library-tabs{display:flex;border-bottom:1px solid #d9d0c7;margin:-4px 0 26px;gap:6px}.library-tabs button{border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 16px;color:var(--muted);font-weight:700;cursor:pointer}.library-tabs button.active{border-bottom-color:var(--gold);color:var(--ink)}.library-tabs span{background:#e8ded2;border-radius:999px;font-size:10px;margin-left:5px;padding:2px 6px}.saved-template-grid{margin-top:20px}.saved-name-button{background:transparent;border:0;color:var(--ink);font:400 19px/1.2 Rufina,serif;padding:0;text-align:left;cursor:pointer}.saved-name-button i{color:var(--gold);font-size:11px;margin-left:4px}.saved-template-card .saved-delete{align-self:center;height:34px;width:34px}
 .saved-card{border:1px solid #d9d0c7;background:#f9f6f2;display:flex;align-items:stretch}
 .saved-card:hover{border-color:var(--gold)}
 .saved-card-body{border:0;background:transparent;text-align:left;padding:13px;display:flex;align-items:center;gap:11px;cursor:pointer;flex:1;min-width:0}
@@ -2084,6 +2212,7 @@ onUnmounted(() => {
 .creator-name-field{display:grid;gap:6px;font-size:11px;color:var(--muted);margin-bottom:22px}
 .creator-name-field input{border:1px solid #d9d0c7;background:#fff;padding:10px 12px;outline:0;color:var(--ink);font-size:14px}
 .creator-name-field input:focus{border-color:var(--gold)}
+.creator-source{align-items:center;border:1px solid #ded5cb;background:#f5f0ea;display:flex;gap:16px;justify-content:space-between;margin-bottom:16px;padding:13px}.creator-source .creator-sub{margin-bottom:4px}.creator-source small{color:var(--muted);display:block;font-size:10px;line-height:1.4;max-width:340px}.file-picker{align-items:center;background:#fff;border:1px solid #d3c7bb;cursor:pointer;display:flex;flex:0 0 auto;font-size:11px;font-weight:700;gap:7px;max-width:210px;overflow:hidden;padding:9px 11px;text-overflow:ellipsis;white-space:nowrap}.file-picker input{display:none}.creator-dimensions{display:grid;gap:10px;grid-template-columns:1fr 1fr 1fr;margin-bottom:22px}.creator-dimensions label{color:var(--muted);display:grid;font-size:10px;gap:5px;text-transform:uppercase}.creator-dimensions input,.creator-dimensions select{background:#fff;border:1px solid #d9d0c7;min-height:39px;padding:8px}.rename-modal{background:#fbf9f6;box-shadow:0 24px 60px rgba(26,20,16,.3);padding:28px 30px;width:min(460px,100%)}
 .creator-sub{font-size:9px;font-weight:700;letter-spacing:.19em;color:var(--gold);margin:0 0 12px}
 .creator-sub--spaced{margin-top:22px}
 .starter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px}
@@ -2106,15 +2235,14 @@ onUnmounted(() => {
 /* ── Editor bar ── */
 .editor-bar{height:64px;background:var(--ink);color:var(--cream);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 22px;position:sticky;top:0;z-index:20}
 .studio--embedded .editor-bar{height:58px;background:#f7f2ea;color:var(--ink);border-bottom:1px solid #dfd4c7;padding:0 18px;top:0}
-.studio--embedded .editor-title input{color:var(--ink)}
+.studio--embedded .editor-title strong{color:var(--ink)}
 .studio--embedded .editor-title .save-status{color:#786b5f}
 .studio--embedded .editor-actions-divider{background:#d8cdbf}
 .studio--embedded .secondary-action{border:1px solid transparent}.studio--embedded .secondary-action:hover{border-color:#d9c7ae;background:#fff}
 .back-button,.secondary-action{border:0;background:transparent;color:inherit;cursor:pointer}
 .back-button{justify-self:start;display:flex;align-items:center;gap:8px;font-size:13px}
 .editor-title{text-align:center;display:grid;justify-items:center;gap:2px;min-width:220px}
-.editor-title input{width:min(320px,28vw);border:0;border-bottom:1px solid transparent;background:transparent;color:var(--cream);font:400 14px Rufina,serif;text-align:center;padding:2px 8px;outline:0}
-.editor-title input:hover,.editor-title input:focus{border-color:rgba(189,148,90,.55)}
+.editor-title strong{max-width:min(320px,28vw);color:var(--cream);font:400 14px Rufina,serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .editor-title .save-status{font:600 9px Urbanist,sans-serif;color:#b7aaa0;letter-spacing:.04em;text-transform:none;display:flex;align-items:center;gap:5px}
 .save-status i{color:var(--gold)}
 .editor-actions{justify-self:end;display:flex;gap:7px;align-items:center}
@@ -2181,8 +2309,7 @@ onUnmounted(() => {
 .canvas-root--canonical .canvas-bg,.canvas-root--canonical .canvas-inner,.canvas-root--canonical .canvas-corners{display:none}
 .canvas-root--canonical .el--qr>img,
 .canvas-root--canonical .el--copy>.t-line,
-.canvas-root--canonical .el--merchant>.t-line,
-.canvas-root--canonical .el--brandmark>img{opacity:0!important}
+.canvas-root--canonical .el--merchant>.t-line{opacity:0!important}
 .canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-image),
 .canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-text),
 .canvas-root--canonical :deep(.canvas-el--back-hit>.dyn-shape){opacity:0!important}
@@ -2239,7 +2366,7 @@ onUnmounted(() => {
 .canvas-wrap.is-dragging .t-line{cursor:grabbing}
 
 /* Brand mark (locked) */
-.el--brandmark{cursor:grab;overflow:hidden}
+.el--brandmark{cursor:grab;overflow:visible}
 .el--brandmark:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
 .canvas-wrap.is-dragging .el--brandmark{cursor:grabbing}
 .el--brandmark img{pointer-events:none;display:block}
@@ -2337,6 +2464,8 @@ onUnmounted(() => {
 .vis-btn:hover{border-color:var(--gold);color:var(--ink)}
 .vis-btn i{font-size:11px}
 .properties-panel input:disabled,.properties-panel textarea:disabled{opacity:.4;pointer-events:none}
+.binding-field{border-bottom:1px solid #ebe3dc;margin-bottom:12px;padding-bottom:12px}.binding-field>label{margin-bottom:6px}.binding-field select{margin-top:5px}.binding-preview{align-items:center;color:#8c6839;display:flex;font-size:9.5px;gap:5px;line-height:1.35;margin-top:5px}.binding-preview i{color:var(--gold)}
+.binding-label{color:var(--muted);display:block;font-size:10px;font-weight:700;letter-spacing:.04em;margin-bottom:7px;text-transform:uppercase}.source-choice{background:#eee8e1;display:grid;grid-template-columns:1fr 1fr;margin-bottom:9px;padding:3px}.source-choice label{align-items:center;cursor:pointer;display:flex;font-size:10px;font-weight:700;gap:6px;justify-content:center;margin:0;padding:7px;text-transform:none}.source-choice label:has(input:checked){background:#fff;box-shadow:0 1px 3px #0001;color:var(--ink)}.source-choice input{accent-color:var(--gold);margin:0}
 .text-style-row{display:flex;gap:6px;margin-bottom:13px}
 .text-style-row .vis-btn{padding:6px 9px}
 .properties-panel select{width:100%;border:1px solid #d9d0c7;background:#fff;padding:8px 10px;outline:0;color:var(--ink)}
@@ -2386,7 +2515,7 @@ onUnmounted(() => {
   .studio{--editor-bar-h:104px}
   .studio--embedded.studio--editor{--editor-bar-h:104px}
   .editor-bar,.studio--embedded .editor-bar{height:var(--editor-bar-h);grid-template-columns:auto minmax(0,1fr);grid-template-rows:48px 48px;padding:4px 10px}
-  .editor-title{justify-items:end;min-width:0}.editor-title input{width:min(58vw,280px);text-align:right}.editor-title .save-status{display:none}
+  .editor-title{justify-items:end;min-width:0}.editor-title strong{max-width:min(58vw,280px);text-align:right}.editor-title .save-status{display:none}
   .editor-actions{grid-column:1/-1;justify-self:stretch;overflow-x:auto;padding-bottom:3px}.editor-actions .secondary-action{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
   .editor-actions .primary-action{margin-left:auto;white-space:nowrap}
   /* Stacked single column regardless of panel state — repeats the same class combinations as the

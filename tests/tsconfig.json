@@ -24,6 +24,9 @@
     "../src/features/designStudio/document/types.ts",
     "../src/features/designStudio/document/migrations.ts",
     "../src/features/designStudio/export/preflight.ts",
-    "../src/features/qrStudio/types.ts"
+    "../src/features/qrStudio/types.ts",
+    "../src/features/qrStudio/dynamicFields.ts",
+    "../src/features/qrStudio/corelSvg.ts",
+    "../src/utils/zip.ts"
   ]
 }

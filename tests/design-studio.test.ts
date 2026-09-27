@@ -4,6 +4,9 @@ import { createStudioDocument, designFromDocument, layoutFitsCanvas, readStudioD
 import { STUDIO_SCHEMA_VERSION } from '../src/features/designStudio/document/types.js';
 import { preflightDesign } from '../src/features/designStudio/export/preflight.js';
 import type { FixedElementLayout, QrTemplateDefinition, StudioDesign } from '../src/features/qrStudio/types.js';
+import { resolveDesignBindings } from '../src/features/qrStudio/dynamicFields.js';
+import { createZip } from '../src/utils/zip.js';
+import { corelPngCardObject } from '../src/features/qrStudio/corelSvg.js';
 
 const template: QrTemplateDefinition = {
   id: 'test-card', index: 1, label: 'Test card', category: 'contact', categoryLabel: 'Contact',
@@ -27,6 +30,34 @@ const design: StudioDesign = {
   descriptor: 'Portfolio · commissions · studio visits', cta: 'SCAN MY PORTFOLIO',
   destination: 'https://pksh.in/noor', revision: 3, variables: { collection: 'Monsoon' },
 };
+
+test('CorelDRAW grid export exposes each finished card as one movable object', () => {
+  const png = `data:image/png;base64,${Buffer.from('card').toString('base64')}`;
+  const output = corelPngCardObject(png, 10, 20, 90, 141, 'page-1-card-1', 'Brass & Chai');
+  assert.equal((output.match(/<(?:image|g|path|rect|text)\b/g) || []).length, 1);
+  assert.match(output, /^<image id="page-1-card-1" data-object-type="qr-card"/);
+  assert.match(output, /width="90\.000" height="141\.000"/);
+  assert.match(output, /data-qr-name="Brass &amp; Chai"/);
+  assert.match(output, /preserveAspectRatio="xMidYMid meet"/);
+  assert.match(output, /image-rendering:optimizeQuality/);
+  assert.match(output, /xlink:href="data:image\/png;base64,/);
+  assert.match(output, /href="data:image\/png;base64,/);
+  assert.equal(output.endsWith('/>'), true);
+});
+
+test('CorelDRAW package keeps every referenced card artwork beside the layout', async () => {
+  const png = `data:image/png;base64,${Buffer.from('card').toString('base64')}`;
+  const card = corelPngCardObject(png, 10, 20, 90, 141, 'card-1', 'Card one');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">${card}</svg>`;
+  const blob = createZip([
+    { name: 'layout-page-01.svg', data: new TextEncoder().encode(svg) },
+    { name: 'assets/01-card.png', data: new Uint8Array([137, 80, 78, 71]) },
+  ]);
+  const archiveText = new TextDecoder().decode(await blob.arrayBuffer());
+  assert.match(archiveText, /layout-page-01\.svg/);
+  assert.match(archiveText, /assets\/01-card\.png/);
+  assert.match(archiveText, /xlink:href="data:image\/png;base64,/);
+});
 
 test('preflight accepts an approved HTTPS destination and print-safe QR', () => {
   const report = preflightDesign(design, template, layout);
@@ -78,6 +109,7 @@ test('the versioned document round-trips copy, layout, variables, and revision',
     layout,
     canvasElements: [],
     variables: design.variables,
+    fieldBindings: undefined,
     merchantName: design.merchantName,
     eyebrow: design.eyebrow,
     headline: design.headline,
@@ -85,6 +117,35 @@ test('the versioned document round-trips copy, layout, variables, and revision',
     cta: design.cta,
     destination: design.destination,
   });
+});
+
+test('dynamic text bindings resolve fixed and freeform text independently for every QR target', () => {
+  const bound: StudioDesign = {
+    ...design,
+    fieldBindings: { headline: 'item.name', descriptor: 'item.description', merchantName: 'vendor.name' },
+    canvasElements: [{ id: 'price', kind: 'text', x: 0, y: 0, w: 100, h: 30, text: 'Price on request', color: '#111111', fontFamily: 'Arial', fontSize: 18, fontWeight: '700', align: 'left', dynamicField: 'item.price' }],
+  };
+  const first = resolveDesignBindings(bound, { 'item.name': 'Paneer Tikka', 'item.description': 'Smoked paneer', 'item.price': '₹450', 'vendor.name': 'Acme Caterers' });
+  const second = resolveDesignBindings(bound, { 'item.name': 'Gulab Jamun', 'item.price': '₹250', 'vendor.name': 'Acme Caterers' });
+  assert.equal(first.headline, 'Paneer Tikka');
+  assert.equal(first.descriptor, 'Smoked paneer');
+  assert.equal(first.merchantName, 'Acme Caterers');
+  assert.equal(first.canvasElements?.[0].kind === 'text' && first.canvasElements[0].text, '₹450');
+  assert.equal(second.headline, 'Gulab Jamun');
+  assert.equal(second.descriptor, '');
+});
+
+test('batch export creates one ZIP container with every named QR asset', async () => {
+  const blob = createZip([
+    { name: '01-paneer.png', data: new Uint8Array([1, 2, 3]) },
+    { name: '02-dessert.png', data: new Uint8Array([4, 5]) },
+  ]);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const text = new TextDecoder().decode(bytes);
+  assert.equal(String.fromCharCode(...bytes.slice(0, 4)), 'PK\u0003\u0004');
+  assert.match(text, /01-paneer\.png/);
+  assert.match(text, /02-dessert\.png/);
+  assert.equal(String.fromCharCode(...bytes.slice(-22, -18)), 'PK\u0005\u0006');
 });
 
 test('unknown or incomplete document schemas are rejected', () => {

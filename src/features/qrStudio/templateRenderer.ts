@@ -137,15 +137,17 @@ function textBlock(
   }
 
   if (vis.headline !== false && options.headline) {
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.displayFont)}" font-size="${headlineSize}" fill="currentColor">${esc(options.headline)}</text>`);
-    y += headlineSize * 1.1 + scale * 0.014;
+    const lines = wrapCopy(options.headline, Math.max(12, Math.floor(width / (headlineSize * 0.56))));
+    parts.push(liveTextLines(options.headline, tx, y, width, headlineSize, 'currentColor', pairing.displayFont, anchor));
+    y += headlineSize * 1.1 * lines.length + scale * 0.014;
     hasAny = true;
   }
 
   if (vis.descriptor !== false && options.descriptor) {
     if (hasAny) y += scale * 0.004; // a little extra gap before descriptor
-    parts.push(`<text x="${tx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${descriptorSize}" opacity=".7" fill="currentColor">${esc(options.descriptor)}</text>`);
-    y += descriptorSize * 1.3 + scale * 0.018;
+    const lines = wrapCopy(options.descriptor, Math.max(12, Math.floor(width / (descriptorSize * 0.56))));
+    parts.push(`<g opacity=".7">${liveTextLines(options.descriptor, tx, y, width, descriptorSize, 'currentColor', pairing.bodyFont, anchor)}</g>`);
+    y += descriptorSize * 1.3 * lines.length + scale * 0.018;
     hasAny = true;
   }
 
@@ -170,17 +172,13 @@ function scanCorners(width: number, height: number, color: string): string {
     `</g>`;
 }
 
-// Brand kit logo: viewBox 0 0 1536 512, visual content x:[335,1312] y:[164,415]
+// Tight visual bounds match the display logo viewBox and include every stroke.
 function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark: boolean): string {
-  const svgW = 1536, svgH = 512;
-  const cx2 = 1312, cy2 = 415, contentH = cy2 - 164;
+  const cx2 = 1316, cy2 = 464, contentH = 356;
   const scale = logoH / contentH;
-  const imgW = svgW * scale;
-  const imgH = svgH * scale;
   const imgX = rightX - cx2 * scale;
   const imgY = bottomY - cy2 * scale;
-  const href = dark ? '/brand/peshkash-logo-dark.svg' : '/brand/peshkash-logo-light.svg';
-  return `<image href="${href}" x="${imgX.toFixed(2)}" y="${imgY.toFixed(2)}" width="${imgW.toFixed(2)}" height="${imgH.toFixed(2)}"/>`;
+  return `<g transform="translate(${imgX.toFixed(2)} ${imgY.toFixed(2)}) scale(${scale.toFixed(6)})">${svgBody(dark ? logoDark : logoLight)}</g>`;
 }
 
 // Freeform element bank layer — shapes and CTA badges the user dropped onto the canvas.
@@ -394,7 +392,7 @@ function renderBrandKitTemplateSvg(
   const headline = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.headline === false || !options.headline ? ''
     : liveTextLines(options.headline, x + dx, y + dy, copyWidth, size * typeScale, fg, pairing.displayFont, anchor);
   const descriptor = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.descriptor === false || !options.descriptor ? ''
-    : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" fill="${muted}">${esc(options.descriptor)}</text>`;
+    : liveTextLines(options.descriptor, x + dx, y + dy, copyWidth, size * typeScale, muted, pairing.bodyFont, anchor);
   const cta = (x: number, y: number, size: number, anchor: 'start' | 'middle' = 'start') => vis.cta === false || !options.cta ? ''
     : `<text x="${x + dx}" y="${y + dy}" text-anchor="${anchor}" font-family="${esc(pairing.bodyFont)}" font-size="${size * typeScale}" font-weight="700" letter-spacing="${1.5 * typeScale}" fill="${fg}">${esc(options.cta.toUpperCase())}</text>`;
 
