@@ -19,6 +19,14 @@ const COREL_EXPORT_SCALE = 600 / 25.4;
 interface QrTarget { key: string; label: string; context: string; type: string; path: string; mappingId?: number; variables?: DynamicValues }
 interface QrMapping { id: number; qrHash: string; url: string; shortQrUrl: string; finalPublicUrl: string; isActive: boolean }
 interface EventRow { id: number; displayName: string; name: string }
+interface PrintCollectionConfiguration {
+  version: 1;
+  orderedTargetKeys: string[];
+  selectedTemplateId: string;
+  targetTemplateIds: Record<string, string>;
+  print: Record<string, string | number | boolean>;
+}
+interface PrintCollectionRow { id: number | string; name: string; eventId: number; configuration: PrintCollectionConfiguration; updatedAt?: string; local?: boolean }
 const props = defineProps<{ event: EventRow | null; targets: QrTarget[]; qrMappings: QrMapping[] }>();
 
 const step = ref<1 | 2 | 3>(1);
@@ -42,6 +50,11 @@ const previewTargetKeys = ref<string[]>([]);
 const previewFilter = ref<'all' | 'problems'>('all');
 const zoomedTargetKey = ref<string | null>(null);
 const showPrintSetup = ref(false);
+const savedCollections = ref<PrintCollectionRow[]>([]);
+const collectionName = ref('');
+const activeCollectionId = ref<number | string | null>(null);
+const collectionNotice = ref('');
+const isSavingCollection = ref(false);
 type PaperSizeId = 'a3' | 'a4' | 'a5' | 'letter' | 'legal' | 'tabloid' | 'photo-4x6' | 'custom';
 type PrintUnit = 'mm' | 'cm' | 'in';
 interface PaperSize { id: PaperSizeId; label: string; widthMm: number; heightMm: number }
@@ -71,8 +84,9 @@ const printColumns = ref(2);
 const printCaptions = ref(true);
 const thumbnailCache = new Map<string, string>();
 const selectedTemplate = computed(() => templates.value.find(t => String(t.id) === String(selectedTemplateId.value)) ?? null);
-const selectedTargets = computed(() => props.targets.filter(t => selectedTargetKeys.value.includes(t.key)));
-const previewTargets = computed(() => props.targets.filter(t => previewTargetKeys.value.includes(t.key)));
+const targetByKey = computed(() => new Map(props.targets.map(target => [target.key, target])));
+const selectedTargets = computed(() => selectedTargetKeys.value.map(key => targetByKey.value.get(key)).filter((target): target is QrTarget => Boolean(target)));
+const previewTargets = computed(() => previewTargetKeys.value.map(key => targetByKey.value.get(key)).filter((target): target is QrTarget => Boolean(target)));
 const targetTypes = computed(() => [...new Set(props.targets.map(t => t.type))].sort());
 const visibleTargets = computed(() => { const q = targetSearch.value.trim().toLowerCase(); return props.targets.filter(t => (targetType.value === 'all' || t.type === targetType.value) && (!q || `${t.label} ${t.context} ${t.type} ${mappingForTarget(t)?.qrHash || ''}`.toLowerCase().includes(q))); });
 const unmappedTargets = computed(() => selectedTargets.value.filter(t => !mappingForTarget(t)));
@@ -261,6 +275,90 @@ function fromApi(row: Record<string, unknown>): StudioDesign {
 function builtInTemplates(): StudioDesign[] { return qrManifest.templates.slice(0, 6).map(t => ({ ...blankDesign(), id: `library:${t.id}`, name: t.label, libraryTemplateId: t.id, theme: t.defaultTheme, widthMm: 120, heightMm: 120 * (t.canvas.height / t.canvas.width), merchantName: t.merchantType, ...t.defaultCopy, destination: t.sampleDestination })); }
 async function loadTemplates(): Promise<void> { try { const { data } = await axios.get<Record<string, unknown>[]>(`${API_BASE_URL}/admin/designs`); templates.value = data.length ? data.map(fromApi) : builtInTemplates(); } catch { templates.value = builtInTemplates(); } selectedTemplateId.value ??= templates.value[0]?.id ?? null; }
 
+function collectionStorageKey(): string { return `peshkash:print-collections:${props.event?.id || 'none'}`; }
+function readLocalCollections(): PrintCollectionRow[] {
+  try { return JSON.parse(localStorage.getItem(collectionStorageKey()) || '[]') as PrintCollectionRow[]; }
+  catch { return []; }
+}
+function writeLocalCollections(rows: PrintCollectionRow[]): void { localStorage.setItem(collectionStorageKey(), JSON.stringify(rows)); }
+async function loadSavedCollections(): Promise<void> {
+  if (!props.event) { savedCollections.value = []; return; }
+  try {
+    const { data } = await axios.get<PrintCollectionRow[]>(`${API_BASE_URL}/admin/print-collections`, { params: { eventId: props.event.id } });
+    savedCollections.value = data;
+  } catch {
+    savedCollections.value = readLocalCollections();
+  }
+}
+function collectionConfiguration(): PrintCollectionConfiguration {
+  return {
+    version: 1,
+    orderedTargetKeys: [...selectedTargetKeys.value],
+    selectedTemplateId: String(selectedTemplateId.value || ''),
+    targetTemplateIds: { ...targetTemplateIds.value },
+    print: {
+      paperSize: printPaperSize.value, orientation: printOrientation.value, sides: printSides.value,
+      includeCutContour: includeCutContour.value, includeRegistrationMarks: includeRegistrationMarks.value,
+      marginMm: printMarginMm.value, gapMm: printGapMm.value, cutCornerRadiusMm: cutCornerRadiusMm.value,
+      cutOffsetMm: cutOffsetMm.value, unit: printUnit.value, customPaperWidthMm: customPaperWidthMm.value,
+      customPaperHeightMm: customPaperHeightMm.value, artworkScalePercent: artworkScalePercent.value,
+      columns: printColumns.value, captions: printCaptions.value,
+    },
+  };
+}
+async function saveCollection(): Promise<void> {
+  const name = collectionName.value.trim();
+  if (!name || !props.event || !selectedTargetKeys.value.length) { collectionNotice.value = 'Enter a name and include at least one QR artwork.'; return; }
+  isSavingCollection.value = true; collectionNotice.value = '';
+  const payload = { name, eventId: props.event.id, configuration: collectionConfiguration() };
+  try {
+    const request = activeCollectionId.value && typeof activeCollectionId.value === 'number'
+      ? axios.put<PrintCollectionRow>(`${API_BASE_URL}/admin/print-collections/${activeCollectionId.value}`, payload)
+      : axios.post<PrintCollectionRow>(`${API_BASE_URL}/admin/print-collections`, payload);
+    const { data } = await request;
+    activeCollectionId.value = data.id;
+    collectionNotice.value = `“${data.name}” is saved for this event.`;
+    await loadSavedCollections();
+  } catch {
+    const rows = readLocalCollections();
+    const id = typeof activeCollectionId.value === 'string' ? activeCollectionId.value : `local:${Date.now()}`;
+    const row: PrintCollectionRow = { id, name, eventId: props.event.id, configuration: payload.configuration, updatedAt: new Date().toISOString(), local: true };
+    const index = rows.findIndex(item => String(item.id) === String(id));
+    if (index >= 0) rows[index] = row; else rows.unshift(row);
+    writeLocalCollections(rows); savedCollections.value = rows; activeCollectionId.value = id;
+    collectionNotice.value = `“${name}” is saved on this device. Server sync was unavailable.`;
+  } finally { isSavingCollection.value = false; }
+}
+function startNewCollection(): void { activeCollectionId.value = null; collectionName.value = ''; collectionNotice.value = ''; }
+async function openCollection(collection: PrintCollectionRow): Promise<void> {
+  const config = collection.configuration; const available = new Set(props.targets.map(target => target.key));
+  const keys = (config.orderedTargetKeys || []).filter(key => available.has(key));
+  if (!keys.length) { collectionNotice.value = 'None of the saved QR artworks are available in this event.'; return; }
+  selectedTargetKeys.value = keys;
+  selectedTemplateId.value = templates.value.some(template => String(template.id) === String(config.selectedTemplateId)) ? config.selectedTemplateId : (templates.value[0]?.id ?? null);
+  targetTemplateIds.value = Object.fromEntries(Object.entries(config.targetTemplateIds || {}).filter(([key, templateId]) => available.has(key) && templates.value.some(template => String(template.id) === String(templateId))));
+  const settings = config.print || {};
+  if (settings.paperSize) printPaperSize.value = String(settings.paperSize) as PaperSizeId;
+  if (settings.orientation) printOrientation.value = String(settings.orientation) as 'portrait' | 'landscape';
+  if (settings.sides) printSides.value = String(settings.sides) as 'single' | 'double';
+  if (typeof settings.includeCutContour === 'boolean') includeCutContour.value = settings.includeCutContour;
+  if (typeof settings.includeRegistrationMarks === 'boolean') includeRegistrationMarks.value = settings.includeRegistrationMarks;
+  if (Number.isFinite(Number(settings.marginMm))) printMarginMm.value = Number(settings.marginMm);
+  if (Number.isFinite(Number(settings.gapMm))) printGapMm.value = Number(settings.gapMm);
+  if (Number.isFinite(Number(settings.cutCornerRadiusMm))) cutCornerRadiusMm.value = Number(settings.cutCornerRadiusMm);
+  if (Number.isFinite(Number(settings.cutOffsetMm))) cutOffsetMm.value = Number(settings.cutOffsetMm);
+  if (settings.unit) printUnit.value = String(settings.unit) as PrintUnit;
+  if (Number.isFinite(Number(settings.customPaperWidthMm))) customPaperWidthMm.value = Number(settings.customPaperWidthMm);
+  if (Number.isFinite(Number(settings.customPaperHeightMm))) customPaperHeightMm.value = Number(settings.customPaperHeightMm);
+  if (Number.isFinite(Number(settings.artworkScalePercent))) artworkScalePercent.value = Number(settings.artworkScalePercent);
+  if (Number.isFinite(Number(settings.columns))) printColumns.value = Number(settings.columns);
+  if (typeof settings.captions === 'boolean') printCaptions.value = settings.captions;
+  activeCollectionId.value = collection.id; collectionName.value = collection.name;
+  const missing = (config.orderedTargetKeys || []).length - keys.length;
+  collectionNotice.value = missing ? `${missing} saved artwork${missing === 1 ? '' : 's'} no longer exists and was skipped.` : `Loaded “${collection.name}”.`;
+  previewTargetKeys.value = [...keys]; step.value = 3; await generatePreviews(); showPrintSetup.value = true;
+}
+
 function templateThumbnail(design: StudioDesign): string {
   const key = String(design.id ?? design.libraryTemplateId);
   const cached = thumbnailCache.get(key); if (cached) return cached;
@@ -431,14 +529,23 @@ async function printSheet() {
   win.document.open(); win.document.write(`<!doctype html><html><head><title>Peshkash print-ready sheets</title><style>@page{size:${pageSize};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}.sheet{height:${layout.pageHeight}mm;overflow:hidden;page-break-after:always;position:relative;width:${layout.pageWidth}mm}.sheet:last-of-type{page-break-after:auto}figure{margin:0;position:absolute;text-align:center}img{display:block;object-fit:contain}figcaption{font:8pt Arial,sans-serif;padding-top:2mm}.cut{border:.0762mm solid #ff00ff;display:block;position:absolute}.registration{border:.1mm solid #000;border-radius:50%;display:block;height:2.4mm;margin:-1.2mm 0 0 -1.2mm;position:absolute;width:2.4mm}.registration:before,.registration:after{background:#000;content:'';left:50%;position:absolute;top:50%;transform:translate(-50%,-50%)}.registration:before{height:.1mm;width:4mm}.registration:after{height:4mm;width:.1mm}</style></head><body>${sheets.join('')}<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),150))<\/script></body></html>`); win.document.close(); showPrintSetup.value = false; isExporting.value = false;
 }
 function toggleAllVisible() { const keys = visibleTargets.value.map(t => t.key); const all = keys.length > 0 && keys.every(k => selectedTargetKeys.value.includes(k)); selectedTargetKeys.value = all ? selectedTargetKeys.value.filter(k => !keys.includes(k)) : [...new Set([...selectedTargetKeys.value, ...keys])]; }
+function moveSelectedTarget(key: string, direction: -1 | 1): void {
+  const from = selectedTargetKeys.value.indexOf(key); const to = from + direction;
+  if (from < 0 || to < 0 || to >= selectedTargetKeys.value.length) return;
+  const next = [...selectedTargetKeys.value]; [next[from], next[to]] = [next[to], next[from]]; selectedTargetKeys.value = next;
+}
 async function nextStep() { if (step.value === 1 && selectedTemplate.value) step.value = 2; else if (step.value === 2 && selectedTargets.value.length) { previewTargetKeys.value = [...selectedTargetKeys.value]; step.value = 3; await generatePreviews(); } }
 function previousStep() { if (step.value > 1) step.value = (step.value - 1) as 1 | 2; }
-watch(() => props.targets, targets => { selectedTargetKeys.value = targets.map(t => t.key); }, { deep: true, immediate: true });
+watch(() => props.targets, targets => {
+  const available = new Set(targets.map(target => target.key));
+  const retained = selectedTargetKeys.value.filter(key => available.has(key));
+  selectedTargetKeys.value = retained.length ? retained : targets.map(target => target.key);
+}, { deep: true, immediate: true });
 watch(selectedTemplateId, () => {
   previews.value = {};
   if (step.value === 3) void generatePreviews();
 });
-onMounted(loadTemplates);
+onMounted(async () => { await loadTemplates(); await loadSavedCollections(); });
 </script>
 
 <template>
@@ -447,6 +554,8 @@ onMounted(loadTemplates);
     <ol class="ps-steps"><li v-for="item in [{ n: 1, label: 'Template' }, { n: 2, label: 'QR assets' }, { n: 3, label: 'Preview & export' }]" :key="item.n" :class="{ active: step === item.n, done: step > item.n }"><span>{{ step > item.n ? '✓' : item.n }}</span><b>{{ item.label }}</b></li></ol>
     <section v-if="step === 1" class="ps-stage">
       <div class="ps-stage-heading"><div><p>Step 1 of 3</p><h4>Choose a default template</h4><small>Use one template for the batch, then override individual cards in the proofing step.</small></div><RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr-templates" target="_blank"><i class="bi bi-plus-lg"></i> New template</RouterLink></div>
+      <div v-if="savedCollections.length" class="ps-saved-collections"><header><div><i class="bi bi-collection"></i><span><b>Saved print collections</b><small>Open a complete job directly in print setup.</small></span></div><em>{{ savedCollections.length }}</em></header><div><button v-for="collection in savedCollections" :key="collection.id" type="button" @click="openCollection(collection)"><span><b>{{ collection.name }}</b><small>{{ collection.configuration.orderedTargetKeys.length }} cards · {{ collection.local ? 'this device' : 'workspace' }}</small></span><i class="bi bi-arrow-right"></i></button></div></div>
+      <p v-if="collectionNotice" class="ps-collection-notice">{{ collectionNotice }}</p>
       <div class="ps-toolbar">
         <label class="ps-search"><i class="bi bi-search"></i><input v-model="templateSearch" type="search" placeholder="Search templates…"></label>
         <select v-model="templateFilter" aria-label="Filter templates"><option value="all">All templates</option><option value="dynamic">Dynamic fields</option><option value="compatible">Fully compatible</option></select>
@@ -460,6 +569,7 @@ onMounted(loadTemplates);
       <div class="ps-stage-heading"><div><p>Step 2 of 3</p><h4>Select QR assets</h4><small>{{ selectedTargets.length }} of {{ targets.length }} selected.</small></div><button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleAllVisible"><i class="bi bi-check2-square"></i> {{ allVisibleSelected ? 'Clear visible results' : 'Select all visible results' }}</button></div>
       <div class="ps-toolbar ps-toolbar--targets"><label class="ps-search"><i class="bi bi-search"></i><input v-model="targetSearch" type="search" placeholder="Search name, type or QR hash…"></label><select v-model="targetType" aria-label="Filter QR type"><option value="all">All QR types</option><option v-for="type in targetTypes" :key="type" :value="type">{{ type }}</option></select></div>
       <div class="ps-target-list"><label v-for="target in visibleTargets" :key="target.key" class="ps-target-row" :class="{ selected: selectedTargetKeys.includes(target.key), error: selectedTemplate && targetProblem(selectedTemplate, target) }"><input v-model="selectedTargetKeys" type="checkbox" :value="target.key"><span class="ps-target-icon"><i class="bi bi-qr-code"></i></span><span><b>{{ displayTargetLabel(target) }}</b><small>{{ target.context }} · {{ target.type }}</small><em v-if="selectedTemplate && targetProblem(selectedTemplate, target)"><i class="bi bi-exclamation-triangle"></i> {{ targetProblem(selectedTemplate, target) }}</em><em v-else><i class="bi bi-check-circle"></i> Ready for this template</em></span><code>{{ mappingForTarget(target)?.qrHash || 'mapping required' }}</code></label></div>
+      <section v-if="selectedTargets.length" class="ps-order"><header><div><b>Print order</b><small>This sequence is used in preview, print, ZIP, and CorelDRAW.</small></div><span>{{ selectedTargets.length }} selected</span></header><ol><li v-for="(target, index) in selectedTargets" :key="target.key"><span>{{ index + 1 }}</span><div><b>{{ displayTargetLabel(target) }}</b><small>{{ target.context }}</small></div><div><button type="button" :disabled="index === 0" :aria-label="`Move ${displayTargetLabel(target)} earlier`" @click="moveSelectedTarget(target.key, -1)"><i class="bi bi-arrow-up"></i></button><button type="button" :disabled="index === selectedTargets.length - 1" :aria-label="`Move ${displayTargetLabel(target)} later`" @click="moveSelectedTarget(target.key, 1)"><i class="bi bi-arrow-down"></i></button></div></li></ol></section>
     </section>
     <section v-else class="ps-stage ps-stage--preview">
       <div class="ps-stage-heading"><div><p>Step 3 of 3</p><h4>Proof the rendered QRs</h4><small>Open any card at full size. Excluded cards remain here so they can be restored.</small></div><RouterLink class="btn btn-outline-secondary btn-sm" :to="editTemplateRoute" target="_blank" title="Opens in a new tab so this batch stays intact"><i class="bi bi-pencil-square"></i> Edit template <i class="bi bi-box-arrow-up-right"></i></RouterLink></div>
@@ -483,6 +593,13 @@ onMounted(loadTemplates);
         <header><div><small>Print &amp; CorelDRAW layout</small><h4>{{ selectedPaper.label }} canvas</h4></div><button type="button" aria-label="Close print setup" @click="showPrintSetup = false"><i class="bi bi-x-lg"></i></button></header>
         <div class="ps-print-body">
           <div class="ps-print-controls">
+            <fieldset class="ps-collection-control">
+              <legend>Reusable collection</legend>
+              <p>Save the ordered artworks, assigned templates, canvas, scale, and finishing settings as one print job.</p>
+              <label>Collection name<input v-model="collectionName" type="text" maxlength="120" placeholder="e.g. Woven Stories · table cards"></label>
+              <div><button class="btn btn-outline-secondary btn-sm" type="button" :disabled="!activeCollectionId" @click="startNewCollection"><i class="bi bi-plus-lg"></i> Save as new</button><button class="btn btn-outline-primary btn-sm" type="button" :disabled="isSavingCollection || !collectionName.trim()" @click="saveCollection"><i class="bi bi-collection"></i> {{ activeCollectionId ? 'Update collection' : 'Save collection' }}</button></div>
+              <small v-if="collectionNotice">{{ collectionNotice }}</small>
+            </fieldset>
             <label>Canvas size<select v-model="printPaperSize"><option v-for="paper in paperSizes" :key="paper.id" :value="paper.id">{{ paper.label }} · {{ paper.widthMm }} × {{ paper.heightMm }} mm</option><option value="custom">Custom canvas…</option></select></label>
             <label>Measurement unit<select v-model="printUnit"><option value="mm">Millimetres</option><option value="cm">Centimetres</option><option value="in">Inches</option></select></label>
             <template v-if="printPaperSize === 'custom'"><label>Canvas width<input v-model.number="customPaperWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label><label>Canvas height<input v-model.number="customPaperHeight" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label></template>
@@ -530,5 +647,6 @@ onMounted(loadTemplates);
 .ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:980px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 340px;overflow:auto;padding:22px}.ps-print-controls{align-content:start;display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-size-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;grid-template-columns:1fr 1fr;margin:2px 0;padding:12px}.ps-size-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-size-control legend span{color:#8a7767;font-size:9px;font-weight:500;letter-spacing:0;margin-left:8px;text-transform:none}.ps-size-control>small,.ps-size-summary{color:#806f61;font-size:9px;grid-column:1/-1;line-height:1.45}.ps-size-summary{background:#f4eee8;padding:7px 9px;text-align:left}.ps-size-control .ps-scale{align-items:center;grid-column:1/-1;grid-template-columns:auto minmax(100px,1fr) auto}.ps-size-control .ps-scale input{min-height:auto;padding:0}.ps-size-control .ps-scale output{color:#ad7d43;font-size:11px;min-width:38px;text-align:right}.ps-layout-preview{background:#f1ebe4;display:flex;flex-direction:column;gap:12px;min-height:420px;padding:16px}.ps-layout-heading{display:grid;gap:3px}.ps-layout-heading>span{color:#ad7d43;font-size:9px;font-weight:800;letter-spacing:.12em}.ps-layout-heading b{font:400 20px Rufina,serif}.ps-layout-heading small{color:#6e5f53;font-size:10px}.ps-page-list{display:grid;gap:10px;max-height:330px;overflow:auto;padding-right:4px}.ps-page-list article{display:grid;gap:4px}.ps-page-list article>header{color:#6b5c50;display:flex;font-size:9px;font-weight:700;justify-content:space-between}.ps-mini-page{background:#fff;border:1px solid #d2c5b8;box-shadow:0 2px 8px #3b2a1d1a;position:relative;width:100%}.ps-mini-card{align-items:center;background:#241a15;border:1px solid #bc915d;color:#f4eadf;display:flex;justify-content:center;overflow:hidden;position:absolute}.ps-mini-card img{display:block;height:100%;object-fit:fill;width:100%}.ps-mini-card i{font-size:clamp(5px,1vw,10px)}.ps-layout-error{background:#fff3e4;border-left:3px solid #b66d28;color:#744819;font-size:10px;padding:10px}.ps-layout-preview>p{color:#716156;font-size:9px;line-height:1.55;margin:auto 0 0}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
 .ps-production-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;margin:2px 0;padding:12px}.ps-production-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-production-control>small{color:#806f61;font-size:9px;line-height:1.45}.ps-cut-settings{display:grid;gap:10px;grid-template-columns:1fr 1fr}.ps-mini-page--cut{background:repeating-linear-gradient(45deg,#fff,#fff 7px,#fbf7fb 7px,#fbf7fb 14px)}.ps-mini-card--cut{background:transparent;border:1px solid #ff00ff;border-radius:2px;overflow:visible}.ps-mini-card--cut::after{color:#b600b6;content:'CUT';font-size:5px;font-weight:800;left:2px;letter-spacing:.05em;position:absolute;top:1px}
 .ps-card-template{align-items:center;display:grid;gap:6px;grid-column:1/-1;grid-template-columns:auto minmax(0,1fr);margin-top:4px}.ps-card-template span{color:#7b695b;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.ps-card-template select{background:#fff;border:1px solid #d7c9bc;color:#352a22;font-size:10px;min-height:34px;padding:6px 8px;width:100%}.ps-card-template select:focus{border-color:#b98b51;outline:2px solid rgba(185,139,81,.16)}
+.ps-saved-collections{background:#f8f3ec;border:1px solid #dfd2c4;display:grid;gap:10px;padding:12px}.ps-saved-collections>header{align-items:center;display:flex;justify-content:space-between}.ps-saved-collections>header>div{align-items:center;display:flex;gap:9px}.ps-saved-collections header i{color:#ad7d43}.ps-saved-collections header span{display:grid}.ps-saved-collections header b{font-size:11px}.ps-saved-collections header small{color:#827365;font-size:9px}.ps-saved-collections header em{background:#ad7d43;border-radius:20px;color:#fff;font-size:9px;font-style:normal;padding:3px 7px}.ps-saved-collections>div{display:grid;gap:7px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}.ps-saved-collections button{align-items:center;background:#fff;border:1px solid #ddd1c5;color:#352a22;display:flex;justify-content:space-between;padding:9px 10px;text-align:left}.ps-saved-collections button:hover{border-color:#b98b51}.ps-saved-collections button span{display:grid}.ps-saved-collections button b{font-size:10px}.ps-saved-collections button small{color:#827365;font-size:8px}.ps-collection-notice{background:#f2ece5;color:#665548;font-size:10px;margin:0;padding:8px 10px}.ps-order{border:1px solid #dfd4ca;display:grid;gap:0}.ps-order>header{align-items:center;background:#f5f0ea;display:flex;justify-content:space-between;padding:10px 12px}.ps-order header>div{display:grid}.ps-order header b{font-size:11px}.ps-order header small,.ps-order header span{color:#806f61;font-size:9px}.ps-order ol{display:grid;list-style:none;margin:0;max-height:210px;overflow:auto;padding:0}.ps-order li{align-items:center;display:grid;gap:10px;grid-template-columns:26px minmax(0,1fr) auto;padding:8px 10px}.ps-order li+li{border-top:1px solid #eee6df}.ps-order li>span{align-items:center;background:#eee6de;border-radius:50%;display:flex;font-size:9px;font-weight:800;height:24px;justify-content:center}.ps-order li>div:nth-child(2){display:grid}.ps-order li b{font-size:10px}.ps-order li small{color:#88786c;font-size:8px}.ps-order li>div:last-child{display:flex;gap:4px}.ps-order li button{align-items:center;background:#fff;border:1px solid #d8ccc1;color:#665548;display:flex;height:26px;justify-content:center;width:26px}.ps-order li button:disabled{opacity:.3}.ps-collection-control{background:#f8f3ec;border:1px solid #d7c9bb;display:grid;gap:9px;grid-column:1/-1;padding:12px}.ps-collection-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-collection-control p{color:#78685b;font-size:9px;line-height:1.45;margin:0}.ps-collection-control>div{display:flex;gap:8px;justify-content:flex-end}.ps-collection-control>small{background:#eee6dc;color:#665548;font-size:9px;padding:7px 8px}
 @media(max-width:850px){.ps-toolbar,.ps-toolbar--targets{grid-template-columns:1fr}.ps-template-card{grid-template-columns:76px minmax(0,1fr) auto}.ps-template-shape{height:74px;width:76px}.ps-print-body{grid-template-columns:1fr}.ps-grid{grid-template-columns:1fr}}
 </style>
