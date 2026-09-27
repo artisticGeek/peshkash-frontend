@@ -66,7 +66,7 @@ const cutOffsetMm = ref(0);
 const printUnit = ref<PrintUnit>('mm');
 const customPaperWidthMm = ref(210);
 const customPaperHeightMm = ref(297);
-const artworkWidthMm = ref(90);
+const artworkScalePercent = ref(100);
 const printColumns = ref(2);
 const printCaptions = ref(true);
 const thumbnailCache = new Map<string, string>();
@@ -95,7 +95,6 @@ const visibleTemplates = computed(() => {
   });
   return filtered.sort((a, b) => templateSort.value === 'name' ? a.name.localeCompare(b.name) : String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')) || a.name.localeCompare(b.name));
 });
-const exportPixelSize = computed(() => selectedTemplate.value ? { w: Math.round(selectedTemplate.value.widthMm * EXPORT_SCALE), h: Math.round(selectedTemplate.value.heightMm * EXPORT_SCALE) } : null);
 const editTemplateRoute = computed(() => typeof selectedTemplate.value?.id === 'number' ? `/dashboard/qr-templates?edit=${selectedTemplate.value.id}` : '/dashboard/qr-templates');
 const zipFilename = computed(() => `${safeFilename(props.event?.displayName || 'peshkash')}-qr-assets.zip`);
 const selectedPaper = computed<PaperSize>(() => printPaperSize.value === 'custom'
@@ -106,7 +105,6 @@ const displayUnit = computed(() => printUnit.value === 'in' ? 'in' : printUnit.v
 function mmValue(model: typeof customPaperWidthMm) { return computed<number>({ get: () => Number((model.value / unitFactor.value).toFixed(printUnit.value === 'mm' ? 1 : 2)), set: value => { model.value = Math.max(0, Number(value) || 0) * unitFactor.value; } }); }
 const customPaperWidth = mmValue(customPaperWidthMm);
 const customPaperHeight = mmValue(customPaperHeightMm);
-const artworkWidth = mmValue(artworkWidthMm);
 const printMargin = mmValue(printMarginMm);
 const printGap = mmValue(printGapMm);
 const cutCornerRadius = mmValue(cutCornerRadiusMm);
@@ -114,47 +112,72 @@ const cutOffset = mmValue(cutOffsetMm);
 const printPageDimensions = computed(() => printOrientation.value === 'portrait'
   ? { widthMm: selectedPaper.value.widthMm, heightMm: selectedPaper.value.heightMm }
   : { widthMm: selectedPaper.value.heightMm, heightMm: selectedPaper.value.widthMm });
-const artworkHeightMm = computed(() => selectedTemplate.value && selectedTemplate.value.widthMm > 0
-  ? artworkWidthMm.value * (selectedTemplate.value.heightMm / selectedTemplate.value.widthMm)
-  : artworkWidthMm.value);
-const artworkHeight = computed(() => Number((artworkHeightMm.value / unitFactor.value).toFixed(printUnit.value === 'mm' ? 1 : 2)));
-const artworkScalePercent = computed<number>({
-  get: () => selectedTemplate.value?.widthMm ? Math.round((artworkWidthMm.value / selectedTemplate.value.widthMm) * 20) * 5 : 100,
-  set: value => { if (selectedTemplate.value) artworkWidthMm.value = Math.max(1, selectedTemplate.value.widthMm * (Number(value) || 100) / 100); },
+interface ArtworkSize { width: number; height: number; captionHeight: number }
+interface SheetPlacement extends ArtworkSize { target: QrTarget; index: number; x: number; mirroredX: number; y: number; row: number }
+interface SheetPage { number: number; placements: SheetPlacement[] }
+interface SheetLayout { pageWidth: number; pageHeight: number; margin: number; gap: number; columns: number; rows: number; pageCount: number; fits: boolean; pages: SheetPage[] }
+function artworkSizeFor(target: QrTarget): ArtworkSize {
+  const design = designForTarget(target);
+  const scale = Math.max(0.05, (Number(artworkScalePercent.value) || 100) / 100);
+  return {
+    width: Math.max(1, (design?.widthMm || 1) * scale),
+    height: Math.max(1, (design?.heightMm || 1) * scale),
+    captionHeight: printCaptions.value ? 6 : 0,
+  };
+}
+const artworkSizeSummary = computed(() => {
+  const sizes = selectedTargets.value.map(artworkSizeFor);
+  if (!sizes.length) return 'No artworks selected';
+  const format = (value: number) => (value / unitFactor.value).toFixed(printUnit.value === 'mm' ? 1 : 2);
+  const widths = sizes.map(size => size.width); const heights = sizes.map(size => size.height);
+  return `${format(Math.min(...widths))}–${format(Math.max(...widths))} × ${format(Math.min(...heights))}–${format(Math.max(...heights))} ${displayUnit.value}`;
 });
-const sheetLayout = computed(() => {
+const sheetLayout = computed<SheetLayout>(() => {
   const { widthMm: pageWidth, heightMm: pageHeight } = printPageDimensions.value;
   const margin = Math.max(0, printMarginMm.value); const gap = Math.max(0, printGapMm.value);
-  const width = Math.max(1, artworkWidthMm.value); const height = Math.max(1, artworkHeightMm.value); const captionHeight = printCaptions.value ? 6 : 0;
   const availableWidth = Math.max(0, pageWidth - (margin * 2)); const availableHeight = Math.max(0, pageHeight - (margin * 2));
-  const fitColumns = Math.max(0, Math.floor((availableWidth + gap) / (width + gap)));
-  const columns = Math.min(Math.max(1, printColumns.value), Math.max(1, fitColumns));
-  const rows = Math.max(0, Math.floor((availableHeight + gap) / (height + captionHeight + gap)));
-  const fits = fitColumns > 0 && rows > 0;
-  const perPage = fits ? columns * rows : 0; const pageCount = perPage ? Math.ceil(selectedTargets.value.length / perPage) : 0;
-  const usedWidth = columns * width + Math.max(0, columns - 1) * gap;
-  return { pageWidth, pageHeight, margin, gap, width, height, captionHeight, columns, rows, perPage, pageCount, fits, startX: margin + Math.max(0, (availableWidth - usedWidth) / 2) };
+  const items = selectedTargets.value.map((target, index) => ({ target, index, ...artworkSizeFor(target) }));
+  const pages: SheetPage[] = []; let cursor = 0; let fits = availableWidth > 0 && availableHeight > 0; let columns = 0; let rows = 0;
+  while (cursor < items.length) {
+    const placements: SheetPlacement[] = []; let y = margin; let row = 0;
+    while (cursor < items.length) {
+      const rowItems: typeof items = []; let rowWidth = 0; let lookahead = cursor;
+      while (lookahead < items.length && rowItems.length < Math.max(1, printColumns.value)) {
+        const item = items[lookahead]; const nextWidth = rowWidth + (rowItems.length ? gap : 0) + item.width;
+        if (rowItems.length && nextWidth > availableWidth) break;
+        rowItems.push(item); rowWidth = nextWidth; lookahead += 1;
+        if (item.width > availableWidth) break;
+      }
+      const rowHeight = Math.max(...rowItems.map(item => item.height + item.captionHeight));
+      if (placements.length && y + rowHeight > pageHeight - margin) break;
+      const startX = margin + Math.max(0, (availableWidth - rowWidth) / 2); let x = startX;
+      rowItems.forEach(item => {
+        placements.push({ ...item, x, mirroredX: pageWidth - x - item.width, y, row });
+        fits &&= item.width <= availableWidth && item.height + item.captionHeight <= availableHeight;
+        x += item.width + gap;
+      });
+      columns = Math.max(columns, rowItems.length); row += 1; rows = Math.max(rows, row); cursor = lookahead; y += rowHeight + gap;
+      if (y > pageHeight - margin && cursor < items.length) break;
+    }
+    pages.push({ number: pages.length + 1, placements });
+  }
+  return { pageWidth, pageHeight, margin, gap, columns, rows, pageCount: pages.length, fits, pages };
 });
 const productionCanvasCount = computed(() => sheetLayout.value.pageCount * (1 + (printSides.value === 'double' ? 1 : 0) + (includeCutContour.value ? 1 : 0)));
 const printSheetSummary = computed(() => `${selectedPaper.value.label} · ${printOrientation.value === 'portrait' ? 'Portrait' : 'Landscape'} · ${printSides.value === 'double' ? 'Duplex' : 'Single-sided'} · ${sheetLayout.value.columns} across · ${sheetLayout.value.pageCount} sheet${sheetLayout.value.pageCount === 1 ? '' : 's'}`);
-const printPreviewPages = computed(() => Array.from({ length: Math.min(sheetLayout.value.pageCount, 4) }, (_, pageIndex) => ({
-  number: pageIndex + 1,
-  targets: selectedTargets.value.slice(pageIndex * sheetLayout.value.perPage, (pageIndex + 1) * sheetLayout.value.perPage),
-})));
+const printPreviewPages = computed(() => sheetLayout.value.pages.slice(0, 4));
 const printPreviewSurfaces = computed(() => printPreviewPages.value.flatMap(page => [
   { ...page, kind: 'front' as const, label: 'Front print' },
   ...(printSides.value === 'double' ? [{ ...page, kind: 'back' as const, label: 'Back print · horizontally reversed placement' }] : []),
   ...(includeCutContour.value ? [{ ...page, kind: 'cut' as const, label: 'CutContour · plotter path' }] : []),
 ]));
-function previewCardStyle(index: number, mirrored = false, offset = 0): Record<string, string> {
-  const layout = sheetLayout.value; const column = index % layout.columns; const row = Math.floor(index / layout.columns);
-  const frontX = layout.startX + column * (layout.width + layout.gap);
-  const x = (mirrored ? layout.pageWidth - frontX - layout.width : frontX) - offset;
+function previewCardStyle(placement: SheetPlacement, mirrored = false, offset = 0): Record<string, string> {
+  const layout = sheetLayout.value; const x = (mirrored ? placement.mirroredX : placement.x) - offset;
   return {
     left: `${(x / layout.pageWidth) * 100}%`,
-    top: `${((layout.margin + row * (layout.height + layout.captionHeight + layout.gap) - offset) / layout.pageHeight) * 100}%`,
-    width: `${((layout.width + offset * 2) / layout.pageWidth) * 100}%`,
-    height: `${((layout.height + offset * 2) / layout.pageHeight) * 100}%`,
+    top: `${((placement.y - offset) / layout.pageHeight) * 100}%`,
+    width: `${((placement.width + offset * 2) / layout.pageWidth) * 100}%`,
+    height: `${((placement.height + offset * 2) / layout.pageHeight) * 100}%`,
   };
 }
 
@@ -304,7 +327,8 @@ async function renderCorelCards(layout: typeof sheetLayout.value): Promise<Recor
     while (cursor < selectedTargets.value.length) {
       const target = selectedTargets.value[cursor++];
       const design = designForTarget(target); if (!design) throw new Error('A template is missing.');
-      images[target.key] = await renderCorelCard(design, target, layout.width, layout.height, layout.captionHeight);
+      const size = artworkSizeFor(target);
+      images[target.key] = await renderCorelCard(design, target, size.width, size.height, size.captionHeight);
       progress.value += 1;
     }
   }
@@ -313,14 +337,6 @@ async function renderCorelCards(layout: typeof sheetLayout.value): Promise<Recor
 }
 type CorelSurfaceKind = 'front' | 'back' | 'cut-contour';
 interface CorelSurface { sheet: number; kind: CorelSurfaceKind; svg: string }
-interface SheetPlacement { target: QrTarget; index: number; x: number; mirroredX: number; y: number }
-function sheetPlacements(targets: QrTarget[], layout: typeof sheetLayout.value): SheetPlacement[] {
-  return targets.map((target, index) => {
-    const column = index % layout.columns; const row = Math.floor(index / layout.columns);
-    const x = layout.startX + column * (layout.width + layout.gap);
-    return { target, index, x, mirroredX: layout.pageWidth - x - layout.width, y: layout.margin + row * (layout.height + layout.captionHeight + layout.gap) };
-  });
-}
 function registrationMarksSvg(layout: typeof sheetLayout.value): string {
   if (!includeRegistrationMarks.value) return '';
   const inset = Math.max(2.5, Math.min(7, layout.margin / 2)); const arm = 2; const radius = 1.2;
@@ -329,25 +345,23 @@ function registrationMarksSvg(layout: typeof sheetLayout.value): string {
 }
 function corelDrawPages(assetPaths: Record<string, string>): CorelSurface[] {
   const layout = sheetLayout.value;
-  if (!layout.fits || !layout.perPage) return [];
-  const { pageWidth, pageHeight, width: artworkWidth, height: artworkHeight, captionHeight, perPage } = layout;
+  if (!layout.fits || !layout.pages.length) return [];
+  const { pageWidth, pageHeight } = layout;
   const surfaces: CorelSurface[] = [];
-  for (let start = 0; start < selectedTargets.value.length; start += perPage) {
-    const sheet = Math.floor(start / perPage) + 1;
-    const targets = selectedTargets.value.slice(start, start + perPage);
-    const placements = sheetPlacements(targets, layout);
-    const cardObjects = (mirrored: boolean) => placements.map(({ target, index, x, mirroredX, y }) => {
-      return corelPngCardObject(assetPaths[target.key] || '', mirrored ? mirroredX : x, y, artworkWidth, artworkHeight + captionHeight, `qr-card-sheet-${sheet}-${mirrored ? 'back' : 'front'}-item-${index + 1}`, displayTargetLabel(target));
+  for (const page of layout.pages) {
+    const sheet = page.number; const placements = page.placements;
+    const cardObjects = (mirrored: boolean) => placements.map(({ target, index, x, mirroredX, y, width, height, captionHeight }) => {
+      return corelPngCardObject(assetPaths[target.key] || '', mirrored ? mirroredX : x, y, width, height + captionHeight, `qr-card-sheet-${sheet}-${mirrored ? 'back' : 'front'}-item-${index + 1}`, displayTargetLabel(target));
     }).join('');
     const document = (title: string, body: string) => `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(title)}</title>${body}</svg>`;
     const registrationMarks = registrationMarksSvg(layout);
     surfaces.push({ sheet, kind: 'front', svg: document(`${props.event?.displayName || 'Peshkash'} sheet ${sheet} front print`, `${cardObjects(false)}${registrationMarks}`) });
     if (printSides.value === 'double') surfaces.push({ sheet, kind: 'back', svg: document(`${props.event?.displayName || 'Peshkash'} sheet ${sheet} back print`, `${cardObjects(true)}${registrationMarks}`) });
     if (includeCutContour.value) {
-      const offset = Math.max(-Math.min(artworkWidth, artworkHeight) / 2 + 0.1, cutOffsetMm.value);
-      const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (artworkWidth + offset * 2) / 2, (artworkHeight + offset * 2) / 2));
-      const outlines = placements.map(({ target, index, x, y }) => {
-        return `<rect id="cut-${sheet}-${index + 1}" data-qr-name="${escapeXml(displayTargetLabel(target))}" x="${(x - offset).toFixed(3)}" y="${(y - offset).toFixed(3)}" width="${(artworkWidth + offset * 2).toFixed(3)}" height="${(artworkHeight + offset * 2).toFixed(3)}" rx="${radius.toFixed(3)}" ry="${radius.toFixed(3)}"/>`;
+      const outlines = placements.map(({ target, index, x, y, width, height }) => {
+        const offset = Math.max(-Math.min(width, height) / 2 + 0.1, cutOffsetMm.value);
+        const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (width + offset * 2) / 2, (height + offset * 2) / 2));
+        return `<rect id="cut-${sheet}-${index + 1}" data-qr-name="${escapeXml(displayTargetLabel(target))}" x="${(x - offset).toFixed(3)}" y="${(y - offset).toFixed(3)}" width="${(width + offset * 2).toFixed(3)}" height="${(height + offset * 2).toFixed(3)}" rx="${radius.toFixed(3)}" ry="${radius.toFixed(3)}"/>`;
       }).join('');
       const cutLayer = `<g id="CutContour" data-layer="cut-contour" data-spot-color="CutContour" fill="none" stroke="#FF00FF" stroke-width="0.0762" vector-effect="non-scaling-stroke">${outlines}</g>`;
       surfaces.push({ sheet, kind: 'cut-contour', svg: document(`${props.event?.displayName || 'Peshkash'} sheet ${sheet} CutContour plotter paths`, `${cutLayer}${registrationMarks}`) });
@@ -369,16 +383,18 @@ async function exportForCorelDraw() {
     const surfaces = corelDrawPages(images);
     const surfaceFiles = surfaces.map(surface => ({ name: `${base}-sheet-${String(surface.sheet).padStart(2, '0')}-${surface.kind}.svg`, label: `Sheet ${surface.sheet} · ${surface.kind === 'cut-contour' ? 'CutContour' : surface.kind === 'front' ? 'Front print' : 'Back print'}`, surface }));
     const cdrOutputName = `${base}-print-job.cdr`;
-    const instructions = `PESHKASH PRINT-SHOP PACKAGE\r\n\r\nPREFERRED: BUILD ONE MULTI-PAGE CDR\r\n1. Extract this ZIP without moving or renaming its contents.\r\n2. In CorelDRAW open the Visual Basic editor (Alt+F11), import BUILD-CORELDRAW-JOB.bas, and run BuildPeshkashPrintJob.\r\n3. Choose this extracted folder. The macro creates ${cdrOutputName} with one named CorelDRAW page per production surface. This requires CorelDRAW because CDR is a proprietary native format.\r\n\r\nDIRECT SVG FALLBACK\r\n4. Open the sheet SVG files directly at their original physical dimensions. All files use one shared placement manifest and identical registration marks. Do not reposition only one page.\r\n5. FRONT files contain the print artwork. Every card is a separate named, movable top-level object.\r\n6. BACK files are included only for duplex jobs. Card positions are reflected horizontally across the sheet; artwork itself is not mirrored. Keep vertical placement unchanged and print using long-edge registration.\r\n7. CUT-CONTOUR files contain vector-only plotter paths on a layer named CutContour. The contour uses #FF00FF at 0.0762 mm. Map that named layer/color to the print shop's plotter preset if required.\r\n8. RegistrationMarks is a separate vector group repeated at exactly the same coordinates on every page. Use it to register duplex printing and the cutter, then omit it from the final cut operation if the plotter workflow requires.\r\n9. CorelDRAW may wrap an imported SVG in one container; use Ungroup once to expose separate card objects. Do not ungroup an individual card.\r\n10. Card artwork is 600 DPI and keeps its original aspect ratio. The objects folder contains one self-contained SVG per card; assets contains the matching PNG files.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard artwork: ${layout.width.toFixed(3)} x ${layout.height.toFixed(3)} mm\r\nPrint mode: ${printSides.value === 'double' ? 'Double-sided' : 'Single-sided'}\r\nCutContour: ${includeCutContour.value ? `Included, ${cutCornerRadiusMm.value.toFixed(3)} mm corner radius, ${cutOffsetMm.value.toFixed(3)} mm offset` : 'Not included'}\r\nRegistration marks: ${includeRegistrationMarks.value ? 'Included at identical coordinates on every surface' : 'Not included'}\r\nPhysical sheets: ${layout.pageCount}\r\nCorelDRAW pages: ${surfaces.length}\r\n`;
+    const sizeLines = selectedTargets.value.map((target, index) => { const size = artworkSizeFor(target); return `${index + 1}. ${displayTargetLabel(target)}: ${size.width.toFixed(3)} x ${size.height.toFixed(3)} mm`; }).join('\r\n');
+    const instructions = `PESHKASH PRINT-SHOP PACKAGE\r\n\r\nPREFERRED: BUILD ONE MULTI-PAGE CDR\r\n1. Extract this ZIP without moving or renaming its contents.\r\n2. In CorelDRAW open the Visual Basic editor (Alt+F11), import BUILD-CORELDRAW-JOB.bas, and run BuildPeshkashPrintJob.\r\n3. Choose this extracted folder. The macro creates ${cdrOutputName} with one named CorelDRAW page per production surface. This requires CorelDRAW because CDR is a proprietary native format.\r\n\r\nDIRECT SVG FALLBACK\r\n4. Open the sheet SVG files directly at their original physical dimensions. All files use one shared placement manifest and identical registration marks. Do not reposition only one page.\r\n5. FRONT files contain the print artwork. Every card is a separate named, movable top-level object.\r\n6. BACK files are included only for duplex jobs. Card positions are reflected horizontally across the sheet; artwork itself is not mirrored. Keep vertical placement unchanged and print using long-edge registration.\r\n7. CUT-CONTOUR files contain vector-only plotter paths on a layer named CutContour. The contour uses #FF00FF at 0.0762 mm. Map that named layer/color to the print shop's plotter preset if required.\r\n8. RegistrationMarks is a separate vector group repeated at exactly the same coordinates on every page. Use it to register duplex printing and the cutter, then omit it from the final cut operation if the plotter workflow requires.\r\n9. CorelDRAW may wrap an imported SVG in one container; use Ungroup once to expose separate card objects. Do not ungroup an individual card.\r\n10. Every artwork retains its assigned template dimensions and aspect ratio. The global scale is ${artworkScalePercent.value}%. Card artwork is 600 DPI.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nPrint mode: ${printSides.value === 'double' ? 'Double-sided' : 'Single-sided'}\r\nCutContour: ${includeCutContour.value ? `Included, ${cutCornerRadiusMm.value.toFixed(3)} mm corner radius, ${cutOffsetMm.value.toFixed(3)} mm offset` : 'Not included'}\r\nRegistration marks: ${includeRegistrationMarks.value ? 'Included at identical coordinates on every surface' : 'Not included'}\r\nPhysical sheets: ${layout.pageCount}\r\nCorelDRAW pages: ${surfaces.length}\r\n\r\nARTWORK SIZES\r\n${sizeLines}\r\n`;
     const files = surfaceFiles.map(file => ({ name: file.name, data: new TextEncoder().encode(file.surface.svg) }));
-    const manifest = { version: 1, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artwork: { width: layout.width, height: layout.height, captionHeight: layout.captionHeight }, margin: layout.margin, gap: layout.gap, columns: layout.columns, rows: layout.rows, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour' } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
+    const manifest = { version: 2, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artworkScalePercent: artworkScalePercent.value, artworks: selectedTargets.value.map(target => { const size = artworkSizeFor(target); return { key: target.key, name: displayTargetLabel(target), templateId: targetTemplateId(target), width: size.width, height: size.height, captionHeight: size.captionHeight }; }), placements: layout.pages.map(page => ({ sheet: page.number, items: page.placements.map(({ target, x, mirroredX, y, width, height, captionHeight }) => ({ key: target.key, x, backX: mirroredX, y, width, height, captionHeight })) })), margin: layout.margin, gap: layout.gap, maxColumns: printColumns.value, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour' } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
     files.push({ name: 'BUILD-CORELDRAW-JOB.bas', data: new TextEncoder().encode(corelBuildMacro(surfaceFiles, layout.pageWidth, layout.pageHeight, cdrOutputName)) });
     files.push({ name: 'JOB-MANIFEST.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
     selectedTargets.value.forEach((target, index) => {
       if (!images[target.key]) return;
+      const size = artworkSizeFor(target);
       files.push({ name: assetPaths[target.key], data: dataUrlBytes(images[target.key]) });
-      const object = corelPngCardObject(images[target.key], 0, 0, layout.width, layout.height + layout.captionHeight, `qr-card-${index + 1}`, displayTargetLabel(target));
-      const objectSvg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${layout.width}mm" height="${layout.height + layout.captionHeight}mm" viewBox="0 0 ${layout.width} ${layout.height + layout.captionHeight}">${object}</svg>`;
+      const object = corelPngCardObject(images[target.key], 0, 0, size.width, size.height + size.captionHeight, `qr-card-${index + 1}`, displayTargetLabel(target));
+      const objectSvg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size.width}mm" height="${size.height + size.captionHeight}mm" viewBox="0 0 ${size.width} ${size.height + size.captionHeight}">${object}</svg>`;
       files.push({ name: `objects/${uniqueFilename(target, index).replace(/\.png$/i, '.svg')}`, data: new TextEncoder().encode(objectSvg) });
     });
     files.push({ name: 'README.txt', data: new TextEncoder().encode(instructions) });
@@ -391,28 +407,28 @@ async function printSheet() {
   if (!selectedTemplate.value || !canExport.value || !sheetLayout.value.fits) return; const win = window.open('', '_blank'); if (!win) return; win.opener = null; win.document.write('<!doctype html><title>Preparing QR print…</title><p style="font:16px sans-serif;padding:24px">Preparing print-quality QR assets…</p>'); isExporting.value = true;
   const images = await renderBatch(selectedTargets.value, EXPORT_SCALE, true);
   const layout = sheetLayout.value; const sheets: string[] = [];
-  for (let start = 0; start < selectedTargets.value.length; start += layout.perPage) {
-    const targets = selectedTargets.value.slice(start, start + layout.perPage);
-    const placements = sheetPlacements(targets, layout);
+  for (const page of layout.pages) {
+    const placements = page.placements;
     const registrationInset = Math.max(2.5, Math.min(7, layout.margin / 2));
     const registration = includeRegistrationMarks.value ? [[registrationInset, registrationInset], [layout.pageWidth - registrationInset, registrationInset], [registrationInset, layout.pageHeight - registrationInset], [layout.pageWidth - registrationInset, layout.pageHeight - registrationInset]].map(([x, y]) => `<span class="registration" style="left:${x}mm;top:${y}mm"></span>`).join('') : '';
-    const cards = (mirrored: boolean) => placements.map(({ target, x: frontX, mirroredX, y }) => {
+    const cards = (mirrored: boolean) => placements.map(({ target, x: frontX, mirroredX, y, width, height, captionHeight }) => {
       if (!images[target.key]) return '';
       const x = mirrored ? mirroredX : frontX;
-      return `<figure style="left:${x}mm;top:${y}mm;width:${layout.width}mm;height:${layout.height + layout.captionHeight}mm"><img src="${images[target.key]}" alt="${escapeHtml(target.label)}">${printCaptions.value ? `<figcaption>${escapeHtml(displayTargetLabel(target))}</figcaption>` : ''}</figure>`;
+      return `<figure style="left:${x}mm;top:${y}mm;width:${width}mm;height:${height + captionHeight}mm"><img style="height:${height}mm;width:${width}mm" src="${images[target.key]}" alt="${escapeHtml(target.label)}">${printCaptions.value ? `<figcaption style="height:${captionHeight}mm">${escapeHtml(displayTargetLabel(target))}</figcaption>` : ''}</figure>`;
     }).join('');
     sheets.push(`<main class="sheet front" data-surface="Front print">${cards(false)}${registration}</main>`);
     if (printSides.value === 'double') sheets.push(`<main class="sheet back" data-surface="Back print — horizontally reversed placement">${cards(true)}${registration}</main>`);
     if (includeCutContour.value) {
-      const offset = cutOffsetMm.value; const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (layout.width + offset * 2) / 2, (layout.height + offset * 2) / 2));
-      const outlines = placements.map(({ x, y }) => {
-        return `<span class="cut" style="left:${x - offset}mm;top:${y - offset}mm;width:${layout.width + offset * 2}mm;height:${layout.height + offset * 2}mm;border-radius:${radius}mm"></span>`;
+      const outlines = placements.map(({ x, y, width, height }) => {
+        const offset = Math.max(-Math.min(width, height) / 2 + 0.1, cutOffsetMm.value);
+        const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (width + offset * 2) / 2, (height + offset * 2) / 2));
+        return `<span class="cut" style="left:${x - offset}mm;top:${y - offset}mm;width:${width + offset * 2}mm;height:${height + offset * 2}mm;border-radius:${radius}mm"></span>`;
       }).join('');
       sheets.push(`<main class="sheet cut-sheet" data-surface="CutContour plotter paths">${outlines}${registration}</main>`);
     }
   }
   const pageSize = `${printPageDimensions.value.widthMm}mm ${printPageDimensions.value.heightMm}mm`;
-  win.document.open(); win.document.write(`<!doctype html><html><head><title>Peshkash print-ready sheets</title><style>@page{size:${pageSize};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}.sheet{height:${layout.pageHeight}mm;overflow:hidden;page-break-after:always;position:relative;width:${layout.pageWidth}mm}.sheet:last-of-type{page-break-after:auto}figure{margin:0;position:absolute;text-align:center}img{display:block;height:${layout.height}mm;object-fit:contain;width:${layout.width}mm}figcaption{font:8pt Arial,sans-serif;height:${layout.captionHeight}mm;padding-top:2mm}.cut{border:.0762mm solid #ff00ff;display:block;position:absolute}.registration{border:.1mm solid #000;border-radius:50%;display:block;height:2.4mm;margin:-1.2mm 0 0 -1.2mm;position:absolute;width:2.4mm}.registration:before,.registration:after{background:#000;content:'';left:50%;position:absolute;top:50%;transform:translate(-50%,-50%)}.registration:before{height:.1mm;width:4mm}.registration:after{height:4mm;width:.1mm}</style></head><body>${sheets.join('')}<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),150))<\/script></body></html>`); win.document.close(); showPrintSetup.value = false; isExporting.value = false;
+  win.document.open(); win.document.write(`<!doctype html><html><head><title>Peshkash print-ready sheets</title><style>@page{size:${pageSize};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}.sheet{height:${layout.pageHeight}mm;overflow:hidden;page-break-after:always;position:relative;width:${layout.pageWidth}mm}.sheet:last-of-type{page-break-after:auto}figure{margin:0;position:absolute;text-align:center}img{display:block;object-fit:contain}figcaption{font:8pt Arial,sans-serif;padding-top:2mm}.cut{border:.0762mm solid #ff00ff;display:block;position:absolute}.registration{border:.1mm solid #000;border-radius:50%;display:block;height:2.4mm;margin:-1.2mm 0 0 -1.2mm;position:absolute;width:2.4mm}.registration:before,.registration:after{background:#000;content:'';left:50%;position:absolute;top:50%;transform:translate(-50%,-50%)}.registration:before{height:.1mm;width:4mm}.registration:after{height:4mm;width:.1mm}</style></head><body>${sheets.join('')}<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),150))<\/script></body></html>`); win.document.close(); showPrintSetup.value = false; isExporting.value = false;
 }
 function toggleAllVisible() { const keys = visibleTargets.value.map(t => t.key); const all = keys.length > 0 && keys.every(k => selectedTargetKeys.value.includes(k)); selectedTargetKeys.value = all ? selectedTargetKeys.value.filter(k => !keys.includes(k)) : [...new Set([...selectedTargetKeys.value, ...keys])]; }
 async function nextStep() { if (step.value === 1 && selectedTemplate.value) step.value = 2; else if (step.value === 2 && selectedTargets.value.length) { previewTargetKeys.value = [...selectedTargetKeys.value]; step.value = 3; await generatePreviews(); } }
@@ -420,7 +436,6 @@ function previousStep() { if (step.value > 1) step.value = (step.value - 1) as 1
 watch(() => props.targets, targets => { selectedTargetKeys.value = targets.map(t => t.key); }, { deep: true, immediate: true });
 watch(selectedTemplateId, () => {
   previews.value = {};
-  if (selectedTemplate.value) artworkWidthMm.value = selectedTemplate.value.widthMm;
   if (step.value === 3) void generatePreviews();
 });
 onMounted(loadTemplates);
@@ -461,7 +476,7 @@ onMounted(loadTemplates);
       </div>
       <div v-else class="ps-empty ps-empty--compact"><i class="bi bi-check-circle"></i><p>No problem cards in this batch.</p></div>
     </section>
-    <footer class="ps-footer"><div><button v-if="step > 1" class="btn btn-outline-secondary" type="button" :disabled="isGenerating || isExporting" @click="previousStep"><i class="bi bi-arrow-left"></i> Back</button></div><span v-if="step === 3 && exportPixelSize"><b>{{ selectedTargets.length }} included</b> · {{ previewTargets.length - selectedTargets.length }} excluded · {{ exportPixelSize.w }} × {{ exportPixelSize.h }} px at 300 DPI</span><button v-if="step < 3" class="btn btn-primary" type="button" :disabled="(step === 1 && !selectedTemplate) || (step === 2 && !selectedTargets.length)" @click="nextStep">Continue <i class="bi bi-arrow-right"></i></button><div v-else class="ps-actions"><button class="btn btn-outline-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="showPrintSetup = true"><i class="bi bi-printer"></i> Print setup</button><button class="btn btn-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="exportZip"><i class="bi bi-file-earmark-zip"></i> {{ isExporting ? `Preparing ${progress}/${progressTotal}` : `Export ZIP (${selectedTargets.length})` }}</button></div></footer>
+    <footer class="ps-footer"><div><button v-if="step > 1" class="btn btn-outline-secondary" type="button" :disabled="isGenerating || isExporting" @click="previousStep"><i class="bi bi-arrow-left"></i> Back</button></div><span v-if="step === 3"><b>{{ selectedTargets.length }} included</b> · {{ previewTargets.length - selectedTargets.length }} excluded · individual template dimensions preserved at 300 DPI</span><button v-if="step < 3" class="btn btn-primary" type="button" :disabled="(step === 1 && !selectedTemplate) || (step === 2 && !selectedTargets.length)" @click="nextStep">Continue <i class="bi bi-arrow-right"></i></button><div v-else class="ps-actions"><button class="btn btn-outline-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="showPrintSetup = true"><i class="bi bi-printer"></i> Print setup</button><button class="btn btn-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="exportZip"><i class="bi bi-file-earmark-zip"></i> {{ isExporting ? `Preparing ${progress}/${progressTotal}` : `Export ZIP (${selectedTargets.length})` }}</button></div></footer>
     <div v-if="zoomedTarget" class="ps-overlay" role="dialog" aria-modal="true" :aria-label="`Inspect ${displayTargetLabel(zoomedTarget)}`" @click.self="zoomedTargetKey = null"><div class="ps-proof-modal"><header><div><small>Actual rendered proof</small><h4>{{ displayTargetLabel(zoomedTarget) }}</h4><code>{{ mappingForTarget(zoomedTarget)?.shortQrUrl }}</code></div><button type="button" aria-label="Close proof" @click="zoomedTargetKey = null"><i class="bi bi-x-lg"></i></button></header><div class="ps-proof-image"><img :src="previews[zoomedTarget.key]" :alt="`Full proof for ${displayTargetLabel(zoomedTarget)}`"></div><footer><span><i class="bi bi-zoom-in"></i> Review copy, spacing and QR quiet zone at full size.</span><label><input v-model="selectedTargetKeys" type="checkbox" :value="zoomedTarget.key"> Include in export</label></footer></div></div>
     <div v-if="showPrintSetup" class="ps-overlay" role="dialog" aria-modal="true" aria-label="Print setup" @click.self="showPrintSetup = false">
       <div class="ps-print-modal">
@@ -475,10 +490,10 @@ onMounted(loadTemplates);
             <label>Print sides<select v-model="printSides"><option value="single">Single-sided</option><option value="double">Double-sided · flip on long edge</option></select></label>
             <label>Maximum cards per row<select v-model.number="printColumns"><option v-for="columns in 6" :key="columns" :value="columns">{{ columns }}</option></select></label>
             <fieldset class="ps-size-control">
-              <legend>Card size <span><i class="bi bi-lock-fill"></i> Aspect ratio locked</span></legend>
-              <label>Width<input v-model.number="artworkWidth" type="number" min="1" step="0.1"><span>{{ displayUnit }}</span></label>
-              <label>Height<input :value="artworkHeight" type="number" readonly><span>{{ displayUnit }}</span></label>
-              <label class="ps-scale">Scale<input v-model.number="artworkScalePercent" type="range" min="25" max="400" step="5"><output>{{ artworkScalePercent }}%</output></label>
+              <legend>Artwork sizing <span><i class="bi bi-lock-fill"></i> Individual aspect ratios locked</span></legend>
+              <small>Every QR uses its assigned template's physical dimensions. Scaling applies proportionally to the whole collection.</small>
+              <label class="ps-scale">Collection scale<input v-model.number="artworkScalePercent" type="range" min="25" max="400" step="5"><output>{{ artworkScalePercent }}%</output></label>
+              <output class="ps-size-summary">Current size range: {{ artworkSizeSummary }}</output>
             </fieldset>
             <label>Page margin<input v-model.number="printMargin" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label>
             <label>Card gap<input v-model.number="printGap" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label>
@@ -492,10 +507,10 @@ onMounted(loadTemplates);
             </fieldset>
           </div>
           <aside class="ps-layout-preview">
-            <div class="ps-layout-heading"><span>LIVE PRODUCTION PREVIEW</span><b>{{ sheetLayout.pageCount || '—' }} physical sheet{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ productionCanvasCount }} production canvas{{ productionCanvasCount === 1 ? '' : 'es' }} · {{ artworkWidth.toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ artworkHeight.toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} per card</small></div>
-            <div v-if="!sheetLayout.fits" class="ps-layout-error"><i class="bi bi-exclamation-triangle"></i> This artwork size does not fit inside the selected canvas and margins.</div>
+            <div class="ps-layout-heading"><span>LIVE PRODUCTION PREVIEW</span><b>{{ sheetLayout.pageCount || '—' }} physical sheet{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ productionCanvasCount }} production canvas{{ productionCanvasCount === 1 ? '' : 'es' }} · individual sizes {{ artworkSizeSummary }}</small></div>
+            <div v-if="!sheetLayout.fits" class="ps-layout-error"><i class="bi bi-exclamation-triangle"></i> At least one assigned template is larger than the selected canvas and margins. Reduce the collection scale or choose a larger canvas.</div>
             <div v-else class="ps-page-list">
-              <article v-for="surface in printPreviewSurfaces" :key="`${surface.number}-${surface.kind}`"><header>Sheet {{ surface.number }} · {{ surface.label }} <span>{{ surface.targets.length }} QR{{ surface.targets.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :class="{ 'ps-mini-page--cut': surface.kind === 'cut' }" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="(target, index) in surface.targets" :key="target.key" class="ps-mini-card" :class="{ 'ps-mini-card--cut': surface.kind === 'cut' }" :style="previewCardStyle(index, surface.kind === 'back', surface.kind === 'cut' ? cutOffsetMm : 0)" :title="surface.kind === 'cut' ? `Cut path for ${displayTargetLabel(target)}` : displayTargetLabel(target)"><template v-if="surface.kind !== 'cut'"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Placed preview for ${displayTargetLabel(target)}`"><i v-else class="bi bi-qr-code"></i></template></div></div></article>
+              <article v-for="surface in printPreviewSurfaces" :key="`${surface.number}-${surface.kind}`"><header>Sheet {{ surface.number }} · {{ surface.label }} <span>{{ surface.placements.length }} QR{{ surface.placements.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :class="{ 'ps-mini-page--cut': surface.kind === 'cut' }" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="placement in surface.placements" :key="placement.target.key" class="ps-mini-card" :class="{ 'ps-mini-card--cut': surface.kind === 'cut' }" :style="previewCardStyle(placement, surface.kind === 'back', surface.kind === 'cut' ? cutOffsetMm : 0)" :title="surface.kind === 'cut' ? `Cut path for ${displayTargetLabel(placement.target)}` : `${displayTargetLabel(placement.target)} · ${placement.width.toFixed(1)} × ${placement.height.toFixed(1)} mm`"><template v-if="surface.kind !== 'cut'"><img v-if="previews[placement.target.key]" :src="previews[placement.target.key]" :alt="`Placed preview for ${displayTargetLabel(placement.target)}`"><i v-else class="bi bi-qr-code"></i></template></div></div></article>
               <small v-if="sheetLayout.pageCount > printPreviewPages.length">+ {{ sheetLayout.pageCount - printPreviewPages.length }} more physical sheet{{ sheetLayout.pageCount - printPreviewPages.length === 1 ? '' : 's' }}</small>
             </div>
             <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas<br>CorelDRAW package: one multi-page CDR builder · movable 600 DPI card objects · {{ printSides === 'double' ? 'front and reversed-placement back pages' : 'front page' }}{{ includeCutContour ? ' · vector CutContour page' : '' }}{{ includeRegistrationMarks ? ' · shared registration marks' : '' }}</p>
@@ -512,7 +527,7 @@ onMounted(loadTemplates);
 </style>
 
 <style scoped>
-.ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:980px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 340px;overflow:auto;padding:22px}.ps-print-controls{align-content:start;display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-size-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;grid-template-columns:1fr 1fr;margin:2px 0;padding:12px}.ps-size-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-size-control legend span{color:#8a7767;font-size:9px;font-weight:500;letter-spacing:0;margin-left:8px;text-transform:none}.ps-size-control .ps-scale{align-items:center;grid-column:1/-1;grid-template-columns:auto minmax(100px,1fr) auto}.ps-size-control .ps-scale input{min-height:auto;padding:0}.ps-size-control .ps-scale output{color:#ad7d43;font-size:11px;min-width:38px;text-align:right}.ps-layout-preview{background:#f1ebe4;display:flex;flex-direction:column;gap:12px;min-height:420px;padding:16px}.ps-layout-heading{display:grid;gap:3px}.ps-layout-heading>span{color:#ad7d43;font-size:9px;font-weight:800;letter-spacing:.12em}.ps-layout-heading b{font:400 20px Rufina,serif}.ps-layout-heading small{color:#6e5f53;font-size:10px}.ps-page-list{display:grid;gap:10px;max-height:330px;overflow:auto;padding-right:4px}.ps-page-list article{display:grid;gap:4px}.ps-page-list article>header{color:#6b5c50;display:flex;font-size:9px;font-weight:700;justify-content:space-between}.ps-mini-page{background:#fff;border:1px solid #d2c5b8;box-shadow:0 2px 8px #3b2a1d1a;position:relative;width:100%}.ps-mini-card{align-items:center;background:#241a15;border:1px solid #bc915d;color:#f4eadf;display:flex;justify-content:center;overflow:hidden;position:absolute}.ps-mini-card img{display:block;height:100%;object-fit:fill;width:100%}.ps-mini-card i{font-size:clamp(5px,1vw,10px)}.ps-layout-error{background:#fff3e4;border-left:3px solid #b66d28;color:#744819;font-size:10px;padding:10px}.ps-layout-preview>p{color:#716156;font-size:9px;line-height:1.55;margin:auto 0 0}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
+.ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:980px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 340px;overflow:auto;padding:22px}.ps-print-controls{align-content:start;display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-size-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;grid-template-columns:1fr 1fr;margin:2px 0;padding:12px}.ps-size-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-size-control legend span{color:#8a7767;font-size:9px;font-weight:500;letter-spacing:0;margin-left:8px;text-transform:none}.ps-size-control>small,.ps-size-summary{color:#806f61;font-size:9px;grid-column:1/-1;line-height:1.45}.ps-size-summary{background:#f4eee8;padding:7px 9px;text-align:left}.ps-size-control .ps-scale{align-items:center;grid-column:1/-1;grid-template-columns:auto minmax(100px,1fr) auto}.ps-size-control .ps-scale input{min-height:auto;padding:0}.ps-size-control .ps-scale output{color:#ad7d43;font-size:11px;min-width:38px;text-align:right}.ps-layout-preview{background:#f1ebe4;display:flex;flex-direction:column;gap:12px;min-height:420px;padding:16px}.ps-layout-heading{display:grid;gap:3px}.ps-layout-heading>span{color:#ad7d43;font-size:9px;font-weight:800;letter-spacing:.12em}.ps-layout-heading b{font:400 20px Rufina,serif}.ps-layout-heading small{color:#6e5f53;font-size:10px}.ps-page-list{display:grid;gap:10px;max-height:330px;overflow:auto;padding-right:4px}.ps-page-list article{display:grid;gap:4px}.ps-page-list article>header{color:#6b5c50;display:flex;font-size:9px;font-weight:700;justify-content:space-between}.ps-mini-page{background:#fff;border:1px solid #d2c5b8;box-shadow:0 2px 8px #3b2a1d1a;position:relative;width:100%}.ps-mini-card{align-items:center;background:#241a15;border:1px solid #bc915d;color:#f4eadf;display:flex;justify-content:center;overflow:hidden;position:absolute}.ps-mini-card img{display:block;height:100%;object-fit:fill;width:100%}.ps-mini-card i{font-size:clamp(5px,1vw,10px)}.ps-layout-error{background:#fff3e4;border-left:3px solid #b66d28;color:#744819;font-size:10px;padding:10px}.ps-layout-preview>p{color:#716156;font-size:9px;line-height:1.55;margin:auto 0 0}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
 .ps-production-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;margin:2px 0;padding:12px}.ps-production-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-production-control>small{color:#806f61;font-size:9px;line-height:1.45}.ps-cut-settings{display:grid;gap:10px;grid-template-columns:1fr 1fr}.ps-mini-page--cut{background:repeating-linear-gradient(45deg,#fff,#fff 7px,#fbf7fb 7px,#fbf7fb 14px)}.ps-mini-card--cut{background:transparent;border:1px solid #ff00ff;border-radius:2px;overflow:visible}.ps-mini-card--cut::after{color:#b600b6;content:'CUT';font-size:5px;font-weight:800;left:2px;letter-spacing:.05em;position:absolute;top:1px}
 .ps-card-template{align-items:center;display:grid;gap:6px;grid-column:1/-1;grid-template-columns:auto minmax(0,1fr);margin-top:4px}.ps-card-template span{color:#7b695b;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.ps-card-template select{background:#fff;border:1px solid #d7c9bc;color:#352a22;font-size:10px;min-height:34px;padding:6px 8px;width:100%}.ps-card-template select:focus{border-color:#b98b51;outline:2px solid rgba(185,139,81,.16)}
 @media(max-width:850px){.ps-toolbar,.ps-toolbar--targets{grid-template-columns:1fr}.ps-template-card{grid-template-columns:76px minmax(0,1fr) auto}.ps-template-shape{height:74px;width:76px}.ps-print-body{grid-template-columns:1fr}.ps-grid{grid-template-columns:1fr}}
