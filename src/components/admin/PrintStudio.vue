@@ -270,7 +270,7 @@ async function renderCorelCards(design: StudioDesign, layout: typeof sheetLayout
   await Promise.all(Array.from({ length: Math.min(3, selectedTargets.value.length) }, () => worker()));
   return images;
 }
-function corelDrawPages(images: Record<string, string>): string[] {
+function corelDrawPages(assetPaths: Record<string, string>): string[] {
   const layout = sheetLayout.value;
   if (!layout.fits || !layout.perPage) return [];
   const { pageWidth, pageHeight, margin, gap, columns, width: artworkWidth, height: artworkHeight, captionHeight, perPage, startX } = layout;
@@ -280,7 +280,7 @@ function corelDrawPages(images: Record<string, string>): string[] {
       const column = index % columns; const row = Math.floor(index / columns);
       const columnX = startX + column * (artworkWidth + gap); const x = columnX;
       const y = margin + row * (artworkHeight + captionHeight + gap);
-      return corelPngCardObject(images[target.key] || '', x, y, artworkWidth, artworkHeight + captionHeight, `qr-card-page-${pages.length + 1}-item-${index + 1}`, displayTargetLabel(target));
+      return corelPngCardObject(assetPaths[target.key] || '', x, y, artworkWidth, artworkHeight + captionHeight, `qr-card-page-${pages.length + 1}-item-${index + 1}`, displayTargetLabel(target));
     }).join('');
     pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect id="page-background" width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
   }
@@ -291,9 +291,12 @@ async function exportForCorelDraw() {
   isExporting.value = true;
   try {
     const layout = sheetLayout.value; const design = selectedTemplate.value;
-    const pages = corelDrawPages(await renderCorelCards(design, layout)); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
-    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract this ZIP file.\r\n2. In CorelDRAW, choose File > Import and select an SVG page.\r\n3. Each finished QR card is one named, print-quality bitmap object.\r\n4. Move, align, duplicate, or rearrange complete cards without ungrouping them.\r\n5. Cards are embedded at 300 DPI for the dimensions selected in Print setup; there are no linked files or missing fonts.\r\n6. Re-export from Peshkash if the final print dimensions change.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard object: ${layout.width.toFixed(2)} x ${(layout.height + layout.captionHeight).toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
+    const images = await renderCorelCards(design, layout); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
+    const assetPaths = Object.fromEntries(selectedTargets.value.map((target, index) => [target.key, `assets/${uniqueFilename(target, index)}`]));
+    const pages = corelDrawPages(assetPaths);
+    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract the entire ZIP file before importing. Keep the SVG pages and assets folder together.\r\n2. In CorelDRAW, choose File > Import and select an SVG page.\r\n3. Each finished QR card imports as one named, print-quality bitmap object.\r\n4. Move, align, duplicate, or rearrange complete cards without ungrouping them.\r\n5. The assets folder contains the same 300 DPI card artwork as separate PNG files for maximum CorelDRAW compatibility.\r\n6. Re-export from Peshkash if the final print dimensions change.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard object: ${layout.width.toFixed(2)} x ${(layout.height + layout.captionHeight).toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
     const files = pages.map((page, index) => ({ name: `${base}-page-${String(index + 1).padStart(2, '0')}.svg`, data: new TextEncoder().encode(page) }));
+    selectedTargets.value.forEach(target => { if (images[target.key]) files.push({ name: assetPaths[target.key], data: dataUrlBytes(images[target.key]) }); });
     files.push({ name: 'README.txt', data: new TextEncoder().encode(instructions) });
     downloadBlob(createZip(files), `${base}-package.zip`);
     showPrintSetup.value = false;

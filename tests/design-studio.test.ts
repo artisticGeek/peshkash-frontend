@@ -32,13 +32,27 @@ const design: StudioDesign = {
 };
 
 test('CorelDRAW grid export exposes each finished card as one movable object', () => {
-  const png = `data:image/png;base64,${Buffer.from('card').toString('base64')}`;
-  const output = corelPngCardObject(png, 10, 20, 90, 141, 'page-1-card-1', 'Brass & Chai');
+  const output = corelPngCardObject('assets/01-brass-and-chai.png', 10, 20, 90, 141, 'page-1-card-1', 'Brass & Chai');
   assert.equal((output.match(/<(?:image|g|path|rect|text)\b/g) || []).length, 1);
   assert.match(output, /^<image id="page-1-card-1" data-object-type="qr-card"/);
   assert.match(output, /width="90\.000" height="141\.000"/);
   assert.match(output, /data-qr-name="Brass &amp; Chai"/);
-  assert.match(output, /href="data:image\/png;base64,/);
+  assert.match(output, /xlink:href="assets\/01-brass-and-chai\.png"/);
+  assert.match(output, /href="assets\/01-brass-and-chai\.png"/);
+  assert.equal(output.endsWith('/>'), true);
+});
+
+test('CorelDRAW package keeps every referenced card artwork beside the layout', async () => {
+  const card = corelPngCardObject('assets/01-card.png', 10, 20, 90, 141, 'card-1', 'Card one');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">${card}</svg>`;
+  const blob = createZip([
+    { name: 'layout-page-01.svg', data: new TextEncoder().encode(svg) },
+    { name: 'assets/01-card.png', data: new Uint8Array([137, 80, 78, 71]) },
+  ]);
+  const archiveText = new TextDecoder().decode(await blob.arrayBuffer());
+  assert.match(archiveText, /layout-page-01\.svg/);
+  assert.match(archiveText, /assets\/01-card\.png/);
+  assert.match(archiveText, /xlink:href="assets\/01-card\.png"/);
 });
 
 test('preflight accepts an approved HTTPS destination and print-safe QR', () => {
