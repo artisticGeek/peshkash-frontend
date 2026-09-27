@@ -38,6 +38,8 @@ test('CorelDRAW grid export exposes each finished card as one movable object', (
   assert.match(output, /^<image id="page-1-card-1" data-object-type="qr-card"/);
   assert.match(output, /width="90\.000" height="141\.000"/);
   assert.match(output, /data-qr-name="Brass &amp; Chai"/);
+  assert.match(output, /preserveAspectRatio="xMidYMid meet"/);
+  assert.match(output, /image-rendering:optimizeQuality/);
   assert.match(output, /xlink:href="data:image\/png;base64,/);
   assert.match(output, /href="data:image\/png;base64,/);
   assert.equal(output.endsWith('/>'), true);

@@ -754,13 +754,12 @@ import { STUDIO_SCHEMA_VERSION } from '../features/designStudio/document/types';
 import { preflightDesign } from '../features/designStudio/export/preflight';
 import { DYNAMIC_FIELD_OPTIONS, dynamicFieldSample, resolveDesignBindings } from '../features/qrStudio/dynamicFields';
 import CanvasElementView from '../features/qrStudio/CanvasElementView.vue';
-import logoLightUrl from '../assets/logo/Peshkash-Primary-For-Light.svg?url';
-import logoDarkUrl from '../assets/logo/Peshkash-Primary-For-Dark.svg?url';
+import logoLightUrl from '../assets/logo/Peshkash-Primary-For-Light-Display.svg?url';
+import logoDarkUrl from '../assets/logo/Peshkash-Primary-For-Dark-Display.svg?url';
 import '../features/qrStudio/qr-template-tokens.css';
 
-// Brand kit logo: SVG content spans x:[335,1312] y:[164,415] in a 1536×512 viewBox
-const LOGO_SVG_W = 1536, LOGO_SVG_H = 512;
-const LOGO_CX1 = 335, LOGO_CX2 = 1312, LOGO_CY1 = 164, LOGO_CY2 = 415;
+// Display logo uses a tight viewBox, including the corner mark and full wordmark.
+const LOGO_ASPECT = 1068 / 356;
 
 const props = withDefaults(defineProps<{
   embedded?: boolean;
@@ -1055,21 +1054,12 @@ const merchantTextStyle = computed(() => ({
   color: inkColor.value, display: 'block', outline: 'none', whiteSpace: 'nowrap' as const,
 }));
 
-// Brand mark: position the logo so its visual content (x:[335,1312] y:[164,415]) renders correctly
 const bmContainerStyle = computed((): Record<string, string> => {
   const { x, y, w, h } = elPos.value.brandmark; const s = canvasScale.value;
-  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'hidden' };
+  return { position: 'absolute', left: `${x * s}px`, top: `${y * s}px`, width: `${w * s}px`, height: `${h * s}px`, overflow: 'visible' };
 });
 const bmImgStyle = computed((): Record<string, string> => {
-  const { w: contentW, h: contentH } = elPos.value.brandmark; const s = canvasScale.value;
-  // Reverse the content crop: full SVG image is larger, positioned so content aligns to container
-  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
-  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
-  const imgW = (contentW / contentFracW) * s;
-  const imgH = (contentH / contentFracH) * s;
-  const offsetX = -(LOGO_CX1 / LOGO_SVG_W) * imgW;
-  const offsetY = -(LOGO_CY1 / LOGO_SVG_H) * imgH;
-  return { position: 'absolute', left: `${offsetX}px`, top: `${offsetY}px`, width: `${imgW}px`, height: `${imgH}px` };
+  return { display: 'block', height: '100%', objectFit: 'contain', width: '100%' };
 });
 
 // QR data URI for canvas display
@@ -1161,13 +1151,9 @@ function initElPos(t: QrTemplateDefinition): void {
     ch = Math.min(ch, height - cy);
   }
 
-  // Brand mark: compute content size to position the SVG correctly
+  // Brand mark uses the logo's tight display viewBox so no strokes or lettering are clipped.
   const logoH = sh * 0.055; // desired content height in canvas units
-  const contentFracH = (LOGO_CY2 - LOGO_CY1) / LOGO_SVG_H;
-  const contentFracW = (LOGO_CX2 - LOGO_CX1) / LOGO_SVG_W;
-  const logoImgH = logoH / contentFracH;
-  const logoImgW = logoImgH * (LOGO_SVG_W / LOGO_SVG_H);
-  const logoContentW = contentFracW * logoImgW;
+  const logoContentW = logoH * LOGO_ASPECT;
   const bx = width - padding * 0.5 - logoContentW;
   const by = markBaseY - logoH;
 
@@ -2380,7 +2366,7 @@ onUnmounted(() => {
 .canvas-wrap.is-dragging .t-line{cursor:grabbing}
 
 /* Brand mark (locked) */
-.el--brandmark{cursor:grab;overflow:hidden}
+.el--brandmark{cursor:grab;overflow:visible}
 .el--brandmark:hover:not(.selected){outline:1.5px dashed rgba(189,148,90,.4)}
 .canvas-wrap.is-dragging .el--brandmark{cursor:grabbing}
 .el--brandmark img{pointer-events:none;display:block}

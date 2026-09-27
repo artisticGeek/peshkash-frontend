@@ -1558,7 +1558,7 @@
         <div v-if="showQrBatchPrint" class="modal-backdrop-custom qr-batch-backdrop" @click.self="showQrBatchPrint = false">
           <div class="qr-batch-modal">
             <div class="modal-title-row">
-              <div><h3>Batch print & export</h3><p class="hint">Choose one template, then print or export the selected QR assets together.</p></div>
+              <div><h3>Batch print & export</h3><p class="hint">Choose a default template, proof every QR, and override individual cards before export.</p></div>
               <button class="icon-button" type="button" aria-label="Close" @click="showQrBatchPrint = false"><i class="bi bi-x-lg"></i></button>
             </div>
             <PrintStudio

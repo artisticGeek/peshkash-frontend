@@ -172,9 +172,9 @@ function scanCorners(width: number, height: number, color: string): string {
     `</g>`;
 }
 
-// Brand kit logo: viewBox 0 0 1536 512, visual content x:[335,1312] y:[164,415]
+// Tight visual bounds match the display logo viewBox and include every stroke.
 function peshkashLogoImage(rightX: number, bottomY: number, logoH: number, dark: boolean): string {
-  const cx2 = 1312, cy2 = 415, contentH = cy2 - 164;
+  const cx2 = 1316, cy2 = 464, contentH = 356;
   const scale = logoH / contentH;
   const imgX = rightX - cx2 * scale;
   const imgY = bottomY - cy2 * scale;

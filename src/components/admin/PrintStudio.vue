@@ -14,6 +14,8 @@ import { designFromDocument, readStudioDocument } from '../../features/designStu
 import { preflightDesign } from '../../features/designStudio/export/preflight';
 import { API_BASE_URL } from '../../config';
 
+const COREL_EXPORT_SCALE = 600 / 25.4;
+
 interface QrTarget { key: string; label: string; context: string; type: string; path: string; mappingId?: number; variables?: DynamicValues }
 interface QrMapping { id: number; qrHash: string; url: string; shortQrUrl: string; finalPublicUrl: string; isActive: boolean }
 interface EventRow { id: number; displayName: string; name: string }
@@ -22,11 +24,13 @@ const props = defineProps<{ event: EventRow | null; targets: QrTarget[]; qrMappi
 const step = ref<1 | 2 | 3>(1);
 const templates = ref<StudioDesign[]>([]);
 const selectedTemplateId = ref<number | string | null>(null);
+const targetTemplateIds = ref<Record<string, string>>({});
 const selectedTargetKeys = ref<string[]>([]);
 const previews = ref<Record<string, string>>({});
 const previewErrors = ref<Record<string, string>>({});
 const isGenerating = ref(false);
 const isExporting = ref(false);
+const changingTemplateKeys = ref<string[]>([]);
 const progress = ref(0);
 const progressTotal = ref(0);
 const targetSearch = ref('');
@@ -67,10 +71,10 @@ const previewTargets = computed(() => props.targets.filter(t => previewTargetKey
 const targetTypes = computed(() => [...new Set(props.targets.map(t => t.type))].sort());
 const visibleTargets = computed(() => { const q = targetSearch.value.trim().toLowerCase(); return props.targets.filter(t => (targetType.value === 'all' || t.type === targetType.value) && (!q || `${t.label} ${t.context} ${t.type} ${mappingForTarget(t)?.qrHash || ''}`.toLowerCase().includes(q))); });
 const unmappedTargets = computed(() => selectedTargets.value.filter(t => !mappingForTarget(t)));
-const targetProblems = computed<Record<string, string>>(() => {
-  const design = selectedTemplate.value; if (!design) return {};
-  return Object.fromEntries(previewTargets.value.flatMap(target => { const problem = targetProblem(design, target); return problem ? [[target.key, problem]] : []; }));
-});
+const targetProblems = computed<Record<string, string>>(() => Object.fromEntries(previewTargets.value.flatMap(target => {
+  const design = designForTarget(target); if (!design) return [];
+  const problem = targetProblem(design, target); return problem ? [[target.key, problem]] : [];
+})));
 const blockingProblems = computed(() => selectedTargets.value.filter(target => targetProblems.value[target.key] || previewErrors.value[target.key]));
 const failedPreviewTargets = computed(() => previewTargets.value.filter(target => previewErrors.value[target.key]));
 const filteredPreviewTargets = computed(() => previewTargets.value.filter(target => previewFilter.value === 'all' || targetProblems.value[target.key] || previewErrors.value[target.key]));
@@ -173,6 +177,23 @@ function templateCompatibility(design: StudioDesign) {
   const problems = props.targets.filter(target => targetProblem(design, target));
   return { compatible: props.targets.length - problems.length, total: props.targets.length, problems: problems.length };
 }
+function designForTarget(target: QrTarget): StudioDesign | null {
+  const override = targetTemplateIds.value[target.key];
+  return templates.value.find(template => String(template.id) === String(override || selectedTemplateId.value)) ?? selectedTemplate.value;
+}
+function targetTemplateId(target: QrTarget): string { return String(targetTemplateIds.value[target.key] || selectedTemplateId.value || ''); }
+async function changeTargetTemplate(target: QrTarget, templateId: string): Promise<void> {
+  const next = { ...targetTemplateIds.value };
+  if (String(templateId) === String(selectedTemplateId.value)) delete next[target.key]; else next[target.key] = String(templateId);
+  targetTemplateIds.value = next;
+  const design = designForTarget(target); if (!design) return;
+  changingTemplateKeys.value = [...new Set([...changingTemplateKeys.value, target.key])];
+  const nextPreviews = { ...previews.value }; delete nextPreviews[target.key]; previews.value = nextPreviews;
+  const nextErrors = { ...previewErrors.value }; delete nextErrors[target.key]; previewErrors.value = nextErrors;
+  try { previews.value = { ...previews.value, [target.key]: await renderToPng(design, target, 6) }; }
+  catch (error) { previewErrors.value = { ...previewErrors.value, [target.key]: error instanceof Error ? error.message : 'Render failed' }; }
+  finally { changingTemplateKeys.value = changingTemplateKeys.value.filter(key => key !== target.key); }
+}
 function isDynamicTemplate(design: StudioDesign) { return requiredDynamicFields(design).length > 0; }
 function templateDefinition(design: StudioDesign): QrTemplateDefinition | undefined {
   return qrManifest.templates.find(t => t.id === design.libraryTemplateId) ?? (design.customTemplate ? synthesizeCustomTemplate(design.customTemplate, { id: design.libraryTemplateId, label: design.name }) : undefined);
@@ -190,7 +211,7 @@ const printPreflight = computed(() => {
   const destination = import.meta.env.DEV || isLocalPreview ? `https://peshkash.app/${mapping.qrHash}` : mapping.shortQrUrl;
   return preflightDesign({ ...resolvePrintableDesign(design, targetValues(firstTarget, mapping)), destination }, definition, layoutFor(design, definition));
 });
-const canExport = computed(() => Boolean(selectedTemplate.value && selectedTargets.value.length && !unmappedTargets.value.length && !blockingProblems.value.length && printPreflight.value?.canExport));
+const canExport = computed(() => Boolean(selectedTemplate.value && selectedTargets.value.length && !unmappedTargets.value.length && !blockingProblems.value.length && !changingTemplateKeys.value.length && printPreflight.value?.canExport));
 
 function blankDesign(): StudioDesign { return { name: '', libraryTemplateId: qrManifest.templates[0]?.id ?? '', manifestVersion: qrManifest.version, qrStyle: 'obsidian-ring', theme: 'light', widthMm: 120, heightMm: 70, merchantName: '', eyebrow: '', headline: '', descriptor: '', cta: '', destination: 'https://peshkash.app' }; }
 function fromApi(row: Record<string, unknown>): StudioDesign {
@@ -228,7 +249,7 @@ function renderToSvg(design: StudioDesign, target: QrTarget): string {
 async function renderBatch(targets: QrTarget[], pixelScale: number, report = false): Promise<Record<string, string>> {
   if (!selectedTemplate.value) return {}; const output: Record<string, string> = {}; const errors: Record<string, string> = {}; let cursor = 0;
   if (report) { progress.value = 0; progressTotal.value = targets.length; }
-  async function worker() { while (cursor < targets.length) { const target = targets[cursor++]; try { output[target.key] = await renderToPng(selectedTemplate.value!, target, pixelScale); } catch (e) { errors[target.key] = e instanceof Error ? e.message : 'Render failed'; } if (report) progress.value++; } }
+  async function worker() { while (cursor < targets.length) { const target = targets[cursor++]; const design = designForTarget(target); try { if (!design) throw new Error('A template is missing.'); output[target.key] = await renderToPng(design, target, pixelScale); } catch (e) { errors[target.key] = e instanceof Error ? e.message : 'Render failed'; } if (report) progress.value++; } }
   await Promise.all(Array.from({ length: Math.min(3, targets.length) }, () => worker()));
   const nextErrors = { ...previewErrors.value }; for (const target of targets) delete nextErrors[target.key]; previewErrors.value = { ...nextErrors, ...errors }; return output;
 }
@@ -247,22 +268,27 @@ async function renderCorelCard(design: StudioDesign, target: QrTarget, widthMm: 
   const svg = renderToSvg(design, target);
   const source = new Image();
   await new Promise<void>((resolve, reject) => { source.onload = () => resolve(); source.onerror = () => reject(new Error('The CorelDRAW card could not be rendered.')); source.src = svgDataUri(svg); });
-  const widthPx = Math.max(1, Math.round(widthMm * EXPORT_SCALE));
-  const artworkHeightPx = Math.max(1, Math.round(heightMm * EXPORT_SCALE));
-  const captionHeightPx = Math.max(0, Math.round(captionHeightMm * EXPORT_SCALE));
+  const widthPx = Math.max(1, Math.round(widthMm * COREL_EXPORT_SCALE));
+  const artworkHeightPx = Math.max(1, Math.round(heightMm * COREL_EXPORT_SCALE));
+  const captionHeightPx = Math.max(0, Math.round(captionHeightMm * COREL_EXPORT_SCALE));
   const canvas = document.createElement('canvas'); canvas.width = widthPx; canvas.height = artworkHeightPx + captionHeightPx;
-  const context = canvas.getContext('2d')!; context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(source, 0, 0, widthPx, artworkHeightPx);
+  const context = canvas.getContext('2d')!; context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height);
+  const sourceRatio = source.naturalWidth / source.naturalHeight; const frameRatio = widthPx / artworkHeightPx;
+  const drawWidth = sourceRatio >= frameRatio ? widthPx : artworkHeightPx * sourceRatio;
+  const drawHeight = sourceRatio >= frameRatio ? widthPx / sourceRatio : artworkHeightPx;
+  context.drawImage(source, (widthPx - drawWidth) / 2, (artworkHeightPx - drawHeight) / 2, drawWidth, drawHeight);
   if (captionHeightPx) {
-    context.fillStyle = '#2b211a'; context.font = `${Math.max(10, Math.round(3.2 * EXPORT_SCALE))}px Arial, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
-    context.fillText(displayTargetLabel(target), widthPx / 2, artworkHeightPx + (captionHeightPx / 2), widthPx - Math.round(4 * EXPORT_SCALE));
+    context.fillStyle = '#2b211a'; context.font = `${Math.max(10, Math.round(3.2 * COREL_EXPORT_SCALE))}px Arial, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.fillText(displayTargetLabel(target), widthPx / 2, artworkHeightPx + (captionHeightPx / 2), widthPx - Math.round(4 * COREL_EXPORT_SCALE));
   }
   return canvas.toDataURL('image/png');
 }
-async function renderCorelCards(design: StudioDesign, layout: typeof sheetLayout.value): Promise<Record<string, string>> {
+async function renderCorelCards(layout: typeof sheetLayout.value): Promise<Record<string, string>> {
   const images: Record<string, string> = {}; let cursor = 0; progress.value = 0; progressTotal.value = selectedTargets.value.length;
   async function worker() {
     while (cursor < selectedTargets.value.length) {
       const target = selectedTargets.value[cursor++];
+      const design = designForTarget(target); if (!design) throw new Error('A template is missing.');
       images[target.key] = await renderCorelCard(design, target, layout.width, layout.height, layout.captionHeight);
       progress.value += 1;
     }
@@ -282,7 +308,7 @@ function corelDrawPages(assetPaths: Record<string, string>): string[] {
       const y = margin + row * (artworkHeight + captionHeight + gap);
       return corelPngCardObject(assetPaths[target.key] || '', x, y, artworkWidth, artworkHeight + captionHeight, `qr-card-page-${pages.length + 1}-item-${index + 1}`, displayTargetLabel(target));
     }).join('');
-    pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title><rect id="page-background" width="100%" height="100%" fill="#fff"/>${cards}</svg>`);
+    pages.push(`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pageWidth}mm" height="${pageHeight}mm" viewBox="0 0 ${pageWidth} ${pageHeight}"><title>${escapeXml(props.event?.displayName || 'Peshkash')} QR print sheet ${pages.length + 1}</title>${cards}</svg>`);
   }
   return pages;
 }
@@ -290,13 +316,19 @@ async function exportForCorelDraw() {
   if (!selectedTemplate.value || !canExport.value || !sheetLayout.value.fits) return;
   isExporting.value = true;
   try {
-    const layout = sheetLayout.value; const design = selectedTemplate.value;
-    const images = await renderCorelCards(design, layout); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
+    const layout = sheetLayout.value;
+    const images = await renderCorelCards(layout); const base = `${safeFilename(props.event?.displayName || 'peshkash')}-coreldraw`;
     const assetPaths = Object.fromEntries(selectedTargets.value.map((target, index) => [target.key, `assets/${uniqueFilename(target, index)}`]));
     const pages = corelDrawPages(images);
-    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract the ZIP file and import an SVG page into CorelDRAW or CorelDRAW Web.\r\n2. Each SVG is self-contained; its 300 DPI card artwork is embedded with CorelDRAW-compatible image references.\r\n3. Each finished QR card imports as one named bitmap object.\r\n4. Move, align, duplicate, or rearrange complete cards without ungrouping them.\r\n5. The assets folder also contains every card as a separate PNG for manual placement or fallback use.\r\n6. Re-export from Peshkash if the final print dimensions change.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard object: ${layout.width.toFixed(2)} x ${(layout.height + layout.captionHeight).toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
+    const instructions = `PESHKASH CORELDRAW EXPORT\r\n\r\n1. Extract the ZIP file and import an SVG page into CorelDRAW or CorelDRAW Web.\r\n2. Every QR card is a separate top-level object on a transparent page, ready to move, align, duplicate, or rearrange.\r\n3. CorelDRAW may wrap an imported SVG in one container; use Ungroup once to expose the separate named card objects. Do not ungroup an individual card.\r\n4. Card artwork is embedded at 600 DPI and keeps its original aspect ratio.\r\n5. The objects folder contains one self-contained SVG per card. Multi-select these files when a shop wants independently imported objects without a page container.\r\n6. The assets folder contains the same 600 DPI cards as separate PNG files for fallback use.\r\n7. Re-export from Peshkash if the final print dimensions change.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nCard object: ${layout.width.toFixed(2)} x ${(layout.height + layout.captionHeight).toFixed(2)} mm\r\nPages: ${pages.length}\r\n`;
     const files = pages.map((page, index) => ({ name: `${base}-page-${String(index + 1).padStart(2, '0')}.svg`, data: new TextEncoder().encode(page) }));
-    selectedTargets.value.forEach(target => { if (images[target.key]) files.push({ name: assetPaths[target.key], data: dataUrlBytes(images[target.key]) }); });
+    selectedTargets.value.forEach((target, index) => {
+      if (!images[target.key]) return;
+      files.push({ name: assetPaths[target.key], data: dataUrlBytes(images[target.key]) });
+      const object = corelPngCardObject(images[target.key], 0, 0, layout.width, layout.height + layout.captionHeight, `qr-card-${index + 1}`, displayTargetLabel(target));
+      const objectSvg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${layout.width}mm" height="${layout.height + layout.captionHeight}mm" viewBox="0 0 ${layout.width} ${layout.height + layout.captionHeight}">${object}</svg>`;
+      files.push({ name: `objects/${uniqueFilename(target, index).replace(/\.png$/i, '.svg')}`, data: new TextEncoder().encode(objectSvg) });
+    });
     files.push({ name: 'README.txt', data: new TextEncoder().encode(instructions) });
     downloadBlob(createZip(files), `${base}-package.zip`);
     showPrintSetup.value = false;
@@ -331,7 +363,7 @@ onMounted(loadTemplates);
   <div v-else class="ps-root">
     <ol class="ps-steps"><li v-for="item in [{ n: 1, label: 'Template' }, { n: 2, label: 'QR assets' }, { n: 3, label: 'Preview & export' }]" :key="item.n" :class="{ active: step === item.n, done: step > item.n }"><span>{{ step > item.n ? '✓' : item.n }}</span><b>{{ item.label }}</b></li></ol>
     <section v-if="step === 1" class="ps-stage">
-      <div class="ps-stage-heading"><div><p>Step 1 of 3</p><h4>Choose a print template</h4><small>Templates are checked against every QR in this batch.</small></div><RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr-templates" target="_blank"><i class="bi bi-plus-lg"></i> New template</RouterLink></div>
+      <div class="ps-stage-heading"><div><p>Step 1 of 3</p><h4>Choose a default template</h4><small>Use one template for the batch, then override individual cards in the proofing step.</small></div><RouterLink class="btn btn-outline-secondary btn-sm" to="/dashboard/qr-templates" target="_blank"><i class="bi bi-plus-lg"></i> New template</RouterLink></div>
       <div class="ps-toolbar">
         <label class="ps-search"><i class="bi bi-search"></i><input v-model="templateSearch" type="search" placeholder="Search templates…"></label>
         <select v-model="templateFilter" aria-label="Filter templates"><option value="all">All templates</option><option value="dynamic">Dynamic fields</option><option value="compatible">Fully compatible</option></select>
@@ -352,7 +384,13 @@ onMounted(loadTemplates);
       <div v-else-if="printPreflight && !printPreflight.canExport" class="ps-blocker"><i class="bi bi-shield-x"></i><div><b>Print preflight blocked</b><p>{{ printPreflight.errors.map(e => e.detail).join(' ') }}</p></div><RouterLink class="btn btn-outline-secondary btn-sm" :to="editTemplateRoute">Fix template</RouterLink></div>
       <div class="ps-proof-tools"><div><button type="button" :class="{ active: previewFilter === 'all' }" @click="previewFilter = 'all'">All {{ previewTargets.length }}</button><button type="button" :class="{ active: previewFilter === 'problems' }" @click="previewFilter = 'problems'">Problems {{ Object.keys(targetProblems).length + failedPreviewTargets.length }}</button></div><button v-if="failedPreviewTargets.length" class="btn btn-outline-secondary btn-sm" type="button" @click="retryFailedPreviews"><i class="bi bi-arrow-clockwise"></i> Retry failed</button><span v-else-if="!isGenerating"><i class="bi bi-check-circle-fill"></i> {{ previews ? Object.keys(previews).length : 0 }} previews rendered</span></div>
       <div v-if="isGenerating" class="ps-progress"><i class="bi bi-arrow-repeat spin"></i><span>Rendering {{ progress }}/{{ progressTotal }} actual previews…</span></div>
-      <div v-if="filteredPreviewTargets.length" class="ps-grid"><article v-for="target in filteredPreviewTargets" :key="target.key" class="ps-card" :class="{ error: previewErrors[target.key] || targetProblems[target.key], excluded: !selectedTargetKeys.includes(target.key) }"><div class="ps-card-top"><label><input v-model="selectedTargetKeys" type="checkbox" :value="target.key"><span>{{ selectedTargetKeys.includes(target.key) ? 'Included' : 'Excluded' }}</span></label><button type="button" :disabled="!previews[target.key]" @click="zoomedTargetKey = target.key"><i class="bi bi-arrows-fullscreen"></i> Inspect</button></div><button class="ps-card-preview" type="button" :style="selectedTemplate ? { aspectRatio: `${selectedTemplate.widthMm}/${selectedTemplate.heightMm}` } : {}" :disabled="!previews[target.key]" @click="zoomedTargetKey = target.key"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Rendered QR for ${displayTargetLabel(target)}`"><span v-else><i class="bi bi-hourglass-split"></i></span></button><div class="ps-card-meta"><b>{{ displayTargetLabel(target) }}</b><small>{{ target.context }} · {{ target.type }}</small><code>{{ mappingForTarget(target)?.qrHash }}</code><p v-if="targetProblems[target.key]">{{ targetProblems[target.key] }}</p><p v-if="previewErrors[target.key]">{{ previewErrors[target.key] }}</p><em v-if="!targetProblems[target.key] && !previewErrors[target.key]"><i class="bi bi-check-circle"></i> Data and mapping ready</em></div></article></div>
+      <div v-if="filteredPreviewTargets.length" class="ps-grid">
+        <article v-for="target in filteredPreviewTargets" :key="target.key" class="ps-card" :class="{ error: previewErrors[target.key] || targetProblems[target.key], excluded: !selectedTargetKeys.includes(target.key) }">
+          <div class="ps-card-top"><label><input v-model="selectedTargetKeys" type="checkbox" :value="target.key"><span>{{ selectedTargetKeys.includes(target.key) ? 'Included' : 'Excluded' }}</span></label><button type="button" :disabled="!previews[target.key]" @click="zoomedTargetKey = target.key"><i class="bi bi-arrows-fullscreen"></i> Inspect</button></div>
+          <button class="ps-card-preview" type="button" :style="designForTarget(target) ? { aspectRatio: `${designForTarget(target)!.widthMm}/${designForTarget(target)!.heightMm}` } : {}" :disabled="!previews[target.key]" @click="zoomedTargetKey = target.key"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Rendered QR for ${displayTargetLabel(target)}`"><span v-else><i class="bi bi-arrow-repeat spin"></i></span></button>
+          <div class="ps-card-meta"><b>{{ displayTargetLabel(target) }}</b><small>{{ target.context }} · {{ target.type }}</small><label class="ps-card-template"><span>Template</span><select :value="targetTemplateId(target)" :disabled="changingTemplateKeys.includes(target.key)" @change="changeTargetTemplate(target, ($event.target as HTMLSelectElement).value)"><option v-for="template in templates" :key="template.id" :value="String(template.id)">{{ template.name }}</option></select></label><code>{{ mappingForTarget(target)?.qrHash }}</code><p v-if="targetProblems[target.key]">{{ targetProblems[target.key] }}</p><p v-if="previewErrors[target.key]">{{ previewErrors[target.key] }}</p><em v-if="changingTemplateKeys.includes(target.key)"><i class="bi bi-arrow-repeat spin"></i> Updating actual preview…</em><em v-else-if="!targetProblems[target.key] && !previewErrors[target.key]"><i class="bi bi-check-circle"></i> Data and mapping ready</em></div>
+        </article>
+      </div>
       <div v-else class="ps-empty ps-empty--compact"><i class="bi bi-check-circle"></i><p>No problem cards in this batch.</p></div>
     </section>
     <footer class="ps-footer"><div><button v-if="step > 1" class="btn btn-outline-secondary" type="button" :disabled="isGenerating || isExporting" @click="previousStep"><i class="bi bi-arrow-left"></i> Back</button></div><span v-if="step === 3 && exportPixelSize"><b>{{ selectedTargets.length }} included</b> · {{ previewTargets.length - selectedTargets.length }} excluded · {{ exportPixelSize.w }} × {{ exportPixelSize.h }} px at 300 DPI</span><button v-if="step < 3" class="btn btn-primary" type="button" :disabled="(step === 1 && !selectedTemplate) || (step === 2 && !selectedTargets.length)" @click="nextStep">Continue <i class="bi bi-arrow-right"></i></button><div v-else class="ps-actions"><button class="btn btn-outline-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="showPrintSetup = true"><i class="bi bi-printer"></i> Print setup</button><button class="btn btn-primary" type="button" :disabled="!canExport || isGenerating || isExporting" @click="exportZip"><i class="bi bi-file-earmark-zip"></i> {{ isExporting ? `Preparing ${progress}/${progressTotal}` : `Export ZIP (${selectedTargets.length})` }}</button></div></footer>
@@ -384,10 +422,10 @@ onMounted(loadTemplates);
               <article v-for="page in printPreviewPages" :key="page.number"><header>Page {{ page.number }} <span>{{ page.targets.length }} QR{{ page.targets.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="(target, index) in page.targets" :key="target.key" class="ps-mini-card" :style="previewCardStyle(index)" :title="displayTargetLabel(target)"><img v-if="previews[target.key]" :src="previews[target.key]" :alt="`Placed preview for ${displayTargetLabel(target)}`"><i v-else class="bi bi-qr-code"></i></div></div></article>
               <small v-if="sheetLayout.pageCount > printPreviewPages.length">+ {{ sheetLayout.pageCount - printPreviewPages.length }} more page{{ sheetLayout.pageCount - printPreviewPages.length === 1 ? '' : 's' }}</small>
             </div>
-            <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas</p>
+            <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas<br>CorelDRAW package: separate movable cards · 600 DPI · individual object SVGs included</p>
           </aside>
         </div>
-        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-file-earmark-zip"></i> Download CorelDRAW layout</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
+        <footer><button class="btn btn-outline-secondary" type="button" @click="showPrintSetup = false">Cancel</button><div class="ps-print-actions"><button class="btn btn-outline-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="exportForCorelDraw"><i class="bi bi-file-earmark-zip"></i> Download CorelDRAW layout · 600 DPI</button><button class="btn btn-primary" type="button" :disabled="isExporting || !sheetLayout.fits" @click="printSheet"><i class="bi bi-printer"></i> Open print preview</button></div></footer>
       </div>
     </div>
   </div>
@@ -399,5 +437,6 @@ onMounted(loadTemplates);
 
 <style scoped>
 .ps-toolbar{display:grid;gap:10px;grid-template-columns:minmax(240px,1fr) 170px 170px}.ps-toolbar select,.ps-print-controls select,.ps-print-controls input{background:#fff;border:1px solid #dcd1c7;color:#352a22;min-height:40px;padding:8px 10px}.ps-toolbar--targets{grid-template-columns:minmax(260px,1fr) 220px}.ps-template-card{align-items:stretch;grid-template-columns:92px minmax(0,1fr) auto;min-height:112px;padding:10px}.ps-template-card.incompatible{border-color:#e0c9a7}.ps-template-shape{background:#e9e1d8;height:90px;max-height:90px;overflow:hidden;width:92px}.ps-template-shape img{height:100%;object-fit:contain;width:100%}.ps-template-copy{align-content:center}.ps-template-card b{line-height:1.25;overflow:visible;text-overflow:clip;white-space:normal}.ps-badges{display:flex!important;flex-wrap:wrap;gap:4px!important;margin-top:5px}.ps-badges em{background:#ede7df;color:#655548;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.04em;padding:3px 5px;text-transform:uppercase}.ps-badges em.warning{background:#fff0dd;color:#895916}.ps-target-row.error{background:#fff9f2}.ps-target-row em,.ps-card-meta em{color:#55735d;font-size:9px;font-style:normal;margin-top:3px}.ps-target-row em:has(.bi-exclamation-triangle){color:#9b5f1b}.ps-proof-tools{align-items:center;display:flex;gap:10px;justify-content:space-between}.ps-proof-tools>div{background:#f3eee8;display:flex;padding:3px}.ps-proof-tools button:not(.btn){background:transparent;border:0;color:#78695d;font-size:10px;font-weight:700;padding:7px 10px}.ps-proof-tools button.active{background:#fff;color:#33271f;box-shadow:0 1px 3px #0001}.ps-proof-tools>span{color:#55735d;font-size:10px}.ps-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));max-height:52vh}.ps-card.excluded{opacity:.58}.ps-card.excluded .ps-card-preview{filter:grayscale(.8)}.ps-card-top{align-items:center;background:#faf7f3;display:flex;justify-content:space-between;padding:7px 9px}.ps-card-top label{align-items:center;display:flex;font-size:10px;font-weight:700;gap:6px}.ps-card-top button{background:transparent;border:0;color:#6d5948;font-size:10px}.ps-card-preview{border:0;cursor:zoom-in;padding:0;width:100%}.ps-card-preview:disabled{cursor:wait}.ps-card-preview span{color:#a29284}.ps-card-meta{grid-template-columns:minmax(0,1fr) auto}.ps-card-meta>*{grid-column:1/-1}.ps-card-meta code{overflow-wrap:anywhere}.ps-empty--compact{min-height:180px;padding:28px}.ps-overlay{align-items:center;background:rgba(27,21,17,.72);display:flex;inset:0;justify-content:center;padding:24px;position:fixed;z-index:1200}.ps-proof-modal,.ps-print-modal{background:#fdfaf6;box-shadow:0 24px 80px #0007;display:flex;flex-direction:column;max-height:94vh;max-width:1080px;width:min(94vw,1080px)}.ps-proof-modal>header,.ps-print-modal>header{align-items:flex-start;border-bottom:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:18px 20px}.ps-proof-modal header small,.ps-print-modal header small{color:#ad7d43;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ps-proof-modal h4,.ps-print-modal h4{font:400 22px Rufina,serif;margin:3px 0}.ps-proof-modal header code{font-size:10px}.ps-proof-modal header button,.ps-print-modal header button{background:transparent;border:0;font-size:18px}.ps-proof-image{align-items:center;background:#ded6ce;display:flex;justify-content:center;min-height:260px;overflow:auto;padding:24px}.ps-proof-image img{display:block;height:auto;max-height:68vh;max-width:100%;object-fit:contain}.ps-proof-modal>footer,.ps-print-modal>footer{align-items:center;border-top:1px solid #dfd4ca;display:flex;justify-content:space-between;padding:14px 20px}.ps-proof-modal footer span,.ps-proof-modal footer label{font-size:11px}.ps-print-modal{max-width:980px}.ps-print-body{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) 340px;overflow:auto;padding:22px}.ps-print-controls{align-content:start;display:grid;gap:12px;grid-template-columns:1fr 1fr}.ps-print-controls label{color:#5f5146;display:grid;font-size:10px;font-weight:700;gap:5px;position:relative;text-transform:uppercase}.ps-print-controls label>span{bottom:12px;font-size:10px;position:absolute;right:10px}.ps-print-controls .ps-check{align-items:center;display:flex;grid-column:1/-1;grid-template-columns:auto 1fr;text-transform:none}.ps-print-controls .ps-check input{min-height:auto}.ps-size-control{border:1px solid #d9cdc1;display:grid;gap:10px;grid-column:1/-1;grid-template-columns:1fr 1fr;margin:2px 0;padding:12px}.ps-size-control legend{color:#4d4036;float:none;font-size:10px;font-weight:800;letter-spacing:.08em;margin:0;padding:0 4px;text-transform:uppercase;width:auto}.ps-size-control legend span{color:#8a7767;font-size:9px;font-weight:500;letter-spacing:0;margin-left:8px;text-transform:none}.ps-size-control .ps-scale{align-items:center;grid-column:1/-1;grid-template-columns:auto minmax(100px,1fr) auto}.ps-size-control .ps-scale input{min-height:auto;padding:0}.ps-size-control .ps-scale output{color:#ad7d43;font-size:11px;min-width:38px;text-align:right}.ps-layout-preview{background:#f1ebe4;display:flex;flex-direction:column;gap:12px;min-height:420px;padding:16px}.ps-layout-heading{display:grid;gap:3px}.ps-layout-heading>span{color:#ad7d43;font-size:9px;font-weight:800;letter-spacing:.12em}.ps-layout-heading b{font:400 20px Rufina,serif}.ps-layout-heading small{color:#6e5f53;font-size:10px}.ps-page-list{display:grid;gap:10px;max-height:330px;overflow:auto;padding-right:4px}.ps-page-list article{display:grid;gap:4px}.ps-page-list article>header{color:#6b5c50;display:flex;font-size:9px;font-weight:700;justify-content:space-between}.ps-mini-page{background:#fff;border:1px solid #d2c5b8;box-shadow:0 2px 8px #3b2a1d1a;position:relative;width:100%}.ps-mini-card{align-items:center;background:#241a15;border:1px solid #bc915d;color:#f4eadf;display:flex;justify-content:center;overflow:hidden;position:absolute}.ps-mini-card img{display:block;height:100%;object-fit:fill;width:100%}.ps-mini-card i{font-size:clamp(5px,1vw,10px)}.ps-layout-error{background:#fff3e4;border-left:3px solid #b66d28;color:#744819;font-size:10px;padding:10px}.ps-layout-preview>p{color:#716156;font-size:9px;line-height:1.55;margin:auto 0 0}.ps-sheet-summary{align-items:center;background:#f1ebe4;display:flex;flex-direction:column;gap:7px;justify-content:center;padding:22px;text-align:center}.ps-sheet-summary>i{font-size:38px}.ps-sheet-summary span,.ps-sheet-summary small{color:#77675b;font-size:10px}.ps-footer>span b{color:#3f332a}.ps-actions{flex-wrap:wrap}.ps-print-actions{display:flex;gap:8px}.ps-search:focus-within{border-color:#b98b51;box-shadow:0 0 0 2px rgba(185,139,81,.16)}
+.ps-card-template{align-items:center;display:grid;gap:6px;grid-column:1/-1;grid-template-columns:auto minmax(0,1fr);margin-top:4px}.ps-card-template span{color:#7b695b;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.ps-card-template select{background:#fff;border:1px solid #d7c9bc;color:#352a22;font-size:10px;min-height:34px;padding:6px 8px;width:100%}.ps-card-template select:focus{border-color:#b98b51;outline:2px solid rgba(185,139,81,.16)}
 @media(max-width:850px){.ps-toolbar,.ps-toolbar--targets{grid-template-columns:1fr}.ps-template-card{grid-template-columns:76px minmax(0,1fr) auto}.ps-template-shape{height:74px;width:76px}.ps-print-body{grid-template-columns:1fr}.ps-grid{grid-template-columns:1fr}}
 </style>

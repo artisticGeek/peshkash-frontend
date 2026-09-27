@@ -18,5 +18,5 @@ export function corelPngCardObject(
   const safeId = id.replace(/[^a-z0-9_-]+/gi, '-');
   const safeLabel = escapeXml(label);
   const safeSource = escapeXml(pngSource);
-  return `<image id="${safeId}" data-object-type="qr-card" data-qr-name="${safeLabel}" aria-label="${safeLabel}" x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${width.toFixed(3)}" height="${height.toFixed(3)}" preserveAspectRatio="none" xlink:href="${safeSource}" href="${safeSource}"/>`;
+  return `<image id="${safeId}" data-object-type="qr-card" data-qr-name="${safeLabel}" aria-label="${safeLabel}" x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${width.toFixed(3)}" height="${height.toFixed(3)}" preserveAspectRatio="xMidYMid meet" style="image-rendering:optimizeQuality" xlink:href="${safeSource}" href="${safeSource}"/>`;
 }
