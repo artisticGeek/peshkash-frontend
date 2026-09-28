@@ -193,6 +193,18 @@ function previewCardStyle(placement: SheetPlacement, mirrored = false, offset = 
     height: `${((placement.height + offset * 2) / layout.pageHeight) * 100}%`,
   };
 }
+function isCircularArtwork(target: QrTarget): boolean {
+  const design = designForTarget(target);
+  return design ? templateDefinition(design)?.format === 'round' : false;
+}
+function cutPreviewStyle(placement: SheetPlacement): Record<string, string> {
+  const style = previewCardStyle(placement, false, cutOffsetMm.value);
+  if (isCircularArtwork(placement.target)) return { ...style, borderRadius: '50%' };
+  const width = Math.max(0.1, placement.width + cutOffsetMm.value * 2);
+  const height = Math.max(0.1, placement.height + cutOffsetMm.value * 2);
+  const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + cutOffsetMm.value, width / 2, height / 2));
+  return { ...style, borderRadius: `${(radius / width) * 100}% / ${(radius / height) * 100}%` };
+}
 
 function mappingForTarget(target: QrTarget): QrMapping | null {
   if (target.mappingId) return props.qrMappings.find(m => m.id === target.mappingId) ?? null;
@@ -478,7 +490,10 @@ async function renderCorelCard(design: StudioDesign, target: QrTarget, widthMm: 
   const artworkHeightPx = Math.max(1, Math.round(heightMm * COREL_EXPORT_SCALE));
   const captionHeightPx = Math.max(0, Math.round(captionHeightMm * COREL_EXPORT_SCALE));
   const canvas = document.createElement('canvas'); canvas.width = widthPx; canvas.height = artworkHeightPx + captionHeightPx;
-  const context = canvas.getContext('2d')!; context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = '#ffffff';
+  if (templateDefinition(design)?.format !== 'round') context.fillRect(0, 0, canvas.width, canvas.height);
+  else if (captionHeightPx) context.fillRect(0, artworkHeightPx, canvas.width, captionHeightPx);
   const sourceRatio = source.naturalWidth / source.naturalHeight; const frameRatio = widthPx / artworkHeightPx;
   const drawWidth = sourceRatio >= frameRatio ? widthPx : artworkHeightPx * sourceRatio;
   const drawHeight = sourceRatio >= frameRatio ? widthPx / sourceRatio : artworkHeightPx;
@@ -528,6 +543,10 @@ function corelDrawPages(assetPaths: Record<string, string>): CorelSurface[] {
     if (includeCutContour.value) {
       const outlines = placements.map(({ target, index, x, y, width, height }) => {
         const offset = Math.max(-Math.min(width, height) / 2 + 0.1, cutOffsetMm.value);
+        if (isCircularArtwork(target)) {
+          const radius = Math.max(0.1, (Math.min(width, height) / 2) + offset);
+          return `<circle id="cut-${sheet}-${index + 1}" data-qr-name="${escapeXml(displayTargetLabel(target))}" cx="${(x + width / 2).toFixed(3)}" cy="${(y + height / 2).toFixed(3)}" r="${radius.toFixed(3)}"/>`;
+        }
         const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (width + offset * 2) / 2, (height + offset * 2) / 2));
         return `<rect id="cut-${sheet}-${index + 1}" data-qr-name="${escapeXml(displayTargetLabel(target))}" x="${(x - offset).toFixed(3)}" y="${(y - offset).toFixed(3)}" width="${(width + offset * 2).toFixed(3)}" height="${(height + offset * 2).toFixed(3)}" rx="${radius.toFixed(3)}" ry="${radius.toFixed(3)}"/>`;
       }).join('');
@@ -554,7 +573,7 @@ async function exportForCorelDraw() {
     const sizeLines = selectedTargets.value.map((target, index) => { const size = artworkSizeFor(target); return `${index + 1}. ${displayTargetLabel(target)}: ${size.width.toFixed(3)} x ${size.height.toFixed(3)} mm`; }).join('\r\n');
     const instructions = `PESHKASH PRINT-SHOP PACKAGE\r\n\r\nPREFERRED: BUILD ONE MULTI-PAGE CDR\r\n1. Extract this ZIP without moving or renaming its contents.\r\n2. In CorelDRAW open the Visual Basic editor (Alt+F11), import BUILD-CORELDRAW-JOB.bas, and run BuildPeshkashPrintJob.\r\n3. Choose this extracted folder. The macro creates ${cdrOutputName} with one named CorelDRAW page per production surface. This requires CorelDRAW because CDR is a proprietary native format.\r\n\r\nDIRECT SVG FALLBACK\r\n4. Open the sheet SVG files directly at their original physical dimensions. All files use one shared placement manifest and identical registration marks. Do not reposition only one page.\r\n5. FRONT files contain the print artwork. Every card is a separate named, movable top-level object.\r\n6. BACK files are included only for duplex jobs. Card positions are reflected horizontally across the sheet; artwork itself is not mirrored. Keep vertical placement unchanged and print using long-edge registration.\r\n7. CUT-CONTOUR files contain vector-only plotter paths on a layer named CutContour. The contour uses #FF00FF at 0.0762 mm. Map that named layer/color to the print shop's plotter preset if required.\r\n8. RegistrationMarks is a separate vector group repeated at exactly the same coordinates on every page. Use it to register duplex printing and the cutter, then omit it from the final cut operation if the plotter workflow requires.\r\n9. CorelDRAW may wrap an imported SVG in one container; use Ungroup once to expose separate card objects. Do not ungroup an individual card.\r\n10. Every artwork retains its assigned template dimensions and aspect ratio. The global scale is ${artworkScalePercent.value}%. Card artwork is 600 DPI.\r\n\r\nCanvas: ${layout.pageWidth} x ${layout.pageHeight} mm\r\nPrint mode: ${printSides.value === 'double' ? 'Double-sided' : 'Single-sided'}\r\nCutContour: ${includeCutContour.value ? `Included, ${cutCornerRadiusMm.value.toFixed(3)} mm corner radius, ${cutOffsetMm.value.toFixed(3)} mm offset` : 'Not included'}\r\nRegistration marks: ${includeRegistrationMarks.value ? 'Included at identical coordinates on every surface' : 'Not included'}\r\nPhysical sheets: ${layout.pageCount}\r\nCorelDRAW pages: ${surfaces.length}\r\n\r\nARTWORK SIZES\r\n${sizeLines}\r\n`;
     const files = surfaceFiles.map(file => ({ name: file.name, data: new TextEncoder().encode(file.surface.svg) }));
-    const manifest = { version: 2, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artworkScalePercent: artworkScalePercent.value, grouping: printGrouping.value, artworks: selectedTargets.value.map(target => { const size = artworkSizeFor(target); return { key: target.key, name: displayTargetLabel(target), templateId: targetTemplateId(target), width: size.width, height: size.height, captionHeight: size.captionHeight }; }), placements: layout.pages.map(page => ({ sheet: page.number, items: page.placements.map(({ target, x, mirroredX, y, width, height, captionHeight }) => ({ key: target.key, x, backX: mirroredX, y, width, height, captionHeight })) })), margin: layout.margin, gap: layout.gap, maxColumns: printColumns.value, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour' } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
+    const manifest = { version: 2, unit: 'mm', canvas: { width: layout.pageWidth, height: layout.pageHeight }, artworkScalePercent: artworkScalePercent.value, grouping: printGrouping.value, artworks: selectedTargets.value.map(target => { const size = artworkSizeFor(target); return { key: target.key, name: displayTargetLabel(target), templateId: targetTemplateId(target), shape: isCircularArtwork(target) ? 'circle' : 'rectangle', width: size.width, height: size.height, captionHeight: size.captionHeight }; }), placements: layout.pages.map(page => ({ sheet: page.number, items: page.placements.map(({ target, x, mirroredX, y, width, height, captionHeight }) => ({ key: target.key, x, backX: mirroredX, y, width, height, captionHeight })) })), margin: layout.margin, gap: layout.gap, maxColumns: printColumns.value, printSides: printSides.value, cutContour: includeCutContour.value ? { cornerRadius: cutCornerRadiusMm.value, offset: cutOffsetMm.value, strokeWidth: 0.0762, spotColor: 'CutContour', circularTemplatesUseCircle: true } : null, registrationMarks: includeRegistrationMarks.value, pages: surfaceFiles.map(file => ({ file: file.name, name: file.label, sheet: file.surface.sheet, kind: file.surface.kind })) };
     files.push({ name: 'BUILD-CORELDRAW-JOB.bas', data: new TextEncoder().encode(corelBuildMacro(surfaceFiles, layout.pageWidth, layout.pageHeight, cdrOutputName)) });
     files.push({ name: 'JOB-MANIFEST.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
     selectedTargets.value.forEach((target, index) => {
@@ -587,8 +606,12 @@ async function printSheet() {
     sheets.push(`<main class="sheet front" data-surface="Front print">${cards(false)}${registration}</main>`);
     if (printSides.value === 'double') sheets.push(`<main class="sheet back" data-surface="Back print — horizontally reversed placement">${cards(true)}${registration}</main>`);
     if (includeCutContour.value) {
-      const outlines = placements.map(({ x, y, width, height }) => {
+      const outlines = placements.map(({ target, x, y, width, height }) => {
         const offset = Math.max(-Math.min(width, height) / 2 + 0.1, cutOffsetMm.value);
+        if (isCircularArtwork(target)) {
+          const diameter = Math.max(0.2, Math.min(width, height) + offset * 2);
+          return `<span class="cut" style="left:${x + (width - diameter) / 2}mm;top:${y + (height - diameter) / 2}mm;width:${diameter}mm;height:${diameter}mm;border-radius:50%"></span>`;
+        }
         const radius = Math.max(0, Math.min(cutCornerRadiusMm.value + offset, (width + offset * 2) / 2, (height + offset * 2) / 2));
         return `<span class="cut" style="left:${x - offset}mm;top:${y - offset}mm;width:${width + offset * 2}mm;height:${height + offset * 2}mm;border-radius:${radius}mm"></span>`;
       }).join('');
@@ -769,15 +792,15 @@ onMounted(async () => { await loadTemplates(); await loadSavedCollections(); if 
               <legend>Finishing</legend>
               <label class="ps-check"><input v-model="includeRegistrationMarks" type="checkbox"> Add identical registration marks to every production canvas</label>
               <label class="ps-check"><input v-model="includeCutContour" type="checkbox"> Add a separate CutContour canvas for a cutting plotter</label>
-              <div v-if="includeCutContour" class="ps-cut-settings"><label>Cut corner radius<input v-model.number="cutCornerRadius" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label><label>Cut path offset<input v-model.number="cutOffset" type="number" min="-2" max="3" step="0.1"><span>{{ displayUnit }}</span></label></div>
-              <small>The plotter canvas shares exact coordinates with the print pages. Use a positive offset to add cutter tolerance, or a negative value to inset the cut.</small>
+              <div v-if="includeCutContour" class="ps-cut-settings"><label>Non-circular corner radius<input v-model.number="cutCornerRadius" type="number" min="0" step="0.1"><span>{{ displayUnit }}</span></label><label>Cut path offset<input v-model.number="cutOffset" type="number" min="-2" max="3" step="0.1"><span>{{ displayUnit }}</span></label></div>
+              <small>The plotter canvas shares exact coordinates with the print pages. Circular templates always use a true circular contour. Use a positive offset to add cutter tolerance, or a negative value to inset the cut.</small>
             </fieldset>
           </div>
           <aside class="ps-layout-preview">
             <div class="ps-layout-heading"><span>LIVE PRODUCTION PREVIEW</span><b>{{ sheetLayout.pageCount || '—' }} physical sheet{{ sheetLayout.pageCount === 1 ? '' : 's' }}</b><small>{{ collectionMode ? 'Auto-optimized standard layout · ' : '' }}{{ productionCanvasCount }} production canvas{{ productionCanvasCount === 1 ? '' : 'es' }} · individual sizes {{ artworkSizeSummary }}</small></div>
             <div v-if="!sheetLayout.fits" class="ps-layout-error"><i class="bi bi-exclamation-triangle"></i> At least one assigned template is larger than the selected canvas and margins. Reduce the collection scale or choose a larger canvas.</div>
             <div v-else class="ps-page-list">
-              <article v-for="surface in printPreviewSurfaces" :key="`${surface.number}-${surface.kind}`"><header>Sheet {{ surface.number }} · {{ surface.label }} <span>{{ surface.placements.length }} QR{{ surface.placements.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :class="{ 'ps-mini-page--cut': surface.kind === 'cut' }" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="placement in surface.placements" :key="placement.target.key" class="ps-mini-card" :class="{ 'ps-mini-card--cut': surface.kind === 'cut' }" :style="previewCardStyle(placement, surface.kind === 'back', surface.kind === 'cut' ? cutOffsetMm : 0)" :title="surface.kind === 'cut' ? `Cut path for ${displayTargetLabel(placement.target)}` : `${displayTargetLabel(placement.target)} · ${placement.width.toFixed(1)} × ${placement.height.toFixed(1)} mm`"><template v-if="surface.kind !== 'cut'"><img v-if="previews[placement.target.key]" :src="previews[placement.target.key]" :alt="`Placed preview for ${displayTargetLabel(placement.target)}`"><i v-else class="bi bi-qr-code"></i></template></div></div></article>
+              <article v-for="surface in printPreviewSurfaces" :key="`${surface.number}-${surface.kind}`"><header>Sheet {{ surface.number }} · {{ surface.label }} <span>{{ surface.placements.length }} QR{{ surface.placements.length === 1 ? '' : 's' }}</span></header><div class="ps-mini-page" :class="{ 'ps-mini-page--cut': surface.kind === 'cut' }" :style="{ aspectRatio: `${sheetLayout.pageWidth}/${sheetLayout.pageHeight}` }"><div v-for="placement in surface.placements" :key="placement.target.key" class="ps-mini-card" :class="{ 'ps-mini-card--cut': surface.kind === 'cut' }" :style="surface.kind === 'cut' ? cutPreviewStyle(placement) : previewCardStyle(placement, surface.kind === 'back')" :title="surface.kind === 'cut' ? `Cut path for ${displayTargetLabel(placement.target)}` : `${displayTargetLabel(placement.target)} · ${placement.width.toFixed(1)} × ${placement.height.toFixed(1)} mm`"><template v-if="surface.kind !== 'cut'"><img v-if="previews[placement.target.key]" :src="previews[placement.target.key]" :alt="`Placed preview for ${displayTargetLabel(placement.target)}`"><i v-else class="bi bi-qr-code"></i></template></div></div></article>
               <small v-if="sheetLayout.pageCount > printPreviewPages.length">+ {{ sheetLayout.pageCount - printPreviewPages.length }} more physical sheet{{ sheetLayout.pageCount - printPreviewPages.length === 1 ? '' : 's' }}</small>
             </div>
             <p>{{ printSheetSummary }}<br>{{ (sheetLayout.pageWidth / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} × {{ (sheetLayout.pageHeight / unitFactor).toFixed(printUnit === 'mm' ? 1 : 2) }} {{ displayUnit }} canvas<br>CorelDRAW package: one multi-page CDR builder · movable 600 DPI card objects · {{ printSides === 'double' ? 'front and reversed-placement back pages' : 'front page' }}{{ includeCutContour ? ' · vector CutContour page' : '' }}{{ includeRegistrationMarks ? ' · shared registration marks' : '' }}</p>
