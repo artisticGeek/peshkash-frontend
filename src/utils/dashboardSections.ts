@@ -5,7 +5,7 @@
 
 export type SectionKey =
   | 'home' | 'vendors' | 'vendorWorkspace' | 'events' | 'eventWorkspace' | 'qrSheet'
-  | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'qr-templates'
+  | 'inventory' | 'insights' | 'designer' | 'preview' | 'publish' | 'qr' | 'collections' | 'qr-templates'
   | 'resources' | 'menus' | 'items' | 'engagement' | 'sessions';
 
 export function sectionFromPath(path: string): SectionKey {
@@ -21,6 +21,7 @@ export function sectionFromPath(path: string): SectionKey {
   if (path.startsWith('/dashboard/menus/preview')) return 'preview';
   if (path.startsWith('/dashboard/menus')) return 'designer';
   if (path.startsWith('/dashboard/qr-templates')) return 'qr-templates';
+  if (path.startsWith('/dashboard/collections')) return 'collections';
   if (path.startsWith('/dashboard/resources')) return 'resources';
   if (path.startsWith('/dashboard/qr')) return 'qr';
   if (path.startsWith('/dashboard/analytics')) return 'insights';
@@ -47,6 +48,7 @@ const GRANT_SECTION: Record<SectionKey, string | null> = {
   preview: 'designer',
   publish: 'events',
   qr: 'qr',
+  collections: 'qr',
   'qr-templates': 'qr-templates',
   resources: 'resources',
   insights: 'insights',
