@@ -157,6 +157,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
+    path: '/print-collections/shared/:token',
+    name: 'SharedPrintCollection',
+    component: () => import('./pages/SharedPrintCollectionPage.vue'),
+  },
+  {
     path: '/dashboard/collections',
     name: 'DashboardPrintCollections',
     component: () => import('./pages/WorkspaceDashboard.vue'),
