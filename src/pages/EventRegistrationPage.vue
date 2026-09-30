@@ -111,7 +111,6 @@ import { usePageMeta } from '../composables/usePageMeta';
 import { googleCalendarReminderUrl, publicEventUrl } from '../features/events/actions';
 import { guestInitials, guestPortraitUrl, instagramUsername } from '../features/events/guestPresentation';
 import { useAuthStore } from '../stores/auth';
-import { calendarResource, openNativeResource } from '../utils/nativeResource';
 import { sharePublicPage } from '../utils/socialShare';
 
 type EventPageData = { id: number; name: string; displayName: string; description?: string; startTime?: string; endTime?: string; status: string; preview?: boolean; registrationOpen?: boolean; registered: boolean; organizer?: any; experience: any };
@@ -239,7 +238,7 @@ async function completeRegistration() {
   } catch (err: any) { notify(err.response?.data?.error || 'Registration could not be completed.'); }
 }
 
-async function setReminder() {
+function setReminder() {
   if (!event.value || !event.value.startTime) { notify('Add event timings before setting a reminder.'); return; }
   const location = [event.value.experience.venueName, event.value.experience.venueAddress].filter(Boolean).join(', ');
   const eventUrl = publicEventUrl(event.value.name, window.location.origin);
@@ -253,21 +252,10 @@ async function setReminder() {
     eventUrl,
   };
   track('event_reminder_click');
-  try {
-    // Android browser support for Calendar insertion intents is inconsistent.
-    // A pre-filled Google Calendar page works in Chrome, PWAs and in-app browsers.
-    if (/Android/i.test(navigator.userAgent)) {
-      window.location.assign(googleCalendarReminderUrl(reminderInput));
-      return;
-    }
-
-    const reminder = calendarResource(reminderInput);
-    const result = await openNativeResource(reminder.file, reminder.androidIntent, `Add ${event.value.displayName} to calendar`);
-    if (result === 'shared') notify('Choose your calendar app to finish adding the reminder.');
-    if (result === 'opened') notify('Calendar file ready. Open it to add the reminder.');
-  } catch {
-    window.location.assign(googleCalendarReminderUrl(reminderInput));
-  }
+  // A hosted calendar compose screen is the only browser-safe handoff that works
+  // consistently across iOS, Android, desktop browsers, PWAs and in-app browsers.
+  // It avoids generated files/share sheets and leaves exactly one action: Save.
+  window.location.assign(googleCalendarReminderUrl(reminderInput));
 }
 
 async function shareEvent() {

@@ -1856,7 +1856,7 @@
 
   <!-- Workspace switcher modal -->
   <teleport to="body">
-    <div v-if="showWsModal" class="ws-modal-backdrop" @click.self="showWsModal = false">
+    <div v-if="showWsModal && authStore.isAdmin" class="ws-modal-backdrop" @click.self="showWsModal = false">
       <div class="ws-modal">
         <div class="ws-modal-header">
           <h3>Switch Workspace</h3>
@@ -4961,6 +4961,7 @@ const overviewChartOptions = {
 } as const;
 
 function selectVendorWs(id: number) {
+  if (!authStore.isAdmin) return;
   selectedVendorId.value = id;
   showWsModal.value = false;
   const name = vendors.value.find((v) => v.id === id)?.displayName;
