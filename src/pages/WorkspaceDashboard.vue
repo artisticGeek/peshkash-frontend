@@ -1856,7 +1856,7 @@
 
   <!-- Workspace switcher modal -->
   <teleport to="body">
-    <div v-if="showWsModal" class="ws-modal-backdrop" @click.self="showWsModal = false">
+    <div v-if="showWsModal && authStore.isAdmin" class="ws-modal-backdrop" @click.self="showWsModal = false">
       <div class="ws-modal">
         <div class="ws-modal-header">
           <h3>Switch Workspace</h3>
@@ -2868,13 +2868,14 @@ async function loadAll() {
   loading.value = true;
   try {
     const canLoad = (section: string) => authStore.isAdmin || authStore.hasSection(section);
+    const canLoadHomeData = canLoad('home');
     const empty = <T>() => Promise.resolve({ data: [] as T[] });
     const [vendorRes, eventRes, menuRes, itemRes, qrRes, previewRes] = await Promise.all([
       axios.get<Vendor[]>(adminUrl('/vendors')),
-      canLoad('events') ? axios.get<EventRow[]>(adminUrl('/events')) : empty<EventRow>(),
-      canLoad('designer') ? axios.get<MenuRow[]>(adminUrl('/menus')) : empty<MenuRow>(),
-      canLoad('designer') ? axios.get<ItemRow[]>(adminUrl('/items')) : empty<ItemRow>(),
-      canLoad('qr') ? axios.get<QrMapping[]>(adminUrl('/qr-mappings')) : empty<QrMapping>(),
+      canLoadHomeData || canLoad('events') || canLoad('insights') ? axios.get<EventRow[]>(adminUrl('/events')) : empty<EventRow>(),
+      canLoadHomeData || canLoad('designer') ? axios.get<MenuRow[]>(adminUrl('/menus')) : empty<MenuRow>(),
+      canLoadHomeData || canLoad('designer') ? axios.get<ItemRow[]>(adminUrl('/items')) : empty<ItemRow>(),
+      canLoadHomeData || canLoad('qr') ? axios.get<QrMapping[]>(adminUrl('/qr-mappings')) : empty<QrMapping>(),
       canLoad('designer') || canLoad('qr')
         ? axios.get<{ menus: Preview[]; items: Preview[] }>(adminUrl('/previews'))
         : Promise.resolve({ data: { menus: [] as Preview[], items: [] as Preview[] } }),
@@ -4961,6 +4962,7 @@ const overviewChartOptions = {
 } as const;
 
 function selectVendorWs(id: number) {
+  if (!authStore.isAdmin) return;
   selectedVendorId.value = id;
   showWsModal.value = false;
   const name = vendors.value.find((v) => v.id === id)?.displayName;
