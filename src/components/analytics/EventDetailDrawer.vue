@@ -97,7 +97,7 @@ import ContactActionsChart from './ContactActionsChart.vue';
 import DateRangePicker, { type DateRange } from './DateRangePicker.vue';
 import EventLog from './EventLog.vue';
 
-const props = defineProps<{ modelValue: boolean; eventId: number; eventName: string }>();
+const props = defineProps<{ modelValue: boolean; eventId: number; eventName: string; vendorId?: number }>();
 defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 
 interface Registration { id: number; phone: string; registeredAt: string; updatedAt: string }
@@ -162,7 +162,11 @@ async function load() {
   if (!props.eventId) return;
   loading.value = true;
   error.value = false;
-  const params = { from: dateRange.value.from.toISOString(), to: dateRange.value.to.toISOString() };
+  const params = {
+    from: dateRange.value.from.toISOString(),
+    to: dateRange.value.to.toISOString(),
+    ...(props.vendorId ? { vendorId: props.vendorId } : {}),
+  };
   try {
     const [summaryResponse, registrationResponse] = await Promise.all([
       axios.get<Summary>(`${API_BASE_URL}/analytics/summary`, { params: { ...params, eventId: props.eventId } }),

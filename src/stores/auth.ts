@@ -17,6 +17,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 export type Role = 'admin' | 'vendor' | 'customer';
 
@@ -25,6 +26,7 @@ export interface AuthState {
   phone:         string;
   role:          Role;
   vendorId:      number | null;
+  vendorIds:     number[];
   // UI convenience only (which dashboard sections to render) — the server re-checks
   // admin_section_grant live on every admin request, this is never the authorization source.
   sectionGrants: string[];
@@ -43,7 +45,7 @@ const SLIDE_THRESHOLD_MS   = 45 * 24 * 60 * 60 * 1000; // slide when < 45 days r
  * we can read the claims. The server verifies every request anyway.
  * We use this to derive role/phone/vendorId rather than trusting stored fields.
  */
-function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId: number | null; sectionGrants: string[] } | null {
+function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId: number | null; vendorIds: number[]; sectionGrants: string[] } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
@@ -51,10 +53,15 @@ function decodeJwtPayload(token: string): { phone: string; role: Role; vendorId:
     const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     const payload = JSON.parse(json);
     if (typeof payload.phone !== 'string' || typeof payload.role !== 'string') return null;
+    const vendorId = typeof payload.vendorId === 'number' ? payload.vendorId : null;
+    const vendorIds = Array.isArray(payload.vendorIds)
+      ? payload.vendorIds.map(Number).filter((id: number) => Number.isFinite(id) && id > 0)
+      : vendorId ? [vendorId] : [];
     return {
       phone:         payload.phone,
       role:          payload.role as Role,
-      vendorId:      typeof payload.vendorId === 'number' ? payload.vendorId : null,
+      vendorId,
+      vendorIds,
       sectionGrants: Array.isArray(payload.sectionGrants) ? payload.sectionGrants.filter((s: unknown) => typeof s === 'string') : [],
     };
   } catch {
@@ -95,6 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
         phone:         decoded.phone,
         role:          decoded.role,
         vendorId:      decoded.vendorId,
+        vendorIds:     decoded.vendorIds,
         sectionGrants: decoded.sectionGrants,
       };
       if (expiresAt !== parsed.expiresAt) {
@@ -118,6 +126,7 @@ export const useAuthStore = defineStore('auth', () => {
       phone:         decoded.phone,
       role:          decoded.role,
       vendorId:      decoded.vendorId,
+      vendorIds:     decoded.vendorIds,
       sectionGrants: decoded.sectionGrants,
     };
     state.value = full;
@@ -132,6 +141,37 @@ export const useAuthStore = defineStore('auth', () => {
     delete axios.defaults.headers.common['Authorization'];
   }
 
+  /** Refresh mutable vendor associations and grants without replacing the JWT. */
+  async function refreshAccess(): Promise<boolean> {
+    if (!state.value?.token) return false;
+    const { data } = await axios.get<{
+      phone: string;
+      role: Role;
+      vendorId: number | null;
+      vendorIds: number[];
+      sectionGrants: string[];
+    }>(`${API_BASE_URL}/auth/me`);
+    if (!state.value || data.phone !== state.value.phone || data.role !== state.value.role) return false;
+
+    const previous = JSON.stringify({
+      vendorId: state.value.vendorId,
+      vendorIds: state.value.vendorIds,
+      sectionGrants: state.value.sectionGrants,
+    });
+    state.value = {
+      ...state.value,
+      vendorId: data.vendorId,
+      vendorIds: data.vendorIds,
+      sectionGrants: data.sectionGrants,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.value));
+    return previous !== JSON.stringify({
+      vendorId: data.vendorId,
+      vendorIds: data.vendorIds,
+      sectionGrants: data.sectionGrants,
+    });
+  }
+
   // ── Computed shortcuts ─────────────────────────────────────────────────────
   const isLoggedIn  = computed(() => !!state.value);
   const isAdmin     = computed(() => state.value?.role === 'admin');
@@ -139,6 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isCustomer  = computed(() => state.value?.role === 'customer');
   const role        = computed(() => state.value?.role ?? null);
   const vendorId    = computed(() => state.value?.vendorId ?? null);
+  const vendorIds   = computed(() => state.value?.vendorIds ?? []);
   const phone       = computed(() => state.value?.phone ?? null);
   const token       = computed(() => state.value?.token ?? null);
   const sectionGrants = computed(() => state.value?.sectionGrants ?? []);
@@ -156,12 +197,14 @@ export const useAuthStore = defineStore('auth', () => {
     state,
     login,
     logout,
+    refreshAccess,
     isLoggedIn,
     isAdmin,
     isVendor,
     isCustomer,
     role,
     vendorId,
+    vendorIds,
     phone,
     token,
     sectionGrants,

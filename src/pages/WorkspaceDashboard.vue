@@ -64,7 +64,7 @@
             <i class="bi bi-arrow-clockwise" :class="{ 'spin': loading }"></i>
           </button>
           <!-- Workspace gear — home page only, admin only, opens modal -->
-          <button v-if="activeSection === 'home' && authStore.isAdmin" class="ws-gear-btn" type="button" @click="showWsModal = true" :title="selectedVendor?.displayName || 'Switch workspace'">
+          <button v-if="activeSection === 'home' && (authStore.isAdmin || vendors.length > 1)" class="ws-gear-btn" type="button" @click="showWsModal = true" :title="selectedVendor?.displayName || 'Switch workspace'">
             <i class="bi bi-gear-fill"></i>
             <span class="ws-vendor-label">{{ selectedVendor?.displayName || 'Workspace' }}</span>
           </button>
@@ -77,7 +77,7 @@
 
         <!-- ── Metric strip ──────────────────────────────────────────── -->
         <div class="home-metrics">
-          <RouterLink class="metric-tile" to="/dashboard/events">
+          <RouterLink v-if="authStore.isAdmin || authStore.hasSection('events')" class="metric-tile" to="/dashboard/events">
             <span class="metric-tile-icon"><i class="bi bi-calendar2-week"></i></span>
             <div>
               <strong class="metric-value">{{ vendorEvents.length }}</strong>
@@ -87,7 +87,7 @@
               {{ vendorEvents.filter(e => e.status === 'active').length }} live
             </span>
           </RouterLink>
-          <RouterLink class="metric-tile" to="/dashboard/menus/studio">
+          <RouterLink v-if="authStore.isAdmin || authStore.hasSection('designer')" class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-layout-three-columns"></i></span>
             <div>
               <strong class="metric-value">{{ vendorMenus.length }}</strong>
@@ -95,7 +95,7 @@
             </div>
             <span class="metric-tile-sub">{{ vendorMenus.filter(m => m.isActive).length }} active</span>
           </RouterLink>
-          <RouterLink class="metric-tile" to="/dashboard/qr">
+          <RouterLink v-if="authStore.isAdmin || authStore.hasSection('qr')" class="metric-tile" to="/dashboard/qr">
             <span class="metric-tile-icon"><i class="bi bi-qr-code"></i></span>
             <div>
               <strong class="metric-value">{{ vendorQrMappings.length }}</strong>
@@ -103,7 +103,7 @@
             </div>
             <span class="metric-tile-sub">{{ vendorQrMappings.reduce((s, m) => s + (m.usageCount || 0), 0) }} scans</span>
           </RouterLink>
-          <RouterLink class="metric-tile" to="/dashboard/menus/studio">
+          <RouterLink v-if="authStore.isAdmin || authStore.hasSection('designer')" class="metric-tile" to="/dashboard/menus/studio">
             <span class="metric-tile-icon"><i class="bi bi-boxes"></i></span>
             <div>
               <strong class="metric-value">{{ vendorItems.length }}</strong>
@@ -119,8 +119,8 @@
             <div class="panel-heading">
               <h3>QR Scans by Code</h3>
               <div class="d-flex gap-1">
-                <RouterLink class="icon-btn" to="/dashboard/analytics" title="Full Analytics"><i class="bi bi-bar-chart-line"></i></RouterLink>
-                <RouterLink class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
+                <RouterLink v-if="authStore.isAdmin || authStore.hasSection('insights')" class="icon-btn" to="/dashboard/analytics" title="Full Analytics"><i class="bi bi-bar-chart-line"></i></RouterLink>
+                <RouterLink v-if="authStore.isAdmin || authStore.hasSection('qr')" class="icon-btn" to="/dashboard/qr" title="QR Bank"><i class="bi bi-arrow-right"></i></RouterLink>
               </div>
             </div>
             <div v-if="vendorQrMappings.length" class="chart-canvas-wrap">
@@ -139,7 +139,7 @@
         </div>
 
         <!-- ── Events list ───────────────────────────────────────────── -->
-        <div class="panel home-events-panel">
+        <div v-if="authStore.isAdmin || authStore.hasSection('events')" class="panel home-events-panel">
           <div class="panel-heading">
             <h3>Events</h3>
             <RouterLink class="icon-btn" to="/dashboard/events" title="Manage events"><i class="bi bi-arrow-right"></i></RouterLink>
@@ -171,7 +171,7 @@
                 <i class="bi bi-search position-absolute top-50 translate-middle-y ms-2 text-muted" style="pointer-events:none;font-size:0.8rem;"></i>
                 <input v-model="vendorSearch" type="search" class="form-control form-control-sm ps-4" placeholder="Search vendors…" style="min-width:160px;" />
               </div>
-              <button class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
+              <button v-if="authStore.isAdmin" class="btn btn-primary" @click="openVendorEditor()"><i class="bi bi-plus-lg"></i> New Vendor</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -194,9 +194,9 @@
                     <span v-else class="status-dot" title="No login phone"></span>
                   </td>
                   <td class="row-actions" @click.stop>
-                    <button class="icon-btn" title="View analytics" @click.stop="openVendorAnalytics(vendor)"><i class="bi bi-bar-chart-line"></i></button>
+                    <button v-if="authStore.isAdmin || authStore.hasSection('insights')" class="icon-btn" title="View analytics" @click.stop="openVendorAnalytics(vendor)"><i class="bi bi-bar-chart-line"></i></button>
                     <button class="icon-btn" title="Edit vendor" @click.stop="openVendorEditor(vendor)"><i class="bi bi-pencil"></i></button>
-                    <button class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
+                    <button v-if="authStore.isAdmin" class="icon-btn icon-btn--danger" title="Delete vendor" @click.stop="deleteVendorById(vendor.id, vendor.displayName)"><i class="bi bi-trash"></i></button>
                   </td>
                 </tr>
                 <tr v-if="!filteredVendors.length">
@@ -347,7 +347,7 @@
                 <!-- Section: Login & Access -->
                 <p class="form-section-label"><i class="bi bi-phone-lock"></i> Login &amp; Access</p>
                 <div class="form-grid">
-                  <label>
+                  <label v-if="authStore.isAdmin">
                     Dashboard login phone
                     <div class="handle-input-wrap">
                       <span class="handle-prefix">+91</span>
@@ -1602,8 +1602,8 @@
         <div class="panel access-panel">
           <div class="panel-heading access-panel-heading">
             <div>
-              <h3><i class="bi bi-shield-check me-2"></i>Admin Access</h3>
-              <p class="hint">Add administrators and choose which dashboard sections each person can access. Dashboard is always available.</p>
+              <h3><i class="bi bi-shield-check me-2"></i>Dashboard Access</h3>
+              <p class="hint">Administrators have full access. Vendor users see only the sections granted to their login phone.</p>
             </div>
             <button class="btn btn-sm btn-outline-secondary refresh-btn" :disabled="adminUsersLoading" @click="loadAdminUsers">
               <i class="bi bi-arrow-clockwise" :class="{ 'spin': adminUsersLoading }"></i>
@@ -1648,17 +1648,19 @@
                     <div class="admin-phone-line">
                       <code>{{ au.phone }}</code>
                       <span v-if="au.phone === authStore.phone" class="ws-admin-you">You</span>
+                      <span class="ws-admin-you">{{ au.role }}</span>
                     </div>
+                    <span v-if="au.vendors" class="admin-created">{{ au.vendors }}</span>
                     <span class="admin-created">Added {{ formatDate(au.created_at) }}</span>
                   </div>
                 </div>
                 <div class="admin-access-actions">
-                  <button class="btn btn-sm btn-outline-secondary" @click="openGrantsEditor(au.phone)">
+                  <button v-if="au.role === 'vendor'" class="btn btn-sm btn-outline-secondary" @click="openGrantsEditor(au.phone)">
                     <i class="bi bi-sliders me-1"></i>
                     {{ editingGrantsFor === au.phone ? 'Close' : 'Manage access' }}
                   </button>
                   <button
-                    v-if="au.phone !== authStore.phone"
+                    v-if="au.role === 'admin' && au.phone !== authStore.phone"
                     class="btn btn-sm btn-outline-danger"
                     :disabled="adminUserActing"
                     @click="removeAdminUser(au.phone)"
@@ -1671,7 +1673,7 @@
               <div v-if="editingGrantsFor === au.phone" class="admin-grants-editor">
                 <div class="admin-grants-heading">
                   <div>
-                    <strong>Dashboard sections</strong>
+                    <strong>Vendor dashboard sections</strong>
                     <p class="hint mb-0">Changes take effect on the server immediately after saving.</p>
                   </div>
                   <span class="grant-count">{{ editingGrantsSelection.size }} of {{ GRANTABLE_SECTIONS.length }} selected</span>
@@ -1694,7 +1696,7 @@
                   </label>
                 </div>
                 <div class="admin-grants-footer">
-                  <span class="hint"><i class="bi bi-grid-1x2 me-1"></i>Dashboard is always available.</span>
+                  <span class="hint">Only selected sections appear for this phone.</span>
                   <button class="btn btn-sm btn-primary" :disabled="grantsSaving || grantsLoading" @click="saveGrantsEditor(au.phone)">
                     <span v-if="grantsSaving" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
                     <i v-else class="bi bi-check2 me-1"></i>Save permissions
@@ -1875,7 +1877,7 @@
           </button>
           <div v-if="!vendors.length" class="ws-modal-empty">No vendors yet.</div>
         </div>
-        <div class="ws-modal-footer">
+        <div v-if="authStore.isAdmin" class="ws-modal-footer">
           <RouterLink to="/dashboard/vendors" class="ws-modal-new" @click="showWsModal = false">
             <i class="bi bi-plus-circle"></i>
             <span>New Vendor</span>
@@ -2155,7 +2157,7 @@ import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
 import { API_BASE_URL } from '../config';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
-import { sectionFromPath, type SectionKey } from '../utils/dashboardSections';
+import { firstGrantedDashboardPath, grantSectionForPath, sectionFromPath, type SectionKey } from '../utils/dashboardSections';
 
 const authStore = useAuthStore();
 type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
@@ -2192,14 +2194,11 @@ const sections = [
   { key: 'sessions',      label: 'Sessions',           icon: 'bi bi-shield-lock' },
 ] as const;
 
-// Admins see whichever sections they've been granted (admin_section_grant, checked
-// server-side on every request too — this filter is cosmetic, not the security boundary).
-// 'home' is always visible, never a grantable section. Vendors keep their existing,
-// separate behavior — grants are an admin-only concept.
+// Admins are superusers. Vendor users see only the sections granted to their phone.
 const visibleSections = computed(() =>
   authStore.isAdmin
-    ? sections.filter(s => s.key === 'home' || s.key === 'engagement' || authStore.hasSection(s.key === 'collections' ? 'qr' : s.key))
-    : sections.filter(s => !['vendors', 'resources', 'sessions'].includes(s.key))
+    ? sections
+    : sections.filter(s => s.key !== 'sessions' && authStore.hasSection(s.key === 'collections' ? 'qr' : s.key))
 );
 
 const route = useRoute();
@@ -2868,13 +2867,17 @@ function normalizePreview(preview: any): Preview {
 async function loadAll() {
   loading.value = true;
   try {
+    const canLoad = (section: string) => authStore.isAdmin || authStore.hasSection(section);
+    const empty = <T>() => Promise.resolve({ data: [] as T[] });
     const [vendorRes, eventRes, menuRes, itemRes, qrRes, previewRes] = await Promise.all([
       axios.get<Vendor[]>(adminUrl('/vendors')),
-      axios.get<EventRow[]>(adminUrl('/events')),
-      axios.get<MenuRow[]>(adminUrl('/menus')),
-      axios.get<ItemRow[]>(adminUrl('/items')),
-      axios.get<QrMapping[]>(adminUrl('/qr-mappings')),
-      axios.get<{ menus: Preview[]; items: Preview[] }>(adminUrl('/previews')),
+      canLoad('events') ? axios.get<EventRow[]>(adminUrl('/events')) : empty<EventRow>(),
+      canLoad('designer') ? axios.get<MenuRow[]>(adminUrl('/menus')) : empty<MenuRow>(),
+      canLoad('designer') ? axios.get<ItemRow[]>(adminUrl('/items')) : empty<ItemRow>(),
+      canLoad('qr') ? axios.get<QrMapping[]>(adminUrl('/qr-mappings')) : empty<QrMapping>(),
+      canLoad('designer') || canLoad('qr')
+        ? axios.get<{ menus: Preview[]; items: Preview[] }>(adminUrl('/previews'))
+        : Promise.resolve({ data: { menus: [] as Preview[], items: [] as Preview[] } }),
     ]);
     vendors.value = vendorRes.data.map(normalizeVendor);
     events.value = eventRes.data.map(normalizeEvent);
@@ -2883,13 +2886,11 @@ async function loadAll() {
     qrMappings.value = qrRes.data;
     previews.menus = previewRes.data.menus.map(normalizePreview);
     previews.items = previewRes.data.items.map(normalizePreview);
-    // Vendor users are always locked to their own workspace; admins fall back to first vendor
-    if (authStore.isVendor && authStore.vendorId) {
-      selectedVendorId.value = authStore.vendorId;
-    } else if (!selectedVendor.value && vendors.value.length) {
+    if (!selectedVendor.value && vendors.value.length) {
       selectedVendorId.value = vendors.value[0].id;
     }
-    await loadEventMenuLinks();
+    if (canLoad('events')) await loadEventMenuLinks();
+    else eventMenuMap.value = {};
     hydrateRouteContext();
   } catch (err) {
     setError(err);
@@ -4393,6 +4394,23 @@ watch(activeSection, (section) => {
   }
 });
 
+async function refreshRuntimeAccess(reloadData = true): Promise<boolean> {
+  if (!authStore.isLoggedIn || !authStore.isVendor) return true;
+  try {
+    const changed = await authStore.refreshAccess();
+    const requiredSection = grantSectionForPath(route.path);
+    if (requiredSection && !authStore.hasSection(requiredSection)) {
+      await router.replace(firstGrantedDashboardPath(authStore.sectionGrants) ?? '/');
+      return false;
+    }
+    if (changed && reloadData) await loadAll();
+  } catch {
+    // Preserve cached UI during transient network failures; the server still
+    // enforces current grants on every protected request.
+  }
+  return true;
+}
+
 onMounted(async () => {
   // The dashboard shell remains visible behind the sign-in modal, but protected requests must not
   // run until authentication succeeds. Besides being unnecessary, the previous eager load showed
@@ -4401,10 +4419,7 @@ onMounted(async () => {
     hydrateRouteContext();
     return;
   }
-  // Vendor workspace lock: pin to their assigned vendorId
-  if (authStore.isVendor && authStore.vendorId) {
-    selectedVendorId.value = authStore.vendorId;
-  }
+  if (!(await refreshRuntimeAccess(false))) return;
   await loadAll();
   selectedMenuIdForItems.value = vendorMenus.value[0]?.id ?? 0;
   selectedEventIdForItems.value = vendorEvents.value[0]?.id ?? 0;
@@ -4428,9 +4443,13 @@ function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
     router.push('/');
     return;
   }
-  // If vendor, lock workspace immediately before loadAll runs
-  if (payload.role === 'vendor' && payload.vendorId) {
-    selectedVendorId.value = payload.vendorId;
+  if (payload.role === 'vendor') {
+    const requiredSection = grantSectionForPath(route.path);
+    if (requiredSection && !authStore.hasSection(requiredSection)) {
+      const destination = firstGrantedDashboardPath(authStore.sectionGrants);
+      router.replace(destination ?? '/');
+      if (!destination) return;
+    }
   }
   loadAll();
 }
@@ -4719,7 +4738,7 @@ const showItemPoolDrawer = ref(false);
 const showLinkEventModal = ref(false);
 
 // ── Admin user management ──────────────────────────────────────────────────────
-type AdminUser = { phone: string; created_at: string };
+type AdminUser = { phone: string; created_at: string; role: 'admin' | 'vendor'; vendors: string | null };
 const adminUsers = ref<AdminUser[]>([]);
 const newAdminPhone = ref('');
 const adminUsersLoading = ref(false);
@@ -4743,8 +4762,7 @@ async function addAdminUser() {
     await axios.post(adminUrl('/admin-users'), { phone });
     newAdminPhone.value = '';
     await loadAdminUsers();
-    addToast('success', `${phone} can now sign in as an administrator. Choose their dashboard access below.`);
-    await openGrantsEditor(phone);
+    addToast('success', `${phone} can now sign in as an administrator with full access.`);
   } catch (err) { setError(err); }
   finally { adminUserActing.value = false; }
 }
@@ -4761,10 +4779,10 @@ async function removeAdminUser(phone: string) {
   finally { adminUserActing.value = false; }
 }
 
-// ── Admin section grants — flat per-admin list, no role hierarchy ──────────────
+// ── Vendor section grants ─────────────────────────────────────────────────────
 // The nav filter (visibleSections) and the router guard are cosmetic; the server
-// re-checks admin_section_grant on every admin request regardless of this editor.
-const GRANTABLE_SECTIONS = sections.filter(s => s.key !== 'home');
+// re-checks admin_section_grant on every vendor request regardless of this editor.
+const GRANTABLE_SECTIONS = sections.filter(s => s.key !== 'sessions');
 const editingGrantsFor = ref<string | null>(null);
 const editingGrantsSelection = ref<Set<string>>(new Set());
 const grantsLoading = ref(false);

@@ -255,7 +255,7 @@
           :key="event.id"
           class="resource-card"
           :class="{ active: drilldownTarget?.type === 'event' && drilldownTarget.id === event.id }"
-          @click="selectDrilldown('event', event.id, event.displayName)"
+          @click="selectDrilldown('event', event.id, event.displayName, event.vendorId)"
         >
           <div class="resource-card-icon"><i class="bi bi-calendar2-week"></i></div>
           <div class="resource-card-body">
@@ -338,6 +338,7 @@
     v-model="drawerOpen"
     :event-id="drawerTarget.id"
     :event-name="drawerTarget.name"
+    :vendor-id="drawerTarget.vendorId"
   />
 
   <!-- ── Vendor detail drawer ────────────────────────────────────────────── -->
@@ -440,8 +441,9 @@ const dateRange = ref(defaultDateRange());
 type ResourceTab = 'events' | 'contacts' | 'items';
 const resourceTab = ref<ResourceTab>('events');
 // drilldownTarget drives active-card highlight; drawerTarget/drawerOpen drive the drawer
-const drilldownTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
-const drawerTarget = ref<{ type: 'event' | 'vendor' | 'item'; id: number; name: string } | null>(null);
+type DrilldownTarget = { type: 'event' | 'vendor' | 'item'; id: number; name: string; vendorId?: number };
+const drilldownTarget = ref<DrilldownTarget | null>(null);
+const drawerTarget = ref<DrilldownTarget | null>(null);
 const drawerOpen = ref(false);
 const allEvents = ref<EventResource[]>([]);
 const eventsLoadError = ref(false);
@@ -484,9 +486,9 @@ watch(selectedVendorId, () => {
   drawerOpen.value = false;
 });
 
-function selectDrilldown(type: 'event' | 'vendor' | 'item', id: number, name: string) {
-  drilldownTarget.value = { type, id, name };
-  drawerTarget.value = { type, id, name };
+function selectDrilldown(type: 'event' | 'vendor' | 'item', id: number, name: string, vendorId?: number) {
+  drilldownTarget.value = { type, id, name, vendorId };
+  drawerTarget.value = { type, id, name, vendorId };
   drawerOpen.value = true;
 }
 
