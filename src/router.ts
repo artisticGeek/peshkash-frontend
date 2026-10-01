@@ -3,7 +3,8 @@ import ItemDetailPage from './pages/ItemDetailPage.vue'
 import LandingPage from './pages/LandingPage.vue'
 import MenuPage from './pages/MenuPage.vue'
 import QrRedirect from './pages/QrRedirect.vue' // Import the new component
-import { grantSectionForPath } from './utils/dashboardSections'
+import { firstGrantedDashboardPath, grantSectionForPath } from './utils/dashboardSections'
+import { useAuthStore } from './stores/auth'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -144,7 +145,6 @@ const routes: Array<RouteRecordRaw> = [
     path: '/dashboard/resources',
     name: 'DashboardPrintResources',
     component: () => import('./pages/WorkspaceDashboard.vue'),
-    meta: { adminOnly: true },
   },
   ...(import.meta.env.DEV || import.meta.env.VITE_STUDIO_PREVIEW === 'true' ? [{
     path: '/dev/qr-studio',
@@ -186,62 +186,41 @@ export const router = createRouter({
   routes,
 })
 
-// ── JWT decode helper (mirrors auth.ts — no signature verification, just read claims) ──
-function _decodeJwt(token: string): { role: string; vendorId: number | null; sectionGrants: string[] } | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
-    const p = JSON.parse(json);
-    if (typeof p.role !== 'string') return null;
-    return {
-      role: p.role,
-      vendorId: typeof p.vendorId === 'number' ? p.vendorId : null,
-      sectionGrants: Array.isArray(p.sectionGrants) ? p.sectionGrants.filter((s: unknown) => typeof s === 'string') : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Auth guard — for /dashboard/* routes, check localStorage for a valid session.
+// Auth guard — refresh mutable access before every dashboard navigation.
 // The LoginModal in WorkspaceDashboard.vue handles unauthenticated users.
 // Customers (role='customer') are redirected to / — the dashboard is admin/vendor only.
-// SECURITY: role/vendorId are decoded from the JWT payload, never read from the plain stored fields.
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (!to.path.startsWith('/dashboard')) return true;
-  const raw = localStorage.getItem('peshkash_auth_v1');
-  if (!raw) return true; // unauthenticated — LoginModal will prompt them
+  const authStore = useAuthStore();
+  if (!authStore.isLoggedIn) return true; // unauthenticated — LoginModal will prompt them
   try {
-    const auth = JSON.parse(raw);
-    if (Date.now() > auth.expiresAt) {
-      localStorage.removeItem('peshkash_auth_v1');
-      return true; // expired — LoginModal will prompt
-    }
-    // Decode role/vendorId from JWT — ignores any tampering with the plain stored fields
-    const decoded = _decodeJwt(auth.token);
-    if (!decoded) return true; // malformed token — LoginModal will prompt
-    const { role, vendorId, sectionGrants } = decoded;
+    await authStore.refreshAccess();
+    const role = authStore.role;
+    const vendorIds = authStore.vendorIds;
+    const sectionGrants = authStore.sectionGrants;
     // Customers have no dashboard access — send them home
     if (role === 'customer') return '/';
     if (to.meta.adminOnly && role !== 'admin') return '/dashboard/home';
-    // Admin section grants — cosmetic redirect only; every admin API route re-checks
+    // Vendor section grants — cosmetic redirect only; every API route re-checks
     // admin_section_grant live regardless of what the client believes it can see.
-    if (role === 'admin') {
+    if (role === 'vendor') {
       const requiredSection = grantSectionForPath(to.path);
-      // Engagement was added after long-lived admin JWTs were issued. The backend
-      // still checks the live grant table, so allow this route during token rollover.
-      if (requiredSection && requiredSection !== 'engagement' && !sectionGrants.includes(requiredSection)) return '/dashboard/home';
+      if (requiredSection && !sectionGrants.includes(requiredSection)) {
+        return firstGrantedDashboardPath(sectionGrants) ?? '/';
+      }
     }
-    // Vendor users are locked to their own workspace
-    if (role === 'vendor' && vendorId) {
+    // Vendor users can only open workspaces associated with their phone.
+    if (role === 'vendor' && vendorIds.length) {
       const path = to.path;
-      if (path.startsWith('/dashboard/vendors') && !path.startsWith(`/dashboard/vendors/${vendorId}`)) {
+      const match = path.match(/^\/dashboard\/vendors\/(\d+)/);
+      if (match && !vendorIds.includes(Number(match[1]))) {
         return '/dashboard/home';
       }
     }
     return true;
   } catch {
+    // Keep cached UI state during a transient network failure. Every protected
+    // API request still enforces live grants server-side.
     return true;
   }
 });

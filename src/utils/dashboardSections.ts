@@ -35,7 +35,7 @@ export function sectionFromPath(path: string): SectionKey {
 // GRANTABLE_SECTIONS in peshkash_backend/src/controllers/AuthController.ts and the
 // section keys used by requireSection() in adminRouter.ts/analyticsRouter.ts.
 const GRANT_SECTION: Record<SectionKey, string | null> = {
-  home: null, // always visible, never gated
+  home: 'home',
   vendors: 'vendors',
   vendorWorkspace: 'vendors',
   events: 'events',
@@ -59,4 +59,24 @@ const GRANT_SECTION: Record<SectionKey, string | null> = {
 /** The admin_section_grant key that gates a given dashboard path, or null if ungated. */
 export function grantSectionForPath(path: string): string | null {
   return GRANT_SECTION[sectionFromPath(path)];
+}
+
+const GRANT_PATHS: Record<string, string> = {
+  home: '/dashboard/home',
+  vendors: '/dashboard/vendors',
+  events: '/dashboard/events',
+  designer: '/dashboard/menus/studio',
+  qr: '/dashboard/qr',
+  'qr-templates': '/dashboard/qr-templates',
+  resources: '/dashboard/resources',
+  insights: '/dashboard/analytics',
+  engagement: '/dashboard/engagement',
+};
+
+/** First dashboard route the current grant set permits, in sidebar order. */
+export function firstGrantedDashboardPath(grants: string[]): string | null {
+  for (const section of Object.keys(GRANT_PATHS)) {
+    if (grants.includes(section)) return GRANT_PATHS[section];
+  }
+  return null;
 }
