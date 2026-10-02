@@ -15,14 +15,16 @@ export default defineConfig({
     }),
     VitePWA({
       strategies: 'generateSW',
-      registerType: 'autoUpdate',
+      // Install updates in the background, but activate them on the next app
+      // launch. Activating immediately can reload a live OTP form mid-request.
+      registerType: 'prompt',
       filename: 'peshkash-sw.js',
       manifest: false,
       workbox: {
         importScripts: ['/peshkash-push-sw.js'],
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
+        clientsClaim: false,
+        skipWaiting: false,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         // Keep the install/update payload to the app shell. Editorial images and

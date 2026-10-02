@@ -14,7 +14,7 @@
         </section>
       </template>
     </main>
-    <LoginModal v-model="showLogin" hide-close-button @success="loadCollection" />
+    <LoginModal v-model="showLogin" hide-close-button :dismissible="false" @success="onLoginSuccess" />
   </div>
 </template>
 
@@ -47,8 +47,19 @@ async function loadCollection(): Promise<void> {
   if (!auth.isLoggedIn) { loading.value = false; showLogin.value = true; return; }
   loading.value = true; error.value = '';
   try { collection.value = (await axios.get<SharedCollection>(`${API_BASE_URL}/print-collections/shared/${encodeURIComponent(String(route.params.token))}`)).data; }
-  catch (err: any) { error.value = err.response?.data?.error || 'This link is not available for the signed-in phone number.'; }
+  catch (err: any) {
+    if (err.response?.status === 401) {
+      auth.logout();
+      showLogin.value = true;
+      return;
+    }
+    error.value = err.response?.data?.error || 'This link is not available for the signed-in phone number.';
+  }
   finally { loading.value = false; }
+}
+async function onLoginSuccess(): Promise<void> {
+  showLogin.value = false;
+  await loadCollection();
 }
 onMounted(loadCollection);
 </script>

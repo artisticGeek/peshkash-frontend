@@ -17,6 +17,7 @@
     vendorName       — drives the phone/success copy ("Take {vendorName} with you.", etc);
                         omitted on the dashboard, which falls back to plain functional copy
     hideCloseButton  — true on public pages; dashboard keeps the × button
+    dismissible      — false for access gates that must remain on the current route
 
   Emits:
     update:modelValue — false on backdrop click, Escape, or successful login
@@ -145,9 +146,11 @@ const props = withDefaults(defineProps<{
   modelValue: boolean;
   vendorName?: string;
   hideCloseButton?: boolean;
+  dismissible?: boolean;
 }>(), {
   vendorName: '',
   hideCloseButton: false,
+  dismissible: true,
 });
 
 const emit = defineEmits<{
@@ -212,6 +215,7 @@ function changeNumber() {
 
 /** Never interrupt an active OTP entry or verification — only phone-step and success allow dismiss. */
 function dismiss(reason: 'backdrop' | 'close' | 'escape') {
+  if (!props.dismissible) return;
   if (step.value === 'otp' && loading.value) return;
   emit('dismiss', { reason });
   emit('update:modelValue', false);
