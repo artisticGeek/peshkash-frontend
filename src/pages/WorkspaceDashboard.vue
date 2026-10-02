@@ -1,8 +1,10 @@
 <template>
-  <!-- Login modal — floats above the dashboard, closes → redirect to / -->
+  <!-- Dashboard login is a gate: failed or cancelled authentication never
+       navigates the user away from the route they were trying to open. -->
   <LoginModal
     :model-value="!authStore.isLoggedIn"
-    @update:model-value="onModalVisibility"
+    hide-close-button
+    :dismissible="false"
     @success="onLoginSuccess"
   />
 
@@ -4430,25 +4432,18 @@ onMounted(async () => {
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
 
-/** Called when the login modal emits update:modelValue = false (user closed it). */
-function onModalVisibility(val: boolean) {
-  // If the user closed the modal without logging in, send them to the landing page.
-  if (!val && !authStore.isLoggedIn) {
-    router.push('/');
-  }
-}
-
 function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
-  // Customers have no dashboard access — send them home
+  // Customers have no dashboard workspace, but a valid login should never
+  // look like a failed login by throwing them back to the marketing page.
   if (payload.role === 'customer') {
-    router.push('/');
+    router.replace('/home/saved');
     return;
   }
   if (payload.role === 'vendor') {
     const requiredSection = grantSectionForPath(route.path);
     if (requiredSection && !authStore.hasSection(requiredSection)) {
       const destination = firstGrantedDashboardPath(authStore.sectionGrants);
-      router.replace(destination ?? '/');
+      router.replace(destination ?? '/dashboard/home');
       if (!destination) return;
     }
   }

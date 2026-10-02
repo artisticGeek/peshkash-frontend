@@ -193,7 +193,7 @@ export const router = createRouter({
 
 // Auth guard — refresh mutable access before every dashboard navigation.
 // The LoginModal in WorkspaceDashboard.vue handles unauthenticated users.
-// Customers (role='customer') are redirected to / — the dashboard is admin/vendor only.
+// Customers are redirected to their signed-in home — never the marketing landing page.
 router.beforeEach(async (to) => {
   if (!to.path.startsWith('/dashboard')) return true;
   const authStore = useAuthStore();
@@ -203,15 +203,15 @@ router.beforeEach(async (to) => {
     const role = authStore.role;
     const vendorIds = authStore.vendorIds;
     const sectionGrants = authStore.sectionGrants;
-    // Customers have no dashboard access — send them home
-    if (role === 'customer') return '/';
+    // Customers have no dashboard access — retain a signed-in destination.
+    if (role === 'customer') return '/home/saved';
     if (to.meta.adminOnly && role !== 'admin') return '/dashboard/home';
     // Vendor section grants — cosmetic redirect only; every API route re-checks
     // admin_section_grant live regardless of what the client believes it can see.
     if (role === 'vendor') {
       const requiredSection = grantSectionForPath(to.path);
       if (requiredSection && !sectionGrants.includes(requiredSection)) {
-        return firstGrantedDashboardPath(sectionGrants) ?? '/';
+        return firstGrantedDashboardPath(sectionGrants) ?? '/dashboard/home';
       }
     }
     // Vendor users can only open workspaces associated with their phone.

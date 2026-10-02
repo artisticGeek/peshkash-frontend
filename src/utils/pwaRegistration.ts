@@ -1,8 +1,6 @@
 import { registerSW } from 'virtual:pwa-register'
 
 let lastUpdateCheck = 0
-let reloadingForUpdate = false
-
 export function registerPeshkashPwa() {
   const updateServiceWorker = registerSW({
     immediate: true,
@@ -17,15 +15,9 @@ export function registerPeshkashPwa() {
       checkForUpdate()
       document.addEventListener('visibilitychange', checkForUpdate)
     },
-    onNeedRefresh() {
-      updateServiceWorker(true).catch(() => {})
-    },
-  })
-
-  navigator.serviceWorker?.addEventListener('controllerchange', () => {
-    if (reloadingForUpdate) return
-    reloadingForUpdate = true
-    window.location.reload()
+    // Do not activate a waiting worker in the middle of a live session. It
+    // becomes active after the current app is closed, preserving form state.
+    onNeedRefresh() {},
   })
 
   return updateServiceWorker
