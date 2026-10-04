@@ -5,6 +5,7 @@ import MenuPage from './pages/MenuPage.vue'
 import QrRedirect from './pages/QrRedirect.vue' // Import the new component
 import { firstGrantedDashboardPath, grantSectionForPath } from './utils/dashboardSections'
 import { useAuthStore } from './stores/auth'
+import { customerPostLoginPath } from './utils/sharedPrintCollections'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -157,6 +158,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('./pages/WorkspaceDashboard.vue'),
   },
   {
+    path: '/print-collections',
+    name: 'SharedPrintCollectionsDashboard',
+    component: () => import('./pages/SharedPrintCollectionsDashboardPage.vue'),
+  },
+  {
     path: '/print-collections/shared/:token',
     name: 'SharedPrintCollection',
     component: () => import('./pages/SharedPrintCollectionPage.vue'),
@@ -195,8 +201,17 @@ export const router = createRouter({
 // The LoginModal in WorkspaceDashboard.vue handles unauthenticated users.
 // Customers are redirected to their signed-in home — never the marketing landing page.
 router.beforeEach(async (to) => {
-  if (!to.path.startsWith('/dashboard')) return true;
   const authStore = useAuthStore();
+
+  // A phone with print-shop access gets the dedicated read-only collection
+  // workspace instead of the consumer saved-items page. This also corrects
+  // existing sessions that were already sitting on /home/saved before a share.
+  if (to.path.startsWith('/home') && authStore.isLoggedIn && authStore.role === 'customer') {
+    const destination = await customerPostLoginPath();
+    if (destination === '/print-collections') return destination;
+  }
+
+  if (!to.path.startsWith('/dashboard')) return true;
   if (!authStore.isLoggedIn) return true; // unauthenticated — LoginModal will prompt them
   try {
     await authStore.refreshAccess();
@@ -204,7 +219,7 @@ router.beforeEach(async (to) => {
     const vendorIds = authStore.vendorIds;
     const sectionGrants = authStore.sectionGrants;
     // Customers have no dashboard access — retain a signed-in destination.
-    if (role === 'customer') return '/home/saved';
+    if (role === 'customer') return customerPostLoginPath();
     if (to.meta.adminOnly && role !== 'admin') return '/dashboard/home';
     // Vendor section grants — cosmetic redirect only; every API route re-checks
     // admin_section_grant live regardless of what the client believes it can see.

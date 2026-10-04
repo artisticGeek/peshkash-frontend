@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="Peshkash notification badge">
+  <g transform="translate(21.75 11.5) scale(.29) translate(-335 -164)" fill="#fff" shape-rendering="geometricPrecision">
+    <path d="M391.5 164H471L516 205L391.5 276.5Z"/>
+    <path d="M516 205V262.5L470.5 310L391.5 276.5Z"/>
+    <path d="M391.5 276.5L470.5 310H391.5Z"/>
+    <path d="M335 164H392V415L364 389L335 415Z"/>
+  </g>
+</svg>

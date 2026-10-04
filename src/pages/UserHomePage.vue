@@ -71,6 +71,7 @@ import LoginModal from '../components/auth/LoginModal.vue'
 import { useAuthStore } from '../stores/auth'
 import { guestInitials } from '../features/events/guestPresentation'
 import { disablePushNotifications, enablePushNotifications, pwaInstalled, pushSupported } from '../utils/pushNotifications'
+import { customerPostLoginPath } from '../utils/sharedPrintCollections'
 
 interface Entry { id:number; itemId:number; actionType:string; occurredAt:string; itemName:string; image:string|null; vendorName:string|null; eventName:string|null; publicPath:string|null; availability:'available'|'event_expired'|'event_upcoming'|'item_unavailable'; availabilityLabel:string|null }
 interface History { summary:{savedCount:number;likedCount:number;dislikedCount:number;uniqueItems:number;uniqueVendors:number}; saved:Entry[];liked:Entry[];disliked:Entry[];recent:Entry[] }
@@ -111,7 +112,7 @@ async function toggleWhatsApp(enabled:boolean){settingsBusy.value='whatsapp';pre
 async function togglePush(enabled:boolean){settingsBusy.value='push';preferenceMessage.value='';const previous=settings.value.pushEnabled;settings.value.pushEnabled=enabled;try{if(enabled&&!pwaInstalled()){window.dispatchEvent(new CustomEvent('peshkash:open-install'));throw new Error('Install Peshkash first. You can enable notifications after opening the installed app.')}if(enabled)await enablePushNotifications();else await disablePushNotifications();preferenceMessage.value=enabled?'App notifications are on.':'App notifications are off.'}catch(e:any){settings.value.pushEnabled=previous;preferenceMessage.value=e?.response?.data?.error||e?.message||'Could not update notification settings.'}finally{settingsBusy.value=null}}
 function goToPage(page:number){router.replace({path:'/home/history',query:{page}})}
 function goBack(){if(window.history.length>2)router.back();else router.push('/')}
-function onLoginSuccess(){loginOpen.value=false;load()}
+async function onLoginSuccess(){loginOpen.value=false;const destination=await customerPostLoginPath();if(destination!==route.path){await router.replace(destination);return}await load()}
 function signOut(){auth.logout();history.value=null}
 watch(section,()=>{search.value='';load()})
 watch(range,()=>{if(isHistoryPage.value){router.replace('/home/history');loadAudit(1)}})

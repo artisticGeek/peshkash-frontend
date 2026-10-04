@@ -2157,6 +2157,7 @@ import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.v
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
+import { customerPostLoginPath } from '../utils/sharedPrintCollections';
 import { API_BASE_URL } from '../config';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
 import { firstGrantedDashboardPath, grantSectionForPath, sectionFromPath, type SectionKey } from '../utils/dashboardSections';
@@ -4432,11 +4433,11 @@ onMounted(async () => {
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
 
-function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
+async function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
   // Customers have no dashboard workspace, but a valid login should never
   // look like a failed login by throwing them back to the marketing page.
   if (payload.role === 'customer') {
-    router.replace('/home/saved');
+    await router.replace(await customerPostLoginPath());
     return;
   }
   if (payload.role === 'vendor') {
