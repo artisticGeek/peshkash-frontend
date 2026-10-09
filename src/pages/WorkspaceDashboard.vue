@@ -945,182 +945,18 @@
         :vendor-name="selectedVendor?.displayName"
       />
 
-      <section v-if="activeSection === 'designer'" class="designer-grid" :data-tab="designerMobileTab">
-
-        <!-- Mobile tab bar (hidden on desktop via CSS) -->
-        <div class="designer-mobile-tabs">
-          <button :class="{ active: designerMobileTab === 'settings' }" @click="designerMobileTab = 'settings'">
-            <i class="bi bi-sliders"></i> Manage
-          </button>
-          <button :class="{ active: designerMobileTab === 'canvas' }" @click="designerMobileTab = 'canvas'">
-            <i class="bi bi-phone"></i> Preview
-          </button>
-        </div>
-
-        <!-- Two-pane designer header -->
-        <div class="panel designer-controls designer-panel-settings">
-          <div class="designer-header-panes">
-            <!-- Pane 1: Working Menu -->
-            <div class="designer-pane">
-              <span class="pane-label">Working Menu</span>
-              <div class="pane-row">
-                <select v-model.number="selectedMenuIdForItems" class="form-select" @change="showMenuRenameInline = false">
-                  <option :value="0">Select menu</option>
-                  <option v-for="menu in vendorMenus" :key="menu.id" :value="menu.id">
-                    {{ menu.displayName }}{{ isMenuLinked(menu.id) ? ' [linked]' : '' }}{{ menu.type === 'personalized' ? ' [personalized]' : '' }}
-                  </option>
-                </select>
-                <button v-if="selectedMenuForItems && !showMenuRenameInline" class="icon-button outlined small" title="Rename menu" @click="openMenuRename"><i class="bi bi-pencil"></i></button>
-                <button class="icon-button outlined small" :disabled="!selectedMenuIdForItems" title="Link to event" @click="showLinkEventModal = true"><i class="bi bi-link-45deg"></i></button>
-              </div>
-              <!-- Compact menu settings form -->
-              <div v-if="showMenuRenameInline" class="ribbon-menu-settings">
-                <label>
-                  <span>Menu name</span>
-                  <input v-model.trim="menuRenameValue" class="form-control" placeholder="Menu display name" @keydown.enter.prevent="saveMenuRename" @keydown.escape="showMenuRenameInline = false" />
-                </label>
-                <label>
-                  <span>Item story heading</span>
-                  <input v-model.trim="menuStoryHeadingValue" class="form-control" list="item-story-heading-options" placeholder="The backstory" />
-                </label>
-                <label>
-                  <span>Ingredients heading</span>
-                  <input v-model.trim="menuMaterialHeadingValue" class="form-control" placeholder="Material" />
-                </label>
-                <label class="ribbon-menu-description">
-                  <span>Menu description</span>
-                  <textarea v-model.trim="menuDescriptionValue" class="form-control" rows="2" placeholder="Tell guests what this menu is about"></textarea>
-                </label>
-                <label class="ribbon-menu-elaborate">
-                  <input v-model="menuElaborateValue" type="checkbox" />
-                  <span>Show elaborate item descriptions (thumbnail, price, tags)</span>
-                </label>
-                <div class="ribbon-menu-settings-actions">
-                  <button class="btn btn-primary btn-sm" :disabled="!menuRenameValue.trim()" @click="saveMenuRename"><i class="bi bi-check2"></i> Save settings</button>
-                  <button class="btn btn-outline-secondary btn-sm" @click="showMenuRenameInline = false"><i class="bi bi-x"></i></button>
-                </div>
-              </div>
-              <!-- Linked event indicator -->
-              <div v-if="selectedMenuIdForItems && linkedEventsForMenu(selectedMenuIdForItems)" class="linked-event-hint">
-                <i class="bi bi-infinity"></i>
-                <span>{{ linkedEventsForMenu(selectedMenuIdForItems) }}</span>
-              </div>
-            </div>
-
-            <div class="designer-pane-divider"></div>
-
-            <!-- Pane 2: New Menu -->
-            <div class="designer-pane">
-              <span class="pane-label">New Menu</span>
-              <div class="pane-row">
-                <input v-model.trim="designerMenuName" class="form-control" placeholder="Display name" />
-                <select v-model="designerMenuType" class="form-select form-select-sm type-select">
-                  <option value="generic">Generic</option>
-                  <option value="personalized">Personalized</option>
-                </select>
-                <button class="btn btn-primary icon-label" :disabled="!designerMenuName || !selectedVendor" @click="createDesignerMenu">
-                  <i class="bi bi-plus-lg"></i>
-                  Create
-                </button>
-              </div>
-              <textarea v-model.trim="designerMenuDescription" class="form-control designer-menu-description" rows="2" placeholder="Menu description (optional)"></textarea>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel menu-render designer-panel-canvas" @dragover.prevent @drop="dropOnMenuRoot">
-          <div class="panel-heading">
-            <div>
-              <h3>{{ selectedMenuForItems?.displayName || 'Select a menu' }}</h3>
-            </div>
-            <div class="actions slim-actions">
-              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Browse item library" aria-label="Browse library" @click="showItemPoolDrawer = true"><i class="bi bi-search"></i></button>
-              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Add item or category" aria-label="Add item" @click="openItemDrawer(null)"><i class="bi bi-plus-lg"></i></button>
-              <button class="icon-button outlined" :disabled="!selectedMenuForItems" title="Arrange" aria-label="Arrange" @click="showArrangeDrawer = true"><i class="bi bi-diagram-3"></i></button>
-              <RouterLink class="icon-button outlined" :class="{ disabled: !selectedMenuForItems }" :to="selectedMenuForItems ? adminMenuPreviewRoute(selectedMenuForItems) : '/dashboard/menus/studio'" title="Open preview" aria-label="Open preview"><i class="bi bi-phone"></i></RouterLink>
-              <button class="btn btn-primary btn-sm" :disabled="!designerDirty" @click="saveDesignerChanges"><i class="bi bi-check2-circle"></i> Save</button>
-            </div>
-          </div>
-          <div class="studio-live-preview">
-            <div class="phone-shell studio-phone" :class="{ dirty: designerDirty }" @dragover.prevent @drop="dropOnMenuRoot">
-              <p class="eyebrow">{{ linkedEventsForMenu(selectedMenuIdForItems) || 'Not linked to any event' }}</p>
-              <h3>{{ selectedMenuForItems?.displayName || 'Menu Preview' }}</h3>
-              <MenuTree
-                v-for="item in selectedDesignerTree"
-                :key="item.id"
-                :item="item"
-                :level="0"
-                :event-name="selectedEventForItems?.name || ''"
-                :menu-name="selectedMenuForItems?.name || ''"
-                :edit-mode="true"
-                :elaborate="selectedMenuForItems?.elaborateDescriptions"
-                :on-add-child="openItemDrawer"
-              />
-              <p v-if="!selectedDesignerItems.length" class="muted">Drop library items here or add a new item.</p>
-              <!-- Root-level add button -->
-              <button
-                v-if="selectedMenuForItems"
-                class="canvas-root-add"
-                type="button"
-                @click="openItemDrawer(null)"
-              >
-                <i class="bi bi-plus-lg"></i>
-                Add item or category
-              </button>
-            </div>
-
-            <div v-if="showArrangeDrawer" class="drawer-backdrop" @click.self="showArrangeDrawer = false">
-              <aside class="side-drawer">
-              <div class="modal-title-row">
-                <div>
-                  <h3>Arrange Menu</h3>
-                  <p class="hint">Move items into categories, then save the menu canvas.</p>
-                </div>
-                <button class="icon-button" type="button" aria-label="Close" @click="showArrangeDrawer = false"><i class="bi bi-x-lg"></i></button>
-              </div>
-          <div class="admin-tree">
-            <div v-for="item in selectedDesignerTree" :key="item.id" class="tree-root">
-              <div class="admin-tree-row" draggable="true" @dragstart="dragDesignedItem(item)" @dragover.prevent @drop.stop="dropOnDesignedItem(item)">
-                <span><i class="bi bi-grip-vertical"></i> <strong>{{ itemLabel(item) }}</strong></span>
-                <small>{{ itemTypeLabel(item.type) }} · {{ childCount(item) }} children</small>
-                <div class="arrange-row-actions">
-                  <button class="icon-button outlined small" title="Edit" aria-label="Edit" @click="editDesignerItem(item)"><i class="bi bi-pencil"></i></button>
-                  <button class="icon-button outlined small" title="Move up" aria-label="Move up" @click="moveDesignerItem(item, -1)"><i class="bi bi-arrow-up"></i></button>
-                  <button class="icon-button outlined small" title="Move down" aria-label="Move down" @click="moveDesignerItem(item, 1)"><i class="bi bi-arrow-down"></i></button>
-                </div>
-              </div>
-              <textarea v-model="designerNotes[item.id]" class="form-control admin-note" rows="1" placeholder="Private admin/vendor note"></textarea>
-              <div class="tree-children-admin">
-                <div
-                  v-for="child in item.subCategoryLineItems"
-                  :key="child.id"
-                  class="admin-tree-row child"
-                  draggable="true"
-                  @dragstart="dragDesignedItem(child)"
-                  @dragover.prevent
-                  @drop.stop="dropOnDesignedItem(child)"
-                >
-                  <span><i class="bi bi-grip-vertical"></i> {{ itemLabel(child) }}</span>
-                  <small>{{ itemTypeLabel(child.type) }}{{ child.enumType ? ' · ' + child.enumType : '' }}</small>
-                  <div class="arrange-row-actions">
-                    <button class="icon-button outlined small" title="Edit" aria-label="Edit" @click="editDesignerItem(child)"><i class="bi bi-pencil"></i></button>
-                    <button class="icon-button outlined small" title="Move up" aria-label="Move up" @click="moveDesignerItem(child, -1)"><i class="bi bi-arrow-up"></i></button>
-                    <button class="icon-button outlined small" title="Move down" aria-label="Move down" @click="moveDesignerItem(child, 1)"><i class="bi bi-arrow-down"></i></button>
-                    <button class="icon-button outlined small" title="Move to root" aria-label="Move to root" @click="setItemParent(child, null, true)"><i class="bi bi-arrow-up-square"></i></button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p v-if="!selectedDesignerItems.length" class="muted">No items in this menu yet.</p>
-          </div>
-              <div class="drawer-actions">
-                <button class="btn btn-outline-secondary" @click="showArrangeDrawer = false">Close</button>
-                <button class="btn btn-primary" :disabled="!designerDirty" @click="saveDesignerChanges"><i class="bi bi-check2-circle"></i> Save Menu</button>
-              </div>
-              </aside>
-            </div>
-          </div>
-        </div>
+      <section v-if="activeSection === 'designer'" class="menu-studio-section">
+        <MenuStudio
+          :vendor="selectedVendor ?? null"
+          :menus="menus"
+          :menu-id="Number(route.params.menuId || 0)"
+          :events-for-menu="studioEventsForMenu"
+          @open="(menuId) => router.push(`/dashboard/menus/${menuId}/studio`)"
+          @home="router.push('/dashboard/menus/studio')"
+          @changed="loadAll"
+          @link-event="openStudioLinkEvent"
+          @notify="addToast"
+        />
       </section>
 
       <section v-if="activeSection === 'preview'" class="preview-layout">
@@ -1963,209 +1799,6 @@
     </div>
   </teleport>
 
-  <!-- Item / Category add MODAL (studio) -->
-  <teleport to="body">
-    <div v-if="showItemDrawer" class="modal-backdrop-custom" @click.self="showItemDrawer = false">
-      <div class="item-add-modal">
-        <div class="modal-title-row">
-          <div>
-            <h3>{{ editingDesignerItemId != null ? 'Edit menu entry' : 'Add to menu' }}</h3>
-            <p class="hint">
-              {{ itemDraft.parentId != null
-                ? `Under: ${designerDraftItems.find(i => i.id === itemDraft.parentId)?.displayName || '#' + itemDraft.parentId}`
-                : 'Root level — no parent category' }}
-            </p>
-          </div>
-          <button class="icon-button" type="button" aria-label="Close" @click="showItemDrawer = false">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-
-        <!-- Type selector -->
-        <div class="item-type-toggle">
-          <button
-            type="button"
-            :class="{ active: itemDraft.type === 'category' }"
-            @click="itemDraft.type = 'category'"
-          >
-            <i class="bi bi-folder2-open"></i>
-            <span>Category</span>
-            <small>Collections, rooms, courses, or sections</small>
-          </button>
-          <button
-            type="button"
-            :class="{ active: itemDraft.type !== 'category' }"
-            @click="itemDraft.type = 'item'"
-          >
-            <i class="bi bi-card-text"></i>
-            <span>Item</span>
-            <small>A product, service, artwork, dish, or experience</small>
-          </button>
-        </div>
-
-        <!-- Fields -->
-        <div class="item-drawer-fields">
-          <label>
-            <span>Name <span class="required">*</span></span>
-            <input
-              v-model.trim="itemDraft.displayName"
-              class="form-control"
-              :placeholder="itemNamePlaceholder"
-              autofocus
-              @keydown.enter.prevent="saveItemFromDrawer"
-            />
-          </label>
-          <label>
-            Description
-            <textarea v-model.trim="itemDraft.description" class="form-control" rows="2" placeholder="Short customer-facing description"></textarea>
-          </label>
-          <template v-if="itemDraft.type !== 'category'">
-            <div class="item-field-pair">
-              <label>
-                Content type
-                <select v-model="itemDraft.type" class="form-select">
-                  <option value="item">Item</option>
-                  <option value="dish">Dish</option>
-                  <option value="product">Product</option>
-                  <option value="service">Service</option>
-                  <option value="art">Art piece</option>
-                  <option value="modifier">Modifier</option>
-                  <option value="addon">Add-on</option>
-                </select>
-              </label>
-              <label>
-                Price / display price
-                <input v-model.trim="itemDraft.price" class="form-control" placeholder="₹450 or From ₹2,500" />
-              </label>
-            </div>
-            <label>
-              {{ itemDetailsField.label }}
-              <textarea v-model.trim="itemDraft.ingredients" class="form-control" rows="2" :placeholder="itemDetailsField.placeholder"></textarea>
-            </label>
-            <label>
-              Image
-              <div class="designer-upload-row">
-                <label class="btn btn-outline-secondary btn-sm designer-upload-btn">
-                  <i class="bi bi-cloud-arrow-up"></i>
-                  {{ uploadingDesignerImage ? 'Uploading…' : 'Upload image' }}
-                  <input type="file" accept="image/*" :disabled="uploadingDesignerImage" @change="uploadDesignerImage" />
-                </label>
-                <span class="muted">or paste a direct URL</span>
-              </div>
-              <input
-                v-model.trim="itemDraft.image"
-                class="form-control"
-                type="url"
-                placeholder="https://example.com/photo.jpg"
-              />
-              <div v-if="itemDraft.image" class="image-preview mt-2">
-                <img :src="itemDraft.image" alt="Preview" class="item-img-preview" @error="($event.target as HTMLImageElement).style.display='none'" />
-              </div>
-            </label>
-            <label>
-              Label / badge <small class="muted">(optional)</small>
-              <div class="tag-combobox">
-                <input
-                  v-model.trim="itemDraft.enumType"
-                  class="form-control"
-                  placeholder="e.g. new, limited, bestseller, handmade…"
-                />
-                <button v-if="itemDraft.enumType" type="button" class="tag-clear-btn" title="Clear tag" @click="itemDraft.enumType = ''">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-              <div v-if="vendorEnumTypes.length > 0" class="tag-suggestions">
-                <button
-                  v-for="tag in vendorEnumTypes"
-                  :key="tag"
-                  type="button"
-                  class="tag-chip"
-                  :class="{ active: itemDraft.enumType === tag }"
-                  @click="itemDraft.enumType = itemDraft.enumType === tag ? '' : tag"
-                >{{ tag }}</button>
-              </div>
-              <p v-else class="tag-no-hints">No tags used by this vendor yet — type any label above.</p>
-            </label>
-            <div v-if="isFoodItemDraft" class="item-field-pair">
-              <label>
-                Dietary
-                <select v-model="itemDraft.isVeg" class="form-select">
-                  <option :value="null">Not specified</option>
-                  <option :value="true">Vegetarian</option>
-                  <option :value="false">Non-vegetarian</option>
-                </select>
-              </label>
-              <label>
-                Spice level
-                <select v-model.number="itemDraft.spiceLevel" class="form-select">
-                  <option :value="0">Not specified</option>
-                  <option :value="1">Mild</option>
-                  <option :value="2">Medium</option>
-                  <option :value="3">Hot</option>
-                </select>
-              </label>
-            </div>
-            <label>
-              Discovery tags <small class="muted">(comma-separated)</small>
-              <input v-model.trim="itemDraft.tagsText" class="form-control" :placeholder="itemTagsPlaceholder" />
-            </label>
-            <label v-if="isFoodItemDraft">
-              Allergens <small class="muted">(comma-separated)</small>
-              <input v-model.trim="itemDraft.allergensText" class="form-control" placeholder="nuts, dairy, gluten" />
-            </label>
-          </template>
-          <label class="designer-active-toggle">
-            <input v-model="itemDraft.isActive" type="checkbox" />
-            <span>Visible on the public menu</span>
-          </label>
-        </div>
-
-        <div class="drawer-actions">
-          <button class="btn btn-outline-secondary" @click="showItemDrawer = false">Cancel</button>
-          <button class="btn btn-primary" :disabled="!itemDraft.displayName || uploadingDesignerImage" @click="saveItemFromDrawer">
-            <i class="bi bi-plus-lg"></i>
-            {{ uploadingDesignerImage ? 'Uploading image…' : editingDesignerItemId != null ? 'Save changes' : `Add ${itemDraft.type === 'category' ? 'category' : 'item'}` }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </teleport>
-
-  <!-- Item Pool pull-out drawer -->
-  <teleport to="body">
-    <div v-if="showItemPoolDrawer" class="drawer-backdrop" @click.self="showItemPoolDrawer = false">
-      <aside class="side-drawer item-pool-drawer">
-        <div class="modal-title-row">
-          <div>
-            <h3>Item Library</h3>
-            <p class="hint">Click to add items, or drag onto the canvas</p>
-          </div>
-          <button class="icon-button" type="button" aria-label="Close" @click="showItemPoolDrawer = false">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div class="sheet-search studio-search">
-          <i class="bi bi-search"></i>
-          <input v-model.trim="designerSearch" class="form-control" placeholder="Search items…" autofocus />
-        </div>
-        <div class="library-list pool-library-list">
-          <button
-            v-for="item in availableDesignerItems"
-            :key="item.id"
-            class="library-row"
-            draggable="true"
-            @dragstart="dragLibraryItem(item)"
-            @click="copyItemToDesignedMenu(item); showItemPoolDrawer = false"
-          >
-            <span><strong>{{ itemLabel(item) }}</strong><small>{{ menuName(item.menuId) }} · {{ itemTypeLabel(item.type) }}</small></span>
-            <i class="bi bi-plus-lg"></i>
-          </button>
-          <p v-if="!availableDesignerItems.length" class="muted pool-empty">{{ designerSearch ? 'No items match your search.' : 'All items are already in this menu.' }}</p>
-        </div>
-      </aside>
-    </div>
-  </teleport>
-
   <!-- Link Menu to Event modal -->
   <teleport to="body">
     <div v-if="showLinkEventModal" class="ws-modal-backdrop" @click.self="showLinkEventModal = false">
@@ -2218,6 +1851,8 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, Title);
 import QrTargetPreview from '../components/admin/QrTargetPreview.vue';
 import MenuTree from '../components/MenuTree.vue';
+import MenuStudio from '../features/menuStudio/MenuStudio.vue';
+import type { StudioEvent } from '../features/menuStudio/types';
 import PeshkashLogo from '../components/PeshkashLogo.vue';
 import QrTemplatePage from './QrTemplatePage.vue';
 import PrintStudio from '../components/admin/PrintStudio.vue';
@@ -2372,15 +2007,9 @@ function onItemDrawerClose(val: boolean) {
   }
 }
 const showEventEditor = ref(false);
-const showArrangeDrawer = ref(false);
 const showQrEditor = ref(false);
 const showPublishDrawer = ref(false);
-const designerMenuName = ref('');
-const designerMenuDescription = ref('');
-const designerMenuType = ref<'generic' | 'personalized'>('generic');
 const designerFullMenuQr = ref(false);
-const designerNotes = reactive<Record<number, string>>({});
-const designerSearch = ref('');
 const designerDraftItems = ref<ItemRow[]>([]);
 const designerOriginalItems = ref<Record<number, string>>({});
 const designerTempId = ref(-1);
@@ -2388,19 +2017,6 @@ const itemSearch = ref('');
 const itemMenuFilter = ref(0);
 const itemTypeFilter = ref('');
 const selectedAnalyticsItemId = ref<number | null>(null);
-const draggedLibraryItemId = ref<number | null>(null);
-const draggedDesignedItemId = ref<number | null>(null);
-const showItemDrawer = ref(false);
-const editingDesignerItemId = ref<number | null>(null);
-const uploadingDesignerImage = ref(false);
-const itemDraft = reactive<any>({ displayName: '', name: '', type: 'item', enumType: '', description: '', ingredients: '', image: '', price: '', tagsText: '', allergensText: '', isVeg: null, spiceLevel: 0, isActive: true, parentId: null as number | null });
-const showMenuRenameInline = ref(false);
-const menuRenameValue = ref('');
-const menuStoryHeadingValue = ref<string>('The backstory');
-const menuMaterialHeadingValue = ref<string>('Material');
-const menuDescriptionValue = ref('');
-const menuElaborateValue = ref<boolean>(false);
-const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
 const vendors = ref<Vendor[]>([]);
 const vendorSearch = ref('');
@@ -2662,57 +2278,18 @@ const selectedEventForItems = computed(() => {
   const id = selectedEventIdForItems.value || Number(route.params.eventId || 0);
   return events.value.find((event) => event.id === id);
 });
-const selectedDesignerItems = computed(() => designerDraftItems.value);
-const selectedDesignerTree = computed(() => buildItemTree(selectedDesignerItems.value));
-const designerDirty = computed(() => {
-  return designerDraftItems.value.some((item) => item.id < 0 || designerItemSignature(item) !== designerOriginalItems.value[item.id]);
-});
 const dirtyItemRows = computed(() => itemRows.value.filter((row) => row.isDirty || row.isNew));
 const miscMenu = computed(() => vendorMenus.value.find((menu) => menu.name === miscMenuSlug.value));
 const miscMenuSlug = computed(() => selectedVendor.value ? `${selectedVendor.value.name}-misc` : '');
 const miscMenuItems = computed(() => miscMenu.value ? items.value.filter((item) => item.menuId === miscMenu.value!.id) : []);
 const importMenuItems = computed(() => items.value.filter((item) => item.menuId === importForm.menuId));
 const itemTypeOptions = computed(() => Array.from(new Set(vendorItems.value.map((item) => item.type || 'item'))).sort());
-const vendorEnumTypes = computed(() => [...new Set(vendorItems.value.map(i => i.enumType).filter(Boolean))].sort() as string[]);
-const isFoodItemDraft = computed(() => itemDraft.type === 'dish');
-const itemNamePlaceholder = computed(() => {
-  if (itemDraft.type === 'category') return 'e.g. Living room, Featured artists, Signature services';
-  const examples: Record<string, string> = {
-    dish: 'e.g. Truffle risotto',
-    product: 'e.g. Aurelia lounge chair',
-    service: 'e.g. Private styling consultation',
-    art: 'e.g. Monsoon Study No. 4',
-    modifier: 'e.g. Premium finish',
-    addon: 'e.g. Gift wrapping',
-  };
-  return examples[itemDraft.type] || 'e.g. Signature piece or experience';
-});
-const itemDetailsField = computed(() => {
-  const fields: Record<string, { label: string; placeholder: string }> = {
-    dish: { label: 'Ingredients / preparation', placeholder: 'Key ingredients, preparation, or serving notes' },
-    product: { label: 'Materials / specifications', placeholder: 'Materials, dimensions, finish, care, or construction' },
-    service: { label: 'What is included', placeholder: 'Scope, duration, requirements, or what the customer receives' },
-    art: { label: 'Medium / provenance', placeholder: 'Medium, dimensions, year, edition, or provenance' },
-    modifier: { label: 'Option details', placeholder: 'What changes, compatibility, or additional terms' },
-    addon: { label: 'Add-on details', placeholder: 'What is included and any relevant conditions' },
-  };
-  return fields[itemDraft.type] || { label: 'Features / details', placeholder: 'Materials, dimensions, specifications, or useful context' };
-});
-const itemTagsPlaceholder = computed(() => isFoodItemDraft.value
-  ? 'seasonal, signature, chef-special'
-  : 'new, limited, handcrafted, premium');
 const inventoryRows = computed(() => itemRows.value.filter((row) => {
   const query = itemSearch.value.toLowerCase();
   const matchesSearch = !query || [row.displayName, row.name, row.type, row.enumType].some((value) => value?.toLowerCase().includes(query));
   const matchesMenu = !itemMenuFilter.value || row.menuId === itemMenuFilter.value;
   const matchesType = !itemTypeFilter.value || row.type === itemTypeFilter.value;
   return matchesSearch && matchesMenu && matchesType;
-}));
-const availableDesignerItems = computed(() => vendorItems.value.filter((item) => {
-  const query = designerSearch.value.toLowerCase();
-  const notInMenu = item.menuId !== selectedMenuIdForItems.value;
-  const matchesSearch = !query || [item.displayName, item.name, item.type, item.enumType].some((value) => value?.toLowerCase().includes(query));
-  return notInMenu && matchesSearch;
 }));
 const selectedMenuTree = computed(() => buildItemTree(selectedMenuItems.value));
 const selectedAnalyticsItem = computed(() => selectedAnalyticsItemId.value ? items.value.find((item) => item.id === selectedAnalyticsItemId.value) : undefined);
@@ -3076,9 +2653,6 @@ function adminMenuStudioRoute(menu: MenuRow) {
   return `/dashboard/menus/${menu.id}/studio`;
 }
 
-function adminMenuPreviewRoute(menu: MenuRow) {
-  return `/dashboard/menus/${menu.id}/preview`;
-}
 
 function menuItems(menuId: number) {
   return items.value.filter((item) => item.menuId === menuId);
@@ -3568,33 +3142,7 @@ async function saveMenu() {
   }
 }
 
-function openMenuRename() {
-  if (!selectedMenuForItems.value) return;
-  menuRenameValue.value = selectedMenuForItems.value.displayName;
-  menuStoryHeadingValue.value = selectedMenuForItems.value.itemStoryHeading || 'The backstory';
-  menuMaterialHeadingValue.value = selectedMenuForItems.value.itemMaterialHeading || 'Material';
-  menuDescriptionValue.value = selectedMenuForItems.value.description || '';
-  menuElaborateValue.value = selectedMenuForItems.value.elaborateDescriptions ?? false;
-  showMenuRenameInline.value = true;
-}
 
-async function saveMenuRename() {
-  if (!selectedMenuForItems.value || !menuRenameValue.value.trim()) return;
-  try {
-    const menu = selectedMenuForItems.value;
-    await axios.put(adminUrl(`/menus/${menu.id}`), {
-      displayName: menuRenameValue.value.trim(),
-      description: menuDescriptionValue.value.trim() || null,
-      itemStoryHeading: menuStoryHeadingValue.value.trim() || 'The backstory',
-      itemMaterialHeading: menuMaterialHeadingValue.value.trim() || 'Material',
-      elaborateDescriptions: menuElaborateValue.value,
-      vendorId: selectedVendorId.value,
-    });
-    showMenuRenameInline.value = false;
-    await loadAll();
-    setNotice('Menu settings saved');
-  } catch (err) { setError(err); }
-}
 
 async function ensureMiscMenu() {
   if (!selectedVendor.value) throw new Error('Select a vendor first');
@@ -3744,18 +3292,7 @@ function cloneItemPayload(item: ItemRow, menuId: number) {
   };
 }
 
-function uniqueDraftSlug(base: string) {
-  const clean = slugify(base || 'item');
-  const existing = new Set([...items.value, ...designerDraftItems.value].map((item) => item.name));
-  if (!existing.has(clean)) return clean;
-  let index = 2;
-  while (existing.has(`${clean}-${index}`)) index += 1;
-  return `${clean}-${index}`;
-}
 
-function splitList(value: string): string[] {
-  return value.split(',').map((part) => part.trim()).filter(Boolean);
-}
 
 function designerItemSignature(item: ItemRow): string {
   return JSON.stringify({
@@ -3789,147 +3326,10 @@ function normalizeAllDesignerOrders() {
   parents.forEach(normalizeDesignerOrder);
 }
 
-function openItemDrawer(parentId: number | null) {
-  if (!selectedMenuForItems.value) { setError(new Error('Select a working menu first')); return; }
-  editingDesignerItemId.value = null;
-  Object.assign(itemDraft, { displayName: '', name: '', type: 'item', enumType: '', description: '', ingredients: '', image: '', price: '', tagsText: '', allergensText: '', isVeg: null, spiceLevel: 0, isActive: true, parentId: parentId ?? null });
-  showItemDrawer.value = true;
-}
 
-function editDesignerItem(item: ItemRow) {
-  editingDesignerItemId.value = item.id;
-  Object.assign(itemDraft, {
-    displayName: item.displayName,
-    name: item.name,
-    type: item.type || 'item',
-    enumType: item.enumType || '',
-    description: item.description || '',
-    ingredients: item.ingredients || '',
-    image: item.image || '',
-    price: item.price || '',
-    tagsText: (item.tags || []).join(', '),
-    allergensText: (item.allergens || []).join(', '),
-    isVeg: item.isVeg ?? null,
-    spiceLevel: item.spiceLevel ?? 0,
-    isActive: item.isActive,
-    parentId: item.parentId ?? null,
-  });
-  showItemDrawer.value = true;
-}
 
-async function uploadDesignerImage(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file || !selectedVendor.value) return;
-  if (!file.type.startsWith('image/')) return setError(new Error('Choose an image file'));
-  if (file.size > 8 * 1024 * 1024) return setError(new Error('Image must be smaller than 8 MB'));
-  uploadingDesignerImage.value = true;
-  try {
-    const form = new FormData();
-    form.append('image', file);
-    const { data } = await axios.post<{ url: string }>(`${API_BASE_URL}/onboard/${selectedVendor.value.name}/upload`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    itemDraft.image = data.url;
-  } catch (err) {
-    setError(err);
-  } finally {
-    uploadingDesignerImage.value = false;
-    input.value = '';
-  }
-}
 
-function saveItemFromDrawer() {
-  try {
-    if (uploadingDesignerImage.value) throw new Error('Wait for the image upload to finish first');
-    if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
-    if (!itemDraft.displayName.trim()) throw new Error('Add a name first');
-    const existing = editingDesignerItemId.value != null
-      ? designerDraftItems.value.find((item) => item.id === editingDesignerItemId.value)
-      : null;
-    const parentId = itemDraft.parentId ?? undefined;
-    const nextOrder = designerDraftItems.value.filter((item) => (item.parentId || undefined) === parentId).length;
-    const values: Partial<ItemRow> = {
-      displayName: itemDraft.displayName.trim(),
-      type: itemDraft.type,
-      enumType: itemDraft.type === 'category' ? '' : itemDraft.enumType,
-      description: itemDraft.description,
-      ingredients: itemDraft.type === 'category' ? '' : itemDraft.ingredients,
-      image: itemDraft.type === 'category' ? '' : itemDraft.image,
-      price: itemDraft.type === 'category' ? '' : itemDraft.price,
-      tags: itemDraft.type === 'category' ? [] : splitList(itemDraft.tagsText),
-      allergens: isFoodItemDraft.value ? splitList(itemDraft.allergensText) : [],
-      isVeg: isFoodItemDraft.value ? itemDraft.isVeg : null,
-      spiceLevel: isFoodItemDraft.value ? Number(itemDraft.spiceLevel || 0) : null,
-      parentId,
-      isActive: Boolean(itemDraft.isActive),
-    };
-    if (existing) {
-      Object.assign(existing, values);
-    } else {
-      designerDraftItems.value.push({
-        id: designerTempId.value--,
-        menuId: selectedMenuIdForItems.value,
-        name: uniqueDraftSlug(itemDraft.displayName),
-        sortOrder: nextOrder,
-        ...values,
-      } as ItemRow);
-    }
-    normalizeAllDesignerOrders();
-    showItemDrawer.value = false;
-  } catch (err) {
-    setError(err);
-  }
-}
 
-async function saveDesignerChanges() {
-  try {
-    if (!selectedMenuIdForItems.value) throw new Error('Select a working menu first');
-    const idMap = new Map<number, number>();
-    normalizeAllDesignerOrders();
-    const newItems = designerDraftItems.value
-      .filter((item) => item.id < 0)
-      .sort((a, b) => Number(Boolean(a.parentId && a.parentId < 0)) - Number(Boolean(b.parentId && b.parentId < 0)));
-    for (const item of newItems) {
-      const parentId = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
-      const { data } = await axios.post<ItemRow>(adminUrl('/items'), {
-        menuId: selectedMenuIdForItems.value,
-        name: item.name,
-        displayName: item.displayName,
-        description: item.description,
-        ingredients: item.ingredients,
-        image: item.image,
-        type: item.type || 'item',
-        enumType: item.enumType,
-        parentId: parentId || null,
-        isActive: item.isActive,
-        sortOrder: item.sortOrder,
-        price: item.price,
-        tags: item.tags,
-        allergens: item.allergens,
-        isVeg: item.isVeg,
-        spiceLevel: item.spiceLevel,
-      });
-      idMap.set(item.id, Number(data.id));
-    }
-
-    for (const item of designerDraftItems.value.filter((row) => row.id > 0)) {
-      const nextParent = item.parentId && item.parentId < 0 ? idMap.get(item.parentId) : item.parentId;
-      const nextItem = { ...item, parentId: nextParent || null };
-      if (designerItemSignature(nextItem as ItemRow) !== designerOriginalItems.value[item.id]) {
-        await axios.put(adminUrl(`/items/${item.id}`), nextItem);
-      }
-    }
-
-    await loadAll();
-    syncItemRows();
-    resetDesignerDraft();
-    showArrangeDrawer.value = false;
-    setNotice('Menu saved');
-  } catch (err) {
-    setError(err);
-  }
-}
 
 async function saveImportedItem() {
   try {
@@ -3966,13 +3366,18 @@ function eventMenus(eventId: number) {
   return eventMenuMap.value[eventId] ?? [];
 }
 
-function linkedEventsForMenu(menuId: number): string {
-  if (!menuId) return '';
-  const names = events.value
+/** Events a menu is linked to, for the Menu Studio. */
+function studioEventsForMenu(menuId: number): StudioEvent[] {
+  return events.value
     .filter((ev) => eventMenus(ev.id).some((m) => m.id === menuId))
-    .map((ev) => ev.displayName);
-  return names.join(' · ');
+    .map(({ id, name, displayName }) => ({ id, name, displayName }));
 }
+
+function openStudioLinkEvent(menuId: number) {
+  selectedMenuIdForItems.value = menuId;
+  showLinkEventModal.value = true;
+}
+
 
 function parentName(parentId?: number) {
   const parent = parentId ? items.value.find((item) => item.id === parentId) : undefined;
@@ -4041,115 +3446,14 @@ function buildItemTree(flatItems: ItemRow[]) {
   return roots;
 }
 
-function childCount(item: any) {
-  return item.subCategoryLineItems?.length ?? 0;
-}
 
-function dragLibraryItem(item: ItemRow) {
-  draggedLibraryItemId.value = item.id;
-  draggedDesignedItemId.value = null;
-}
 
-function dragDesignedItem(item: ItemRow) {
-  draggedDesignedItemId.value = item.id;
-  draggedLibraryItemId.value = null;
-}
 
-async function dropOnMenuRoot() {
-  if (draggedLibraryItemId.value) {
-    const item = items.value.find((row) => row.id === draggedLibraryItemId.value);
-    if (item) await copyItemToDesignedMenu(item);
-  } else if (draggedDesignedItemId.value) {
-    const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
-    if (item) await setItemParent(item, null, true);
-  }
-  draggedLibraryItemId.value = null;
-  draggedDesignedItemId.value = null;
-}
 
-async function dropOnDesignedItem(target: ItemRow) {
-  if (draggedLibraryItemId.value) {
-    const item = items.value.find((row) => row.id === draggedLibraryItemId.value);
-    if (item) {
-      await copyItemToDesignedMenu(item, target.type === 'category' ? target.id : (target.parentId || null));
-    }
-  } else if (draggedDesignedItemId.value && draggedDesignedItemId.value !== target.id) {
-    const item = designerDraftItems.value.find((row) => row.id === draggedDesignedItemId.value);
-    if (item && target.type === 'category') await setItemParent(item, target.id, true);
-    else if (item) reorderDesignerItem(item, target);
-  }
-  draggedLibraryItemId.value = null;
-  draggedDesignedItemId.value = null;
-}
 
-async function setItemParent(item: ItemRow, parentId: number | null, placeLast = false) {
-  if (parentId === item.id) return setError(new Error('An item cannot be its own parent'));
-  let ancestorId = parentId;
-  while (ancestorId) {
-    if (ancestorId === item.id) return setError(new Error('A category cannot be moved inside one of its descendants'));
-    ancestorId = designerDraftItems.value.find((row) => row.id === ancestorId)?.parentId || null;
-  }
-  const draft = designerDraftItems.value.find((row) => row.id === item.id);
-  if (!draft) return;
-  const oldParent = draft.parentId || null;
-  draft.parentId = parentId || undefined;
-  if (placeLast) draft.sortOrder = designerDraftItems.value.filter((row) => row.id !== draft.id && (row.parentId || null) === parentId).length;
-  normalizeDesignerOrder(oldParent);
-  normalizeDesignerOrder(parentId);
-}
 
-function reorderDesignerItem(item: ItemRow, target: ItemRow) {
-  const draft = designerDraftItems.value.find((row) => row.id === item.id);
-  const targetDraft = designerDraftItems.value.find((row) => row.id === target.id);
-  if (!draft || !targetDraft) return;
-  const oldParent = draft.parentId || null;
-  const targetParent = targetDraft.parentId || null;
-  if (targetParent === draft.id) return setError(new Error('A category cannot be reordered inside its own contents'));
-  const siblings = designerDraftItems.value
-    .filter((row) => row.id !== draft.id && (row.parentId || null) === targetParent)
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id);
-  const targetIndex = Math.max(0, siblings.findIndex((row) => row.id === targetDraft.id));
-  siblings.splice(targetIndex, 0, draft);
-  draft.parentId = targetParent || undefined;
-  siblings.forEach((row, index) => { row.sortOrder = index; });
-  normalizeDesignerOrder(oldParent);
-}
 
-function moveDesignerItem(item: ItemRow, direction: -1 | 1) {
-  const parentId = item.parentId || null;
-  const siblings = designerDraftItems.value
-    .filter((row) => (row.parentId || null) === parentId)
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id);
-  const index = siblings.findIndex((row) => row.id === item.id);
-  const nextIndex = index + direction;
-  if (index < 0 || nextIndex < 0 || nextIndex >= siblings.length) return;
-  [siblings[index], siblings[nextIndex]] = [siblings[nextIndex], siblings[index]];
-  siblings.forEach((row, order) => { row.sortOrder = order; });
-}
 
-async function createDesignerMenu() {
-  try {
-    if (!selectedVendor.value) throw new Error('Select a vendor before creating a menu');
-    const name = slugify(designerMenuName.value);
-    requireSlug(name, 'Menu slug');
-    const { data } = await axios.post<MenuRow>(adminUrl('/menus'), {
-      vendorId: selectedVendorId.value,
-      name,
-      displayName: designerMenuName.value.trim(),
-      description: designerMenuDescription.value.trim() || null,
-      isActive: true,
-      type: designerMenuType.value,
-    });
-    await loadAll();
-    selectedMenuIdForItems.value = Number(data.id);
-    designerMenuName.value = '';
-    designerMenuDescription.value = '';
-    designerMenuType.value = 'generic';
-    setNotice(`${data.type === 'personalized' ? 'Personalized' : 'Generic'} menu created. Add items from the library next.`);
-  } catch (err) {
-    setError(err);
-  }
-}
 
 async function linkSelectedMenuToEvent() {
   try {
@@ -4190,19 +3494,6 @@ async function detachMenuFromEvent(menuId: number) {
   finally { loading.value = false; }
 }
 
-async function copyItemToDesignedMenu(item: ItemRow, parentId: number | null = null) {
-  if (!selectedMenuIdForItems.value) return setError(new Error('Select a working menu first'));
-  const baseSlug = slugify(item.name || itemLabel(item));
-  designerDraftItems.value.push({
-    ...item,
-    id: designerTempId.value--,
-    menuId: selectedMenuIdForItems.value,
-    name: uniqueDraftSlug(baseSlug),
-    displayName: itemLabel(item),
-    parentId: parentId || undefined,
-    sortOrder: designerDraftItems.value.filter((row) => (row.parentId || null) === parentId).length,
-  });
-}
 
 function loadEventIntoForm(event: EventRow) {
   selectedEventIdForItems.value = event.id;
@@ -4844,7 +4135,6 @@ function tplElStyle(el: any): Record<string, string> {
 
 // ── Workspace switcher modal ───────────────────────────────────────────────────
 const showWsModal = ref(false);
-const showItemPoolDrawer = ref(false);
 const showLinkEventModal = ref(false);
 
 // ── Admin user management ──────────────────────────────────────────────────────
@@ -4980,9 +4270,6 @@ watch(activeSection, (s) => {
   }
 }, { immediate: true });
 
-function isMenuLinked(menuId: number): boolean {
-  return events.value.some((ev) => eventMenus(ev.id).some((m) => m.id === menuId));
-}
 
 async function linkSelectedMenuToEventAndClose() {
   await linkSelectedMenuToEvent();
@@ -5378,45 +4665,6 @@ async function deleteVendorById(id: number, name: string) {
   .admin-main:not(.admin-main--canvas) > .workspace-header { margin-left: -14px; margin-right: -14px; padding-left: 52px; padding-right: 14px; }
   .workspace-title h2 { font-size: 1rem; }
   .workspace-subtitle { display: none; }
-
-  /* Designer mobile tab layout */
-  .designer-mobile-tabs {
-    align-items: stretch;
-    background: #fffcf7;
-    border: 1px solid #e8dccb;
-    border-radius: 8px;
-    display: flex;
-    gap: 0;
-    grid-column: 1 / -1;
-    overflow: hidden;
-    position: sticky;
-    top: 0;
-    z-index: 20;
-  }
-  .designer-mobile-tabs button {
-    align-items: center;
-    background: transparent;
-    border: 0;
-    color: #7a6a52;
-    cursor: pointer;
-    display: flex;
-    flex: 1;
-    font-size: 0.8rem;
-    font-weight: 600;
-    gap: 5px;
-    justify-content: center;
-    padding: 10px 4px;
-    transition: background 0.12s;
-  }
-  .designer-mobile-tabs button.active {
-    background: #b98f56;
-    color: #fff;
-  }
-  .designer-mobile-tabs button:not(.active):hover { background: #f5f0e8; }
-
-  /* Hide panels that aren't the active tab on mobile */
-  .designer-grid[data-tab="settings"] .designer-panel-canvas { display: none; }
-  .designer-grid[data-tab="canvas"] .designer-panel-settings { display: none; }
 
   /* Sidebar: fixed overlay on mobile */
   .admin-sidebar {
@@ -6055,7 +5303,6 @@ label {
   .admin-grants-footer { gap: 10px; }
 }
 
-
 /* Inline menu attach row */
 .attach-menu-row {
   align-items: center;
@@ -6625,10 +5872,6 @@ label {
   margin-bottom: 8px;
 }
 
-.studio-search {
-  margin-bottom: 10px;
-}
-
 .inline-editor,
 .quick-add-row {
   background: #fbfaf8;
@@ -6898,21 +6141,6 @@ td a {
   gap: 16px;
 }
 
-.designer-grid {
-  grid-template-columns: 1fr;
-}
-
-.designer-controls {
-  align-self: start;
-}
-
-/* Mobile tab bar — hidden on desktop, shown via mobile media query */
-@media (min-width: 768px) {
-  .designer-mobile-tabs {
-    display: none;
-  }
-}
-
 .designer-ribbon {
   align-items: end;
   display: flex;
@@ -6938,10 +6166,6 @@ td a {
   gap: 6px;
 }
 
-.type-select {
-  flex: 0 0 130px;
-}
-
 .ribbon-divider {
   align-self: stretch;
   background: #e5e7eb;
@@ -6965,22 +6189,6 @@ td a {
   gap: 6px;
   padding: 6px 8px;
 }
-
-.ribbon-menu-settings {
-  background: #f8f3ec;
-  border: 1px solid #e0d5c3;
-  border-radius: 8px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 10px;
-}
-.ribbon-menu-settings label { color: #6b5a48; font-size: 0.7rem; gap: 4px; }
-.ribbon-menu-settings-actions { align-items: flex-end; display: flex; gap: 5px; }
-.ribbon-menu-elaborate { align-items: center; display: flex; flex-direction: row; gap: 6px; grid-column: 1 / -1; }
-.ribbon-menu-description { grid-column: 1 / -1; }
-.ribbon-menu-description textarea { resize: vertical; }
-.designer-menu-description { margin-top: 8px; resize: vertical; }
 
 .pill-accent {
   background: #fef3e0;
@@ -7077,54 +6285,12 @@ td a {
   grid-template-columns: auto auto 1fr;
 }
 
-.library-list {
-  display: grid;
-  gap: 8px;
-  max-height: 560px;
-  overflow: auto;
-}
-
-.library-row {
-  align-items: center;
-  background: #fbfaf8;
-  border: 1px solid #e6dfd4;
-  border-radius: 5px;
-  color: #15191e;
-  display: flex;
-  justify-content: space-between;
-  padding: 10px;
-  text-align: left;
-}
-
 .library-row small,
 .designed-item small,
 .public-item small {
   color: #6b7280;
   display: block;
   font-size: 0.76rem;
-}
-
-.menu-render {
-  min-height: 620px;
-}
-
-.studio-live-preview {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(320px, 520px);
-  justify-content: center;
-  margin-top: 12px;
-}
-
-.studio-phone {
-  border-width: 8px;
-  box-shadow: 0 18px 44px rgba(42, 34, 24, 0.13);
-  min-height: 560px;
-  width: 100%;
-}
-
-.studio-phone.dirty {
-  border-color: #9f743d;
 }
 
 .drawer-backdrop {
@@ -7173,43 +6339,6 @@ td a {
   color: #74695d;
 }
 
-.admin-tree {
-  display: grid;
-  gap: 10px;
-}
-
-.admin-tree-row {
-  align-items: center;
-  background: #fffcf7;
-  border: 1px solid #eadfce;
-  border-radius: 5px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 8px 10px;
-}
-
-.admin-tree-row.child {
-  margin-left: 22px;
-}
-
-.admin-tree-row span {
-  min-width: 0;
-}
-
-.arrange-row-actions { display: inline-flex; gap: 4px; }
-
-@media (max-width: 520px) {
-  .admin-tree-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .admin-tree-row > small { grid-column: 1 / -1; }
-}
-
-.tree-children-admin {
-  display: grid;
-  gap: 8px;
-  margin: 8px 0;
-}
-
 .menu-preview-card,
 .phone-shell {
   background: #fffdfa;
@@ -7231,10 +6360,6 @@ td a {
   font-size: 1rem;
   font-weight: 900;
   margin: 0 0 8px;
-}
-
-.admin-note {
-  margin-bottom: 8px;
 }
 
 .designed-item,
@@ -7446,125 +6571,6 @@ td a {
 
 /* ── Item Add Drawer ──────────────────────────────────────────────────────── */
 .item-add-drawer { max-width: 380px; }
-
-.item-type-toggle {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr 1fr;
-  margin-bottom: 20px;
-}
-
-.item-type-toggle button {
-  align-items: flex-start;
-  background: #f9f5ef;
-  border: 2px solid #e8dccb;
-  border-radius: 8px;
-  color: #4b3f30;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 12px 14px;
-  text-align: left;
-  transition: border-color 0.15s, background 0.15s;
-}
-.item-type-toggle button i { font-size: 1.2rem; color: #9b7a4f; }
-.item-type-toggle button span { font-size: 0.9rem; font-weight: 700; }
-.item-type-toggle button small { color: #7a6649; font-size: 0.75rem; line-height: 1.3; }
-.item-type-toggle button.active { background: #fff7ed; border-color: #bd945a; }
-.item-type-toggle button.active i { color: #bd945a; }
-
-.item-drawer-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 20px;
-}
-.item-drawer-fields label { color: #4b3f30; display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 700; gap: 5px; text-transform: uppercase; }
-.item-drawer-fields .required { color: #c84b4b; font-size: 0.7rem; }
-.item-field-pair { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-.designer-upload-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
-.designer-upload-btn { align-items: center; display: inline-flex !important; flex-direction: row !important; gap: 6px !important; margin: 0; width: fit-content; }
-.designer-upload-btn input { display: none; }
-.designer-active-toggle { align-items: center !important; flex-direction: row !important; gap: 8px !important; text-transform: none !important; }
-.designer-active-toggle input { accent-color: #bd945a; height: 16px; width: 16px; }
-.image-preview { line-height: 0; }
-.item-img-preview { border-radius: 8px; max-height: 120px; max-width: 100%; object-fit: cover; border: 1px solid #e6ddd2; }
-
-@media (max-width: 520px) {
-  .item-field-pair { grid-template-columns: 1fr; }
-}
-
-.tag-combobox {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.tag-combobox input {
-  padding-right: 28px;
-  text-transform: none;
-  font-weight: 400;
-}
-.tag-clear-btn {
-  background: transparent;
-  border: 0;
-  color: #9a8870;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0 6px;
-  position: absolute;
-  right: 2px;
-}
-.tag-clear-btn:hover { color: #c84b4b; }
-
-.tag-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 6px;
-}
-.tag-chip {
-  background: #f0ece6;
-  border: 1.5px solid #ddd1bc;
-  border-radius: 20px;
-  color: #6b5a43;
-  cursor: pointer;
-  font-size: 0.76rem;
-  font-weight: 600;
-  padding: 3px 10px;
-  transition: all 0.12s;
-}
-.tag-chip:hover { background: #e8e0d4; border-color: #c9a96e; }
-.tag-chip.active { background: #fef3d9; border-color: #c9a96e; color: #6e4e10; }
-
-.tag-no-hints {
-  color: #aaa;
-  font-size: 0.72rem;
-  font-weight: 400;
-  margin: 5px 0 0;
-  text-transform: none;
-}
-
-/* Root-level canvas add button */
-.canvas-root-add {
-  align-items: center;
-  background: transparent;
-  border: 1.5px dashed #d4b88a;
-  border-radius: 8px;
-  color: #9b7a4f;
-  cursor: pointer;
-  display: flex;
-  font-size: 0.82rem;
-  font-weight: 600;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 12px;
-  padding: 10px 0;
-  transition: border-color 0.15s, color 0.15s;
-  width: 100%;
-}
-.canvas-root-add:hover { border-color: #bd945a; color: #7a542a; }
 
 /* ── Event QR Panel ──────────────────────────────────────────────────────────── */
 .event-qr-panel {
@@ -8681,97 +7687,6 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
   text-align: center;
 }
 
-/* ── Designer two-pane header ────────────────────────────────────────────── */
-.designer-header-panes {
-  align-items: flex-start;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-}
-
-.designer-pane {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 240px;
-  padding: 4px 16px 4px 0;
-}
-
-.designer-pane:last-child { padding-right: 0; }
-
-.pane-label {
-  color: #6b7280;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.pane-row {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-}
-
-.pane-row .form-select,
-.pane-row .form-control {
-  flex: 1;
-  min-width: 0;
-}
-
-.pane-row .type-select { flex: 0 0 120px; }
-
-.designer-pane-divider {
-  align-self: stretch;
-  background: #e5e7eb;
-  margin: 0 12px;
-  width: 1px;
-  flex-shrink: 0;
-}
-
-.linked-event-hint {
-  align-items: center;
-  color: #4b8b3b;
-  display: flex;
-  font-size: 0.75rem;
-  font-weight: 600;
-  gap: 5px;
-}
-
-.linked-event-hint i { font-size: 0.85rem; }
-
-/* ── Item add modal ──────────────────────────────────────────────────────── */
-.item-add-modal {
-  background: #fffcf7;
-  border-radius: 10px;
-  box-shadow: 0 24px 64px rgba(42, 34, 24, 0.22);
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  padding: 0;
-  width: min(100%, 440px);
-}
-
-.item-add-modal .modal-title-row { padding: 18px 20px 14px; }
-.item-add-modal .item-type-toggle { margin: 0 20px 16px; }
-.item-add-modal .item-drawer-fields { margin: 0 20px 16px; }
-.item-add-modal .drawer-actions { margin: 0; padding: 12px 20px 18px; }
-
-/* ── Item Pool drawer ────────────────────────────────────────────────────── */
-.item-pool-drawer { max-width: 380px; }
-
-.pool-library-list {
-  max-height: calc(100vh - 200px);
-}
-
-.pool-empty {
-  font-size: 0.85rem;
-  padding: 20px 0;
-  text-align: center;
-}
-
 /* ── Link Event modal ────────────────────────────────────────────────────── */
 .link-event-modal {
   width: min(92vw, 400px);
@@ -8791,22 +7706,9 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
   justify-content: center;
 }
 
-/* ── Designer grid: now two-column with controls full-width ─────────────── */
-.designer-grid {
-  grid-template-columns: 1fr;
-}
-
 @media (max-width: 900px) {
   .home-charts-row {
     grid-template-columns: 1fr;
-  }
-  .designer-header-panes {
-    flex-direction: column;
-  }
-  .designer-pane-divider {
-    height: 1px;
-    margin: 8px 0;
-    width: 100%;
   }
 }
 
@@ -8822,8 +7724,6 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 }
 /* QR view mode stacks on truly narrow screens only */
 @media (max-width: 620px) {
-  .ribbon-menu-settings { grid-template-columns: 1fr; }
-  .ribbon-menu-settings-actions { align-items: center; }
   .qr-view-body { grid-template-columns: 1fr; overflow-y: auto; }
   .qr-view-visual-pane { border-right: none; border-bottom: 1px solid #e6dfd4; }
   .qr-view-chart-wrap { height: 140px; }

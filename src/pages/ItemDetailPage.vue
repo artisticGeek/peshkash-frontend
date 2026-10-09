@@ -122,23 +122,36 @@
        a transform on that shell, which otherwise makes position:fixed relative to
        the content instead of the phone viewport. -->
   <Teleport to="body">
-    <nav v-if="!error && !isLoading && itemData" class="pk-action-dock" aria-label="Item actions">
-        <button class="pk-action-icon" :class="{ active: userReaction === 'like' }" type="button" @click="toggleReaction('like')" aria-label="Like this item" :aria-pressed="userReaction === 'like'" title="Like">
+    <nav v-if="!error && !isLoading && itemData && hasAnyCta" class="pk-action-dock" aria-label="Item actions">
+        <button v-if="ctas.like" class="pk-action-icon" :class="{ active: userReaction === 'like' }" type="button" @click="toggleReaction('like')" aria-label="Like this item" :aria-pressed="userReaction === 'like'" title="Like">
           <i :class="userReaction === 'like' ? 'bi bi-hand-thumbs-up-fill' : 'bi bi-hand-thumbs-up'"></i>
           <span class="visually-hidden">Like</span>
         </button>
-        <button class="pk-action-icon" :class="{ active: userReaction === 'dislike' }" type="button" @click="toggleReaction('dislike')" aria-label="Dislike this item" :aria-pressed="userReaction === 'dislike'" title="Dislike">
+        <button v-if="ctas.dislike" class="pk-action-icon" :class="{ active: userReaction === 'dislike' }" type="button" @click="toggleReaction('dislike')" aria-label="Dislike this item" :aria-pressed="userReaction === 'dislike'" title="Dislike">
           <i :class="userReaction === 'dislike' ? 'bi bi-hand-thumbs-down-fill' : 'bi bi-hand-thumbs-down'"></i>
           <span class="visually-hidden">Dislike</span>
         </button>
-        <button class="pk-action-icon" :class="{ active: isBookmarked }" type="button" @click="toggleBookmark" :aria-label="isBookmarked ? 'Remove this item from saved' : 'Save this item'" :aria-pressed="isBookmarked" :title="isBookmarked ? 'Remove from saved' : 'Save'">
+        <button v-if="ctas.save" class="pk-action-icon" :class="{ active: isBookmarked }" type="button" @click="toggleBookmark" :aria-label="isBookmarked ? 'Remove this item from saved' : 'Save this item'" :aria-pressed="isBookmarked" :title="isBookmarked ? 'Remove from saved' : 'Save'">
           <i :class="isBookmarked ? 'bi bi-bookmark-check-fill' : 'bi bi-bookmark-plus'"></i>
           <span class="visually-hidden">{{ isBookmarked ? 'Saved' : 'Save' }}</span>
         </button>
-        <button class="pk-action-icon" type="button" @click="shareItem" aria-label="Share this item" title="Share">
+        <button v-if="ctas.share" class="pk-action-icon" type="button" @click="shareItem" aria-label="Share this item" title="Share">
           <i class="bi bi-share-fill"></i>
           <span class="visually-hidden">Share</span>
         </button>
+        <!-- Vendor-configured buttons (Menu Studio): WhatsApp, call or link. -->
+        <a
+          v-for="cta in customCtas"
+          :key="cta.id"
+          class="pk-action-pill"
+          :href="cta.href"
+          :target="cta.kind === 'link' ? '_blank' : undefined"
+          rel="noopener noreferrer"
+          @click="trackCustomCta(cta)"
+        >
+          <i :class="['bi', customCtaIcon(cta.kind)]"></i>
+          <span>{{ cta.label }}</span>
+        </a>
     </nav>
   </Teleport>
   </div>
@@ -156,6 +169,8 @@ import { useRequireLoginGate } from '../composables/useRequireLoginGate';
 import { useAuthStore } from '../stores/auth';
 import LoginModal from '../components/auth/LoginModal.vue';
 import { sharePublicPage } from '../utils/socialShare';
+import { customCtaHref, customCtaIcon, normalizeCtaConfig } from '../features/menuStudio/cta';
+import type { CustomCta } from '../features/menuStudio/types';
 
 const route = useRoute()
 const router = useRouter()
@@ -277,6 +292,25 @@ const errorCopy = computed(() => {
   }
 })
 const feedback = ref('')
+
+// Buttons configured in the Menu Studio. Older API responses have no `ctas`: show the defaults.
+const ctas = computed(() => normalizeCtaConfig(itemData.value?.ctas))
+const customCtas = computed(() => {
+  const itemLabel = itemData.value?.displayName || itemData.value?.name || itemName
+  return ctas.value.custom
+    .map((cta) => ({ ...cta, href: customCtaHref(cta, itemLabel) }))
+    .filter((cta) => cta.href)
+})
+const hasAnyCta = computed(() => ctas.value.like || ctas.value.dislike || ctas.value.save || ctas.value.share || customCtas.value.length > 0)
+
+function trackCustomCta(cta: CustomCta) {
+  analytics.track(cta.kind === 'whatsapp' ? 'whatsapp_click' : cta.kind === 'call' ? 'call_click' : 'item_link_click', {
+    vendorId: itemData.value?.event?.vendor?.id,
+    eventId: itemData.value?.event?.id,
+    menuId: itemData.value?.menu?.id,
+    itemId: itemData.value?.numericId,
+  })
+}
 const showFeedback = ref(false)
 const analytics = useAnalytics()
 
@@ -621,6 +655,8 @@ onMounted(loadItem)
   position: fixed;
   bottom: max(1rem, env(safe-area-inset-bottom));
   left: 50%;
+  max-width: calc(100vw - 2rem);
+  overflow-x: auto;
   transform: translateX(-50%);
   z-index: 1000;
 }
@@ -637,6 +673,22 @@ onMounted(loadItem)
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
   width: 44px;
 }
+.pk-action-pill {
+  align-items: center;
+  background: #1a1410;
+  border-radius: 999px;
+  color: #f7f1e8;
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 0.4rem;
+  height: 44px;
+  padding: 0 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pk-action-pill:hover { background: #402b18; color: #fff; }
+.pk-action-pill:focus-visible { outline: 2px solid #7a5b3d; outline-offset: 2px; }
 .pk-action-icon:hover { background: rgba(189, 148, 90, 0.16); color: #402b18; transform: scale(1.06); }
 .pk-action-icon.active { background: #bd945a; color: #1a1410; }
 .pk-action-icon:focus-visible { box-shadow: 0 0 0 3px rgba(189, 148, 90, 0.28); outline: 2px solid #7a5b3d; outline-offset: 2px; }
