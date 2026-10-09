@@ -6,7 +6,11 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ command }) => {
   const isDevServer = command === 'serve'
+  const buildId = (process.env.GITHUB_SHA || process.env.VITE_BUILD_ID || 'local').slice(0, 7)
   return ({
+  define: {
+    __PESHKASH_BUILD__: JSON.stringify(buildId),
+  },
   plugins: [
     {
       name: 'retire-production-service-worker-in-dev',

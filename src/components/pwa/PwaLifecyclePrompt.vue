@@ -1,15 +1,28 @@
 <template>
   <Teleport to="body">
     <Transition name="pwa-sheet-fade">
-      <div v-if="installOpen || notificationOpen" class="pwa-sheet-backdrop" @click.self="dismissCurrent">
+      <div v-if="updateAvailable || installOpen || notificationOpen" class="pwa-sheet-backdrop" @click.self="dismissCurrent">
         <Transition name="pwa-sheet-rise" appear>
-          <aside ref="sheetRef" class="pwa-sheet" role="dialog" aria-modal="true" tabindex="-1" :aria-labelledby="installOpen ? 'pwa-install-title' : 'pwa-notification-title'" @keydown.esc="dismissCurrent">
+          <aside ref="sheetRef" class="pwa-sheet" role="dialog" aria-modal="true" tabindex="-1" :aria-labelledby="updateAvailable ? 'pwa-update-title' : installOpen ? 'pwa-install-title' : 'pwa-notification-title'" @keydown.esc="dismissCurrent">
             <header>
               <span>Your Peshkash</span>
               <button type="button" aria-label="Not now" @click="dismissCurrent"><i class="bi bi-x-lg"></i></button>
             </header>
 
-            <template v-if="installOpen">
+            <template v-if="updateAvailable">
+              <span class="pwa-sheet-mark"><i class="bi bi-arrow-repeat"></i></span>
+              <p class="pwa-sheet-kicker">New version ready</p>
+              <h2 id="pwa-update-title">A fresher Peshkash is waiting.</h2>
+              <p class="pwa-sheet-copy">Update now to use the latest pages and fixes. The app will reload once.</p>
+              <p v-if="updateError" class="pwa-error" role="alert">{{ updateError }}</p>
+              <div class="pwa-sheet-actions">
+                <button type="button" class="pwa-primary" :disabled="updateBusy" @click="applyUpdate"><i class="bi bi-arrow-clockwise"></i> {{ updateBusy ? 'Updating…' : 'Update now' }}</button>
+                <button type="button" class="pwa-secondary" :disabled="updateBusy" @click="dismissUpdate">Later</button>
+              </div>
+              <p class="pwa-fineprint">Current build {{ buildId }}</p>
+            </template>
+
+            <template v-else-if="installOpen">
               <span class="pwa-sheet-mark"><i class="bi bi-phone"></i></span>
               <p class="pwa-sheet-kicker">Keep it close</p>
               <h2 id="pwa-install-title">Peshkash, on your home screen.</h2>
@@ -60,18 +73,20 @@ const route = useRoute()
 const auth = useAuthStore()
 const lifecycle = usePwaLifecycle()
 const {
+  updateAvailable, updateBusy, updateError, buildId, applyUpdate, dismissUpdate,
   installOpen, notificationOpen, notificationError,
   notificationBusy, isIosInstallHelp, install, dismissInstall,
   enableNotifications, dismissNotification, considerAfterEngagement,
   considerAfterLogin, noteHomeVisit,
 } = lifecycle
-const anyOpen = computed(() => installOpen.value || notificationOpen.value)
+const anyOpen = computed(() => updateAvailable.value || installOpen.value || notificationOpen.value)
 const sheetRef = ref<HTMLElement | null>(null)
 let previousBodyOverflow = ''
 let previousFocus: HTMLElement | null = null
 
 function dismissCurrent() {
-  if (installOpen.value) dismissInstall()
+  if (updateAvailable.value) dismissUpdate()
+  else if (installOpen.value) dismissInstall()
   else dismissNotification()
 }
 

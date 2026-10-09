@@ -1,6 +1,14 @@
 import { computed, ref, shallowRef } from 'vue'
 import { enablePushNotifications, getPushConfig, pwaInstalled, pushSupported } from '../utils/pushNotifications'
 import { gtagEvent } from '../utils/ga'
+import {
+  applyPeshkashUpdate,
+  dismissPeshkashUpdate,
+  pwaBuildId,
+  pwaUpdateAvailable,
+  pwaUpdateBusy,
+  pwaUpdateError,
+} from '../utils/pwaRegistration'
 
 interface InstallPromptChoice { outcome: 'accepted' | 'dismissed'; platform: string }
 interface InstallPromptEvent extends Event {
@@ -180,6 +188,12 @@ function noteHomeVisit(loggedIn: boolean) {
 export function usePwaLifecycle() {
   initializePwaLifecycle()
   return {
+    updateAvailable: pwaUpdateAvailable,
+    updateBusy: pwaUpdateBusy,
+    updateError: pwaUpdateError,
+    buildId: pwaBuildId,
+    applyUpdate: applyPeshkashUpdate,
+    dismissUpdate: dismissPeshkashUpdate,
     installed,
     installAvailable,
     installOpen,
