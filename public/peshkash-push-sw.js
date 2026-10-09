@@ -3,8 +3,8 @@ self.addEventListener('push', event => {
   try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
   event.waitUntil(self.registration.showNotification(payload.title || 'Peshkash Updates', {
     body: payload.body || 'There is something new waiting for you.',
-    icon: payload.icon || '/android-chrome-192x192.png',
-    badge: payload.badge || '/favicon-32x32.png',
+    icon: payload.icon || '/peshkash-notification-icon.png',
+    badge: payload.badge || '/peshkash-notification-badge.png',
     tag: payload.tag || 'peshkash-update',
     renotify: false,
     data: { url: payload.url || '/home/history' },

@@ -373,17 +373,81 @@
                   </label>
                 </div>
 
-                <!-- Contact card product toggle -->
+                <!-- Public vendor page -->
                 <div class="form-grid" style="margin-top:4px">
                   <label class="product-toggle wide" :class="{ selected: vendorForm.hasContactPage }">
                     <input v-model="vendorForm.hasContactPage" type="checkbox" @change="syncVendorQrDraft" />
                     <i class="bi bi-person-vcard"></i>
                     <span>
-                      <strong>Add contact card product</strong>
-                      <small>Includes vendor public card and a reusable QR mapping when the vendor is saved.</small>
+                      <strong>Add public vendor page</strong>
+                      <small>Includes a reusable QR mapping and one of five public page styles.</small>
                     </span>
                   </label>
                 </div>
+
+                <template v-if="vendorForm.hasContactPage">
+                  <p class="form-section-label"><i class="bi bi-window-stack"></i> Public page style</p>
+                  <div class="page-type-grid wide">
+                    <label v-for="option in CONTACT_PAGE_OPTIONS" :key="option.value" class="page-type-option" :class="{ selected: vendorForm.contactPageMode === option.value }">
+                      <input v-model="vendorForm.contactPageMode" type="radio" :value="option.value" />
+                      <i :class="`bi ${option.icon}`"></i>
+                      <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+                    </label>
+                  </div>
+
+                  <div v-if="contactPageIsWebsite" class="page-config-editor wide">
+                    <div class="form-grid">
+                      <label>Kicker<input v-model.trim="vendorForm.contactPageConfig.kicker" class="form-control" placeholder="North Indian kitchen" /></label>
+                      <label>Cover image URL<input v-model.trim="vendorForm.contactPageConfig.coverImageUrl" class="form-control" placeholder="https://…" /></label>
+                      <label class="wide">Story heading<input v-model.trim="vendorForm.contactPageConfig.storyHeading" class="form-control" placeholder="Three generations at the table" /></label>
+                      <label class="wide">Story body <small class="muted">(blank lines create paragraphs)</small><textarea v-model="vendorForm.contactPageConfig.storyBody" class="form-control" rows="5"></textarea></label>
+                      <label>Pull quote<textarea v-model.trim="vendorForm.contactPageConfig.storyQuote" class="form-control" rows="3"></textarea></label>
+                      <label>Quote attribution<input v-model.trim="vendorForm.contactPageConfig.storyQuoteBy" class="form-control" placeholder="Founder name" /></label>
+                      <label class="wide">Gallery images <small class="muted">(one per line: URL | optional caption)</small><textarea :value="galleryConfigText" class="form-control" rows="5" placeholder="https://…/photo.jpg | The courtyard" @input="updateGalleryConfig"></textarea></label>
+                    </div>
+
+                    <div class="page-config-block">
+                      <div class="page-config-heading"><strong>Gallery presentation</strong><small>Choose how images appear on this public page.</small></div>
+                      <div class="gallery-layout-options" role="radiogroup" aria-label="Gallery presentation">
+                        <label v-for="option in galleryLayoutOptions" :key="option.value" :class="{ selected: vendorForm.contactPageConfig.galleryLayout === option.value }">
+                          <input v-model="vendorForm.contactPageConfig.galleryLayout" type="radio" :value="option.value" />
+                          <i :class="`bi ${option.icon}`"></i>
+                          <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="page-config-block">
+                      <div class="page-config-heading"><strong>Sections</strong><small>Switch sections on or off and change their order.</small></div>
+                      <div v-for="(section, index) in vendorForm.contactPageConfig.sections" :key="section.key" class="section-config-row">
+                        <input v-model="section.enabled" type="checkbox" />
+                        <span>{{ contactPageSectionLabel(section.key) }}</span>
+                        <button type="button" :disabled="index === 0" :aria-label="`Move ${section.key} up`" @click="moveContactPageSection(index, -1)"><i class="bi bi-arrow-up"></i></button>
+                        <button type="button" :disabled="index === vendorForm.contactPageConfig.sections.length - 1" :aria-label="`Move ${section.key} down`" @click="moveContactPageSection(index, 1)"><i class="bi bi-arrow-down"></i></button>
+                      </div>
+                      <label class="config-check"><input v-model="vendorForm.contactPageConfig.showCountdown" type="checkbox" /> Show countdown to the next event</label>
+                    </div>
+
+                    <div class="page-config-block">
+                      <div class="page-config-heading"><strong>Events</strong><small>Choose which past and upcoming events appear.</small></div>
+                      <select v-model="vendorForm.contactPageConfig.eventScope" class="form-control">
+                        <option value="all">All events</option><option value="upcoming">Upcoming only</option><option value="past">Past only</option><option value="selected">Selected events</option>
+                      </select>
+                      <div v-if="vendorForm.contactPageConfig.eventScope === 'selected'" class="content-choice-list">
+                        <label v-for="event in vendorEvents" :key="event.id"><input v-model="vendorForm.contactPageConfig.eventIds" type="checkbox" :value="event.id" /> <span>{{ event.displayName }}</span></label>
+                        <small v-if="!vendorEvents.length">Save the vendor, then create events to select them here.</small>
+                      </div>
+                    </div>
+
+                    <div class="page-config-block">
+                      <div class="page-config-heading"><strong>Menus</strong><small>Leave every menu unchecked to show all active menus.</small></div>
+                      <div class="content-choice-list">
+                        <label v-for="menu in vendorMenus" :key="menu.id"><input v-model="vendorForm.contactPageConfig.menuIds" type="checkbox" :value="menu.id" /> <span>{{ menu.displayName }}</span></label>
+                        <small v-if="!vendorMenus.length">Save the vendor, then create menus to select them here.</small>
+                      </div>
+                    </div>
+                  </div>
+                </template>
 
                 <div class="actions">
                   <button class="btn btn-primary" type="submit" :disabled="loading">
@@ -755,11 +819,13 @@
             <label class="check"><input v-model="menuForm.elaborateDescriptions" type="checkbox" /> Show elaborate item descriptions (thumbnail, price, tags)</label>
             <label class="wide">Description<textarea v-model.trim="menuForm.description" rows="2" class="form-control"></textarea></label>
             <label class="wide">Item-page story heading
-              <select v-model="menuForm.itemStoryHeading" class="form-select">
-                <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading">{{ heading }}</option>
-              </select>
+              <input v-model.trim="menuForm.itemStoryHeading" class="form-control" list="item-story-heading-options" placeholder="The backstory" />
             </label>
+            <label class="wide">Ingredients section heading<input v-model.trim="menuForm.itemMaterialHeading" class="form-control" placeholder="Material" /></label>
           </div>
+          <datalist id="item-story-heading-options">
+            <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading"></option>
+          </datalist>
           <div class="actions">
             <button class="btn btn-primary" type="submit" :disabled="!selectedVendor || loading">Save Menu</button>
             <button class="btn btn-outline-secondary" type="button" @click="resetMenu">Clear</button>
@@ -915,9 +981,15 @@
                 </label>
                 <label>
                   <span>Item story heading</span>
-                  <select v-model="menuStoryHeadingValue" class="form-select">
-                    <option v-for="heading in ITEM_STORY_HEADINGS" :key="heading" :value="heading">{{ heading }}</option>
-                  </select>
+                  <input v-model.trim="menuStoryHeadingValue" class="form-control" list="item-story-heading-options" placeholder="The backstory" />
+                </label>
+                <label>
+                  <span>Ingredients heading</span>
+                  <input v-model.trim="menuMaterialHeadingValue" class="form-control" placeholder="Material" />
+                </label>
+                <label class="ribbon-menu-description">
+                  <span>Menu description</span>
+                  <textarea v-model.trim="menuDescriptionValue" class="form-control" rows="2" placeholder="Tell guests what this menu is about"></textarea>
                 </label>
                 <label class="ribbon-menu-elaborate">
                   <input v-model="menuElaborateValue" type="checkbox" />
@@ -951,6 +1023,7 @@
                   Create
                 </button>
               </div>
+              <textarea v-model.trim="designerMenuDescription" class="form-control designer-menu-description" rows="2" placeholder="Menu description (optional)"></textarea>
             </div>
           </div>
         </div>
@@ -2157,15 +2230,17 @@ import VendorAnalyticsPanel from '../components/analytics/VendorAnalyticsPanel.v
 import ItemAnalyticsPanel from '../components/analytics/ItemAnalyticsPanel.vue';
 import LoginModal from '../components/auth/LoginModal.vue';
 import { useAuthStore } from '../stores/auth';
+import { customerPostLoginPath } from '../utils/sharedPrintCollections';
 import { API_BASE_URL } from '../config';
 import { eventExperienceWasPersisted, eventPublishChecklist, hasStandaloneEventPage } from '../features/events/workflow';
 import { firstGrantedDashboardPath, grantSectionForPath, sectionFromPath, type SectionKey } from '../utils/dashboardSections';
+import { CONTACT_PAGE_OPTIONS, CONTACT_PAGE_SECTION_LABELS, contactFieldValue, defaultContactPageConfig, normalizeContactPageConfig, normalizeContactPageMode, vendorPhoneValue, type ContactPageMode, type ContactPageSectionKey } from '../features/vendors/contactPage';
 
 const authStore = useAuthStore();
-type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
+type Vendor = { id: number; name: string; displayName: string; description?: string; contact: string[]; address?: string; hasContactPage: boolean; contactPageMode?: ContactPageMode; contactPageConfig?: ReturnType<typeof defaultContactPageConfig>; logoUrl?: string; loginPhone?: string | null; requireLogin?: boolean; createdAt?: string };
 type EventExperience = { enabled: boolean; eyebrow: string; heroImageUrl: string; venueName: string; venueAddress: string; mapUrl: string; registrationEnabled: boolean; reminderEnabled: boolean; reminderMode: 'timed' | 'all_day'; countdownEnabled: boolean; organizerVisible: boolean; contactVisible: boolean; livestreamUrl: string; livestreamLabel: string; socialPreview: SocialPreviewConfig; guests: any[] };
 type EventRow = { id: number; name: string; displayName: string; eventDescription?: string; startTime?: string; endTime?: string; status: string; vendorId: number; vendor?: Vendor; experienceConfig?: EventExperience };
-type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; elaborateDescriptions?: boolean; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
+type MenuRow = { id: number; name: string; displayName: string; description?: string; itemStoryHeading?: string; itemMaterialHeading?: string; elaborateDescriptions?: boolean; isActive: boolean; vendorId: number; type: string; sourceMenuId?: number; vendor?: Vendor };
 type ItemRow = { id: number; name: string; displayName: string; description?: string; ingredients?: string; image?: string; type?: string; enumType?: string; isActive: boolean; menuId: number; parentId?: number; sortOrder: number; price?: string; tags?: string[]; allergens?: string[]; isVeg?: boolean | null; spiceLevel?: number | null };
 type QrMapping = { id: number; qrHash: string; url: string; type: 'static' | 'event' | 'vendor'; isActive: boolean; shortQrUrl: string; finalPublicUrl: string; usageCount?: number; vendorId?: number; eventId?: number; createdAt?: string; updatedAt?: string; expiresAt?: string; paid?: boolean; templateLabel?: string };
 type Preview = { eventId: number; menuId: number; itemId?: number; eventName: string; menuName: string; itemName?: string; publicPath: string; publicUrl: string };
@@ -2301,6 +2376,7 @@ const showArrangeDrawer = ref(false);
 const showQrEditor = ref(false);
 const showPublishDrawer = ref(false);
 const designerMenuName = ref('');
+const designerMenuDescription = ref('');
 const designerMenuType = ref<'generic' | 'personalized'>('generic');
 const designerFullMenuQr = ref(false);
 const designerNotes = reactive<Record<number, string>>({});
@@ -2321,6 +2397,8 @@ const itemDraft = reactive<any>({ displayName: '', name: '', type: 'item', enumT
 const showMenuRenameInline = ref(false);
 const menuRenameValue = ref('');
 const menuStoryHeadingValue = ref<string>('The backstory');
+const menuMaterialHeadingValue = ref<string>('Material');
+const menuDescriptionValue = ref('');
 const menuElaborateValue = ref<boolean>(false);
 const designerMobileTab = ref<'settings' | 'canvas'>('settings');
 
@@ -2521,13 +2599,20 @@ const vendorQrCodeDataUrl = ref('');
 const eventQrDataUrl = ref('');
 const itemRows = ref<DraftItem[]>([]);
 
-const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
+const vendorForm = reactive<any>({ id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, contactPageMode: 'classic', contactPageConfig: defaultContactPageConfig(), logoUrl: '' });
+const contactPageIsWebsite = computed(() => vendorForm.hasContactPage && vendorForm.contactPageMode !== 'classic');
+const galleryLayoutOptions = [
+  { value: 'carousel', label: 'Carousel', description: 'One focused image at a time.', icon: 'bi-view-stacked' },
+  { value: 'grid', label: 'Gallery section', description: 'A dedicated visual grid.', icon: 'bi-grid-3x3-gap' },
+  { value: 'spread', label: 'Throughout the page', description: 'Images placed between story sections.', icon: 'bi-distribute-vertical' },
+];
+const galleryConfigText = computed(() => (vendorForm.contactPageConfig?.gallery || []).map((item: any) => `${item.url}${item.caption ? ` | ${item.caption}` : ''}`).join('\n'));
 function defaultEventExperience(): EventExperience {
   return { enabled: false, eyebrow: '', heroImageUrl: '', venueName: '', venueAddress: '', mapUrl: '', registrationEnabled: true, reminderEnabled: true, reminderMode: 'timed', countdownEnabled: true, organizerVisible: true, contactVisible: false, livestreamUrl: '', livestreamLabel: 'Watch live', socialPreview: { imageUrl: '', imageAlt: '', titleOverride: '', descriptionOverride: '', version: 1, generatedImageUrl: '', generatedAt: '' }, guests: [] };
 }
 const eventForm = reactive<any>({ id: null, name: '', displayName: '', eventDescription: '', startTime: '', endTime: '', status: 'draft', experienceConfig: defaultEventExperience() });
 const socialPreviewValid = ref(true);
-const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', elaborateDescriptions: false, isActive: true });
+const menuForm = reactive<any>({ id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', itemMaterialHeading: 'Material', elaborateDescriptions: false, isActive: true });
 const linkForm = reactive({ eventId: 0, menuId: 0 });
 const qrForm = reactive<any>({ qrHash: '', url: '', isActive: true, paid: true, templateLabel: '', selectedTemplateId: 0, eventId: 0, menuId: 0, itemId: 0 });
 const vendorQrDraft = reactive({ qrHash: '', url: '' });
@@ -3148,7 +3233,7 @@ function closeVendorEditor() {
 }
 
 function resetVendor() {
-  Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, logoUrl: '' });
+  Object.assign(vendorForm, { id: null, name: '', displayName: '', description: '', contact: [], address: '', hasContactPage: false, contactPageMode: 'classic', contactPageConfig: defaultContactPageConfig(), logoUrl: '' });
   vendorContactText.value = '';
   vendorPhone.value = '';
   vendorEmail.value = '';
@@ -3174,6 +3259,8 @@ function resetVendor() {
 
 function editVendor(vendor: Vendor) {
   Object.assign(vendorForm, vendor);
+  vendorForm.contactPageMode = normalizeContactPageMode(vendor.contactPageMode);
+  vendorForm.contactPageConfig = normalizeContactPageConfig(vendor.contactPageConfig);
   vendorContactText.value = vendor.contact?.join(', ') ?? '';
   hydrateVendorContactFields(vendor.contact ?? []);
   // Login phone: stored as +91XXXXXXXXXX — show just the 10-digit part
@@ -3190,9 +3277,28 @@ function editVendor(vendor: Vendor) {
   syncVendorQrDraft();
 }
 
+function updateGalleryConfig(event: Event) {
+  const value = (event.target as HTMLTextAreaElement).value;
+  vendorForm.contactPageConfig.gallery = value.split(/\r?\n/).map(line => {
+    const [url, ...caption] = line.split('|');
+    return { url: url.trim(), caption: caption.join('|').trim() };
+  }).filter(item => item.url).slice(0, 24);
+}
+
+function moveContactPageSection(index: number, direction: -1 | 1) {
+  const next = index + direction;
+  const sections = vendorForm.contactPageConfig.sections;
+  if (next < 0 || next >= sections.length) return;
+  [sections[index], sections[next]] = [sections[next], sections[index]];
+}
+
+function contactPageSectionLabel(key: ContactPageSectionKey) {
+  return CONTACT_PAGE_SECTION_LABELS[key] || key;
+}
+
 function hydrateVendorContactFields(contact: string[]) {
-  const find = (label: string) => contact.find((line) => line.toLowerCase().startsWith(`${label.toLowerCase()}:`))?.split(':').slice(1).join(':').trim() || '';
-  vendorPhone.value        = find('Phone');
+  const find = (label: string) => contactFieldValue(contact, label);
+  vendorPhone.value        = vendorPhoneValue(contact);
   vendorEmail.value        = find('Email');
   vendorWebsite.value      = find('Website');
   const savedMapUrl = find('Google Maps');
@@ -3223,7 +3329,6 @@ function hydrateVendorContactFields(contact: string[]) {
   vendorHoursFrom.value = fmt12to24(timeParts[0] ?? '');
   vendorHoursTo.value   = fmt12to24(timeParts[1] ?? '');
 
-  if (!vendorPhone.value && !vendorEmail.value && contact.length) vendorPhone.value = contact[0] || '';
 }
 
 function vendorContactPayload() {
@@ -3431,7 +3536,7 @@ async function saveEvent() {
 }
 
 function resetMenu() {
-  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', elaborateDescriptions: false, isActive: true });
+  Object.assign(menuForm, { id: null, name: '', displayName: '', description: '', itemStoryHeading: 'The backstory', itemMaterialHeading: 'Material', elaborateDescriptions: false, isActive: true });
 }
 
 async function openEventEditorFromWorkspace(event: EventRow) {
@@ -3440,7 +3545,11 @@ async function openEventEditorFromWorkspace(event: EventRow) {
 }
 
 function editMenu(menu: MenuRow) {
-  Object.assign(menuForm, { ...menu, itemStoryHeading: menu.itemStoryHeading || 'The backstory' });
+  Object.assign(menuForm, {
+    ...menu,
+    itemStoryHeading: menu.itemStoryHeading || 'The backstory',
+    itemMaterialHeading: menu.itemMaterialHeading || 'Material',
+  });
 }
 
 async function saveMenu() {
@@ -3463,6 +3572,8 @@ function openMenuRename() {
   if (!selectedMenuForItems.value) return;
   menuRenameValue.value = selectedMenuForItems.value.displayName;
   menuStoryHeadingValue.value = selectedMenuForItems.value.itemStoryHeading || 'The backstory';
+  menuMaterialHeadingValue.value = selectedMenuForItems.value.itemMaterialHeading || 'Material';
+  menuDescriptionValue.value = selectedMenuForItems.value.description || '';
   menuElaborateValue.value = selectedMenuForItems.value.elaborateDescriptions ?? false;
   showMenuRenameInline.value = true;
 }
@@ -3472,15 +3583,16 @@ async function saveMenuRename() {
   try {
     const menu = selectedMenuForItems.value;
     await axios.put(adminUrl(`/menus/${menu.id}`), {
-      ...menu,
       displayName: menuRenameValue.value.trim(),
-      itemStoryHeading: menuStoryHeadingValue.value,
+      description: menuDescriptionValue.value.trim() || null,
+      itemStoryHeading: menuStoryHeadingValue.value.trim() || 'The backstory',
+      itemMaterialHeading: menuMaterialHeadingValue.value.trim() || 'Material',
       elaborateDescriptions: menuElaborateValue.value,
       vendorId: selectedVendorId.value,
     });
     showMenuRenameInline.value = false;
     await loadAll();
-    setNotice('Menu renamed');
+    setNotice('Menu settings saved');
   } catch (err) { setError(err); }
 }
 
@@ -4024,12 +4136,14 @@ async function createDesignerMenu() {
       vendorId: selectedVendorId.value,
       name,
       displayName: designerMenuName.value.trim(),
+      description: designerMenuDescription.value.trim() || null,
       isActive: true,
       type: designerMenuType.value,
     });
     await loadAll();
     selectedMenuIdForItems.value = Number(data.id);
     designerMenuName.value = '';
+    designerMenuDescription.value = '';
     designerMenuType.value = 'generic';
     setNotice(`${data.type === 'personalized' ? 'Personalized' : 'Generic'} menu created. Add items from the library next.`);
   } catch (err) {
@@ -4432,11 +4546,11 @@ onMounted(async () => {
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
 
-function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
+async function onLoginSuccess(payload: { role: string; vendorId: number | null }) {
   // Customers have no dashboard workspace, but a valid login should never
   // look like a failed login by throwing them back to the marketing page.
   if (payload.role === 'customer') {
-    router.replace('/home/saved');
+    await router.replace(await customerPostLoginPath());
     return;
   }
   if (payload.role === 'vendor') {
@@ -6858,12 +6972,15 @@ td a {
   border-radius: 8px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.9fr) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 10px;
 }
 .ribbon-menu-settings label { color: #6b5a48; font-size: 0.7rem; gap: 4px; }
 .ribbon-menu-settings-actions { align-items: flex-end; display: flex; gap: 5px; }
 .ribbon-menu-elaborate { align-items: center; display: flex; flex-direction: row; gap: 6px; grid-column: 1 / -1; }
+.ribbon-menu-description { grid-column: 1 / -1; }
+.ribbon-menu-description textarea { resize: vertical; }
+.designer-menu-description { margin-top: 8px; resize: vertical; }
 
 .pill-accent {
   background: #fef3e0;
@@ -8823,10 +8940,14 @@ code.slug { color: #9a6b3a; font-size: 0.72rem; }
 
 .collections-workspace{display:grid;gap:16px;padding:0 24px 28px}.collections-intro{align-items:center;background:linear-gradient(115deg,#f7f0e7,#fff);display:flex;justify-content:space-between;padding:18px 20px}.collections-intro>div{max-width:760px}.collections-intro span{color:#ad7d43;font-size:.62rem;font-weight:800;letter-spacing:.14em}.collections-intro h3{font-family:Rufina,serif;font-size:1.45rem;margin:3px 0}.collections-intro p{color:#766657;font-size:.78rem;line-height:1.55;margin:0}.collections-studio{padding:18px 20px}.ps-order li button.danger{color:#a3443c}
 
+.page-type-grid{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}.page-type-option{align-items:flex-start;background:#fff;border:1px solid #ddd1c0;border-radius:10px;cursor:pointer;display:grid;gap:9px;grid-template-columns:auto auto 1fr;padding:11px}.page-type-option:last-child{grid-column:1/-1}.page-type-option.selected{background:#fbf6ed;border-color:#b9874c;box-shadow:inset 0 0 0 1px #b9874c}.page-type-option>i{color:#a47742;font-size:1.1rem;margin-top:1px}.page-type-option strong,.page-type-option small{display:block}.page-type-option strong{color:#33261c;font-size:.8rem}.page-type-option small{color:#7a6a5b;font-size:.68rem;line-height:1.4;margin-top:2px}.page-config-editor{background:#faf7f2;border:1px solid #e2d7c8;border-radius:12px;display:grid;gap:14px;margin-top:4px;padding:14px}.page-config-block{background:#fff;border:1px solid #e5dbce;border-radius:10px;padding:12px}.page-config-heading{display:flex;flex-direction:column;margin-bottom:9px}.page-config-heading strong{color:#3b2c20;font-size:.8rem}.page-config-heading small{color:#897868;font-size:.68rem}.section-config-row{align-items:center;border-bottom:1px solid #eee5da;display:grid;font-size:.76rem;gap:7px;grid-template-columns:auto 1fr 28px 28px;padding:7px 0}.section-config-row button{background:#fff;border:1px solid #ddd1c0;border-radius:5px;color:#725b44;height:26px;padding:0}.section-config-row button:disabled{opacity:.35}.config-check{align-items:center;display:flex;font-size:.75rem;gap:8px;margin-top:10px}.content-choice-list{display:grid;gap:6px;margin-top:9px;max-height:145px;overflow:auto}.content-choice-list label{align-items:center;display:flex;font-size:.75rem;gap:7px}.content-choice-list>small{color:#8a7968;font-size:.68rem}
+.gallery-layout-options{display:grid;gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))}.gallery-layout-options label{align-items:flex-start;border:1px solid #e2d7c8;border-radius:9px;cursor:pointer;display:grid;gap:7px;grid-template-columns:auto auto 1fr;padding:10px}.gallery-layout-options label.selected{background:#fbf6ed;border-color:#b9874c;box-shadow:inset 0 0 0 1px #b9874c}.gallery-layout-options i{color:#a47742}.gallery-layout-options span strong,.gallery-layout-options span small{display:block}.gallery-layout-options span strong{color:#3b2c20;font-size:.75rem}.gallery-layout-options span small{color:#897868;font-size:.64rem;line-height:1.35;margin-top:2px}
+
 @media (max-width: 700px) {
   .qr-filters-bar { flex-direction: column; align-items: stretch; }
   .qr-type-tabs { flex-wrap: wrap; }
   .qr-target-cell { max-width: 120px; }
   .collections-workspace{padding:0 12px 20px}.collections-intro{align-items:flex-start;flex-direction:column;gap:12px}.collections-studio{padding:12px}
+  .page-type-grid,.gallery-layout-options{grid-template-columns:1fr}.page-type-option:last-child{grid-column:auto}
 }
 </style>

@@ -85,8 +85,8 @@ test('contact cards can be handed to native contacts apps', () => {
   assert.match(card, /EMAIL;TYPE=INTERNET:hello@example\.com/);
 
   const intent = androidContactIntent(input);
-  assert.match(intent, /^intent:#Intent;/);
-  assert.match(intent, /type=vnd\.android\.cursor\.dir\/contact/);
+  assert.match(intent, /^intent:\/\/#Intent;/);
+  assert.match(intent, /type=vnd\.android\.cursor\.item\/contact/);
   assert.match(intent, /S\.name=Niharika%20Singh%20%26%20Vidhu%20Shoor/);
 });
 

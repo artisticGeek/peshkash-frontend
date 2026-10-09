@@ -501,8 +501,22 @@ async function shareSavedCollection(collection: PrintCollectionRow): Promise<voi
   if (!phone) return;
   try {
     await openCollection(collection);
-    const artworks = selectedTargets.value.map((target) => ({ key: target.key, label: displayTargetLabel(target), svg: renderToSvg(designForTarget(target)!, target) }));
+    const artworks = selectedTargets.value.map((target) => {
+      const design = designForTarget(target)!;
+      return {
+        key: target.key,
+        label: displayTargetLabel(target),
+        svg: renderToSvg(design, target),
+        widthMm: design.widthMm,
+        heightMm: design.heightMm,
+        format: templateDefinition(design)?.format || 'rectangle',
+      };
+    });
     const { data } = await axios.post<{ path: string }>(`${API_BASE_URL}/admin/print-collections/${persistedId}/shares`, { phone, artworks });
+    // Do not report success until the newly-created entitlement can actually
+    // read the collection. Admin access is intentionally allowed by this
+    // read-only endpoint for verification and support.
+    await axios.get(`${API_BASE_URL}${data.path}`);
     const url = new URL(data.path, window.location.origin).toString();
     const copied = await copyText(url);
     collectionNotice.value = copied
