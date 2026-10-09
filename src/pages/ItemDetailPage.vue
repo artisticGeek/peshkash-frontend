@@ -77,21 +77,17 @@
           </div>
         </div>
 
-        <div v-if="showDietaryBadge || itemData?.tags?.length || itemData?.spiceLevel" class="pk-item-badges">
-          <span v-if="showDietaryBadge" class="pk-item-chip">
-            <i :class="['bi','bi-circle-fill', itemData.isVeg ? 'text-success' : 'text-danger']"></i>
-            <span class="ms-1">{{ itemData.isVeg ? 'Veg' : 'Non-Veg' }}</span>
-          </span>
-          <span v-for="tag in itemData?.tags || []" :key="tag" class="pk-item-chip">{{ tag }}</span>
-          <span v-if="itemData?.spiceLevel" class="pk-item-chip text-danger">
-            <i v-for="n in 3" :key="n" class="bi bi-fire" :class="{'opacity-25': n > itemData.spiceLevel}"></i>
+        <div v-if="dietaryBadge" class="pk-item-badges">
+          <span class="pk-item-chip">
+            <i :class="['bi', 'bi-circle-fill', dietaryBadge.tone]"></i>
+            <span class="ms-1">{{ dietaryBadge.label }}</span>
           </span>
         </div>
 
         <p v-if="descriptionParts.second" class="pk-story-copy">{{ descriptionParts.second }}</p>
 
         <div v-if="itemData?.ingredients" class="pk-material">
-          <p class="pk-material-label">Material</p>
+          <p class="pk-material-label">{{ materialSectionLabel }}</p>
           <div class="d-flex flex-wrap gap-2">
             <span
               v-for="ing in itemData.ingredients.split(',')"
@@ -216,10 +212,29 @@ const itemSectionLabel = computed(() => {
   const t = (itemData.value?.itemType || itemData.value?.type)?.toLowerCase()
   return ITEM_SECTION_MAP[t]?.label ?? 'The backstory'
 })
-const showDietaryBadge = computed(() => {
+const dietaryBadge = computed(() => {
   const type = (itemData.value?.itemType || itemData.value?.type || '').toLowerCase()
-  return type === 'dish' && typeof itemData.value?.isVeg === 'boolean'
+  if (type !== 'dish') return null
+
+  const enumType = String(itemData.value?.enumType || '').toLowerCase()
+  const eggSignals = [
+    enumType,
+    ...(itemData.value?.tags || []),
+    ...(itemData.value?.allergens || []),
+    itemData.value?.ingredients || '',
+  ].join(' ').toLowerCase()
+  if (enumType === 'egg' || /\begg(s)?\b|contains[- ]egg/.test(eggSignals)) {
+    return { label: 'Egg', tone: 'text-warning' }
+  }
+  if (enumType === 'veg' || itemData.value?.isVeg === true) {
+    return { label: 'Veg', tone: 'text-success' }
+  }
+  if (enumType === 'non-veg' || enumType === 'nonveg' || itemData.value?.isVeg === false) {
+    return { label: 'Non-Veg', tone: 'text-danger' }
+  }
+  return null
 })
+const materialSectionLabel = computed(() => itemData.value?.menu?.itemMaterialHeading || 'Material')
 
 // The immediate category this item sits under (last entry in the parent chain).
 const categoryLabel = computed(() => {

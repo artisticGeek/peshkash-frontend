@@ -14,6 +14,8 @@
     </div>
   </div>
 
+  <VendorStoryPage v-else-if="publicPageMode !== 'classic'" :vendor="vendorData" />
+
   <div v-else class="vendor-card-page">
 
     <div class="top-section">
@@ -164,6 +166,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import PublicNav from '../components/PublicNav.vue'
+import VendorStoryPage from '../components/vendor/VendorStoryPage.vue'
 import LoginModal from '../components/auth/LoginModal.vue'
 import { API_BASE_URL } from '../config'
 import { useAnalytics } from '../composables/useAnalytics'
@@ -172,6 +175,7 @@ import { usePageMeta } from '../composables/usePageMeta'
 import { useRequireLoginGate } from '../composables/useRequireLoginGate'
 import { contactResource, openNativeResource } from '../utils/nativeResource'
 import { sharePublicPage } from '../utils/socialShare'
+import { isPlausiblePhone, normalizeContactPageMode } from '../features/vendors/contactPage'
 
 const route = useRoute()
 const vendorName = route.params.vendorName as string
@@ -201,6 +205,7 @@ const analytics = useAnalytics()
 const vendorData = ref<any>(null)
 const isLoading  = ref(true)
 const error      = ref<string | null>(null)
+const publicPageMode = computed(() => normalizeContactPageMode(vendorData.value?.contactPageMode))
 
 const vendorRequireLogin = computed(() => vendorData.value?.requireLogin)
 useRequireLoginGate(vendorRequireLogin, isLoggedIn, loginModalOpen)
@@ -279,10 +284,13 @@ const parsedContact = computed(() => {
       const prefix = raw.slice(0, colonIdx).trim()
       const value  = raw.slice(colonIdx + 1).trim()
       const meta   = CONTACT_FIELD_MAP[prefix]
-      if (meta) return { prefix, value, icon: meta.icon, href: meta.hrefFn?.(value), isSocial: !!meta.isSocial }
+      if (meta) {
+        if (prefix === 'Phone' && !isPlausiblePhone(value)) return null
+        return { prefix, value, icon: meta.icon, href: meta.hrefFn?.(value), isSocial: !!meta.isSocial }
+      }
     }
-    return { prefix: 'Phone', value: raw, icon: 'bi bi-telephone-fill', href: `tel:${raw}`, isSocial: false }
-  })
+    return isPlausiblePhone(raw) ? { prefix: 'Phone', value: raw, icon: 'bi bi-telephone-fill', href: `tel:${raw}`, isSocial: false } : null
+  }).filter((field): field is NonNullable<typeof field> => field !== null)
 })
 
 // ── Per-field accessors ───────────────────────────────────────────────────────
