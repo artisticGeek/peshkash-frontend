@@ -18,6 +18,7 @@
     "event-workflow.test.ts",
     "social-share.test.ts",
     "vendor-contact-page.test.ts",
+    "menu-studio.test.ts",
     "../src/features/events/workflow.ts",
     "../src/features/events/guestPresentation.ts",
     "../src/utils/nativeResource.ts",
@@ -30,6 +31,10 @@
     "../src/features/qrStudio/dynamicFields.ts",
     "../src/features/qrStudio/corelSvg.ts",
     "../src/features/qrStudio/sheetPacking.ts",
-    "../src/utils/zip.ts"
+    "../src/utils/zip.ts",
+    "../src/features/menuStudio/tree.ts",
+    "../src/features/menuStudio/bank.ts",
+    "../src/features/menuStudio/cta.ts",
+    "../src/features/menuStudio/types.ts"
   ]
 }
