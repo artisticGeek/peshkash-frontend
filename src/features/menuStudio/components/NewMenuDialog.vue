@@ -43,6 +43,7 @@
         </select>
       </label>
 
+      <p v-if="note && source === 'clone'" class="ms-hint">{{ note }}</p>
       <p v-if="error" class="ms-warn" role="alert">{{ error }}</p>
       <div class="ms-modal-actions">
         <button type="button" class="ms-btn" @click="emit('close')">Cancel</button>
@@ -60,7 +61,7 @@ import { errorMessage, menuStudioApi } from '../api';
 import { uniqueSlug } from '../tree';
 import type { StudioMenu } from '../types';
 
-const props = defineProps<{ menus: StudioMenu[]; vendorId: number; cloneFromId?: number | null }>();
+const props = defineProps<{ menus: StudioMenu[]; vendorId: number; cloneFromId?: number | null; note?: string }>();
 const emit = defineEmits<{ close: []; created: [menu: StudioMenu] }>();
 
 const fixedSource = computed(() => (props.cloneFromId ? props.menus.find((menu) => menu.id === props.cloneFromId) ?? null : null));

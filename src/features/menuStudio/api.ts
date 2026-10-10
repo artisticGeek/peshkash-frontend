@@ -2,7 +2,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import type { ReorderEntry } from './tree';
-import type { CtaConfig, PoolItem, StudioItem, StudioMenu } from './types';
+import type { CtaConfig, DraftMenuSettings, MenuDraft, PoolItem, StudioItem, StudioMenu } from './types';
 
 const admin = (path: string) => `${API_BASE_URL}/admin${path}`;
 
@@ -10,7 +10,7 @@ const admin = (path: string) => `${API_BASE_URL}/admin${path}`;
 const toId = (value: unknown): number | null => (value === null || value === undefined || value === '' ? null : Number(value));
 
 export function normalizeMenu(raw: any): StudioMenu {
-  return { ...raw, id: Number(raw.id), vendorId: Number(raw.vendorId), sourceMenuId: toId(raw.sourceMenuId) };
+  return { ...raw, id: Number(raw.id), vendorId: Number(raw.vendorId), sourceMenuId: toId(raw.sourceMenuId), draftSavedAt: raw.draftSavedAt ?? null };
 }
 
 export function normalizeItem<T extends StudioItem>(raw: any): T {
@@ -29,6 +29,8 @@ export function normalizeItem<T extends StudioItem>(raw: any): T {
 }
 
 export type ItemPayload = {
+  /** Present in working copies; negative for entries that don't exist on the server yet. */
+  id?: number;
   menuId?: number;
   name?: string;
   displayName: string;
@@ -58,6 +60,9 @@ export type CloneOptions = {
   type?: string;
   include: { items: boolean; hidden: boolean; ctas: boolean };
 };
+
+/** What the Studio sends for a draft or a save: menu settings plus every entry. */
+export type WorkingCopy = { menu: DraftMenuSettings; items: ItemPayload[] };
 
 export const menuStudioApi = {
   async listMenus(): Promise<StudioMenu[]> {
@@ -92,6 +97,22 @@ export const menuStudioApi = {
   },
   async reorder(menuId: number, items: ReorderEntry[]): Promise<StudioItem[]> {
     return (await axios.patch<unknown[]>(admin(`/menus/${menuId}/order`), { items })).data.map((row) => normalizeItem<StudioItem>(row));
+  },
+  async getDraft(menuId: number): Promise<MenuDraft | null> {
+    const { data } = await axios.get(admin(`/menus/${menuId}/draft`));
+    if (!data || !Array.isArray(data.items)) return null;
+    return { menu: data.menu, savedAt: data.savedAt, items: data.items.map((row: unknown) => normalizeItem<StudioItem>({ ...(row as object), menuId })) };
+  },
+  async saveDraft(menuId: number, copy: WorkingCopy): Promise<{ savedAt: string }> {
+    return (await axios.put<{ savedAt: string }>(admin(`/menus/${menuId}/draft`), copy)).data;
+  },
+  async discardDraft(menuId: number): Promise<void> {
+    await axios.delete(admin(`/menus/${menuId}/draft`));
+  },
+  /** Saves a working copy and makes it live. */
+  async publish(menuId: number, copy: WorkingCopy): Promise<{ menu: StudioMenu; items: StudioItem[]; idMap: Record<string, number> }> {
+    const { data } = await axios.post(admin(`/menus/${menuId}/publish`), copy);
+    return { menu: normalizeMenu(data.menu), items: data.items.map((row: unknown) => normalizeItem<StudioItem>(row)), idMap: data.idMap ?? {} };
   },
   async uploadImage(vendorSlug: string, file: File): Promise<string> {
     const form = new FormData();

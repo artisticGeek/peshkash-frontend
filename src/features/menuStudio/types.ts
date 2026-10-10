@@ -26,6 +26,8 @@ export type StudioMenu = {
   vendorId: number;
   type: string;
   sourceMenuId?: number | null;
+  /** When the menu last had an unsaved Studio draft stored; null when it has none. */
+  draftSavedAt?: string | null;
   createdAt?: string;
 };
 
@@ -88,3 +90,12 @@ export type DragPayload =
 export type DropTarget = { parentId: number | null; index: number };
 
 export type Selection = { kind: 'menu' } | { kind: 'item'; id: number };
+
+/** Menu-level settings that are part of a Studio working copy. */
+export type DraftMenuSettings = Pick<StudioMenu, 'displayName' | 'description' | 'itemStoryHeading' | 'itemMaterialHeading' | 'elaborateDescriptions' | 'ctaConfig'>;
+
+/** A private working copy stored on the server. New items have negative ids. */
+export type MenuDraft = { menu: DraftMenuSettings; items: StudioItem[]; savedAt: string };
+
+/** unsaved: edits not stored anywhere yet · draft: stored privately, not live · live: what guests see. */
+export type SaveStatus = 'unsaved' | 'draft' | 'live' | 'saving';

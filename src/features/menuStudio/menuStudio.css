@@ -134,12 +134,26 @@
 .ms-title-input:hover, .ms-title-input:focus { background: var(--ms-panel-2); border-color: var(--ms-line-strong); outline: none; }
 .ms-save { align-items: center; display: inline-flex; font-size: 12px; gap: 6px; white-space: nowrap; }
 .ms-save::before { border-radius: 50%; content: ''; height: 7px; width: 7px; }
-.ms-save.is-saved { color: var(--ms-ok); }
-.ms-save.is-saved::before { background: var(--ms-ok); }
 .ms-save.is-saving { color: var(--ms-muted); }
 .ms-save.is-saving::before { background: var(--ms-gold); animation: ms-pulse 1s ease-in-out infinite; }
-.ms-save.is-error { color: var(--ms-bad); }
-.ms-save.is-error::before { background: var(--ms-bad); }
+.ms-save.is-live { color: var(--ms-ok); }
+.ms-save.is-live::before { background: var(--ms-ok); }
+.ms-save.is-unsaved { color: #9a5b12; font-weight: 600; }
+.ms-save.is-unsaved::before { background: #d08a2c; }
+.ms-save.is-draft { color: var(--ms-gold-ink); font-weight: 600; }
+.ms-save.is-draft::before { background: var(--ms-gold); border: 1px solid var(--ms-gold-ink); }
+.ms-save-actions { display: inline-flex; gap: 6px; }
+/* Secondary tools sit on their own line under the title and save buttons. */
+.ms-tools { align-items: center; border-top: 1px solid var(--ms-line); display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 8px; }
+.ms-banner {
+  align-items: center; background: var(--ms-gold-soft); border: 1px solid #e6cfa6; border-radius: 10px; color: var(--ms-ink);
+  display: flex; flex-wrap: wrap; font-size: 13px; gap: 8px 12px; padding: 9px 12px;
+}
+.ms-banner > span:first-of-type { flex: 1 1 260px; }
+.ms-banner > i { color: var(--ms-gold-ink); }
+.ms-banner.is-warn { background: #fdf0e1; border-color: #efc993; }
+.ms-banner.is-warn > i { color: #9a5b12; }
+.ms-chip.draft { background: #fdf0e1; border-color: #efc993; color: #9a5b12; }
 @keyframes ms-pulse { 50% { opacity: 0.3; } }
 .ms-spacer { flex: 1; }
 .ms-device-toggle { width: auto; }

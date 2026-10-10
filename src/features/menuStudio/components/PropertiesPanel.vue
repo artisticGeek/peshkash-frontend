@@ -117,7 +117,7 @@
         <button type="button" class="ms-btn danger sm" @click="studio.remove(item.id)">Remove</button>
         <button type="button" class="ms-btn sm" @click="confirmingRemove = false">Keep</button>
       </div>
-      <p class="ms-hint">Changes apply to this menu only. The same item in other menus isn't touched.</p>
+      <p class="ms-hint">Changes apply to this menu only and reach guests when you press Save. The same item in other menus isn't touched.</p>
     </template>
 
     <!-- Menu settings -->

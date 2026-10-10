@@ -25,6 +25,7 @@
         </button>
         <div class="ms-menu-card-tags">
           <span class="ms-chip">{{ menu.type === 'personalized' ? 'Personalized' : 'Generic' }}</span>
+          <span v-if="menu.draftSavedAt" class="ms-chip draft" title="Has a saved draft that guests don't see yet"><i class="bi bi-file-earmark-text"></i> Draft</span>
           <span v-for="event in eventsForMenu(menu.id)" :key="event.id" class="ms-chip gold"><i class="bi bi-calendar-event"></i> {{ event.displayName }}</span>
           <span v-if="!eventsForMenu(menu.id).length" class="ms-chip muted">Not linked</span>
         </div>

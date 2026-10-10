@@ -1,16 +1,21 @@
-// State and actions for one menu open in the studio. Every change is saved as it happens.
+// State and actions for one menu open in the studio.
+//
+// The studio edits a local working copy. Nothing reaches guests until "Save":
+//   - Save draft  stores the working copy privately on the server (guests still see the live menu)
+//   - Save        makes the working copy live and clears the draft
+// New entries get negative temporary ids until they are saved.
 import { computed, reactive, ref } from 'vue';
 import { buildBank, buildSectionTemplates, copyableFields } from './bank';
-import { errorMessage, menuStudioApi, type ItemPayload, type MenuPayload } from './api';
+import { errorMessage, menuStudioApi, type ItemPayload, type WorkingCopy } from './api';
 import { applyOrder, buildTree, childrenOf, descendantIds, orderWithInsert, parentsFirst, planMove, uniqueSlug } from './tree';
-import type { DragPayload, DropTarget, PoolItem, Selection, StudioItem, StudioMenu } from './types';
+import type { DraftMenuSettings, DragPayload, DropTarget, PoolItem, SaveStatus, Selection, StudioItem, StudioMenu } from './types';
 
 type Notify = (type: 'success' | 'error', text: string) => void;
 
-const SAVE_DELAY_MS = 600;
-
 export function toItemPayload(item: StudioItem): ItemPayload {
   return {
+    id: item.id,
+    name: item.name,
     displayName: item.displayName,
     description: item.description ?? '',
     ingredients: item.ingredients ?? '',
@@ -25,9 +30,26 @@ export function toItemPayload(item: StudioItem): ItemPayload {
     isVeg: item.isVeg ?? null,
     spiceLevel: item.spiceLevel ?? null,
     ctaConfig: item.ctaConfig ?? null,
-    // Always explicit: the API treats a missing parentId as "move to top level".
     parentId: item.parentId || null,
   };
+}
+
+function menuSettings(menu: StudioMenu): DraftMenuSettings {
+  return {
+    displayName: menu.displayName,
+    description: menu.description ?? '',
+    itemStoryHeading: menu.itemStoryHeading,
+    itemMaterialHeading: menu.itemMaterialHeading,
+    elaborateDescriptions: Boolean(menu.elaborateDescriptions),
+    ctaConfig: menu.ctaConfig,
+  };
+}
+
+/** A stable fingerprint of a working copy, used to tell whether anything changed. */
+export function copySignature(menu: StudioMenu | null, items: StudioItem[]): string {
+  if (!menu) return '';
+  const rows = [...items].sort((a, b) => a.id - b.id).map(toItemPayload);
+  return JSON.stringify({ menu: menuSettings(menu), items: rows });
 }
 
 export function useMenuStudio(notify: Notify) {
@@ -35,19 +57,18 @@ export function useMenuStudio(notify: Notify) {
   const items = ref<StudioItem[]>([]);
   const pool = ref<PoolItem[]>([]);
   const loading = ref(false);
-  const inFlight = ref(0);
-  const failed = ref(false);
+  const busy = ref<'draft' | 'publish' | 'discard' | null>(null);
   const selection = ref<Selection>({ kind: 'menu' });
   const drag = ref<DragPayload | null>(null);
-  /** An inline "type a name" row shown on the canvas before a new item/section is created. */
+  /** An inline "type a name" row shown on the canvas before a new item/section is added. */
   const pendingNew = ref<{ target: DropTarget; section: boolean } | null>(null);
   const collapsed = reactive(new Set<number>());
 
-  const itemTimers = new Map<number, ReturnType<typeof setTimeout>>();
-  let menuTimer: ReturnType<typeof setTimeout> | null = null;
-  const pendingSaves = ref(0);
-  const failedItemIds = new Set<number>();
-  let menuSaveFailed = false;
+  /** When the stored draft was saved; null when the server has no draft for this menu. */
+  const draftSavedAt = ref<string | null>(null);
+  /** Fingerprint of the last version stored anywhere (the draft if there is one, else live). */
+  const savedSignature = ref('');
+  let nextTempId = -1;
 
   const tree = computed(() => buildTree(items.value));
   const bank = computed(() => (menu.value ? buildBank(pool.value, menu.value.id, items.value) : []));
@@ -56,38 +77,36 @@ export function useMenuStudio(notify: Notify) {
     const current = selection.value;
     return current.kind === 'item' ? items.value.find((item) => item.id === current.id) ?? null : null;
   });
-  const saveState = computed<'saving' | 'saved' | 'error'>(() =>
-    failed.value ? 'error' : inFlight.value > 0 || pendingSaves.value > 0 ? 'saving' : 'saved');
+  const dirty = computed(() => Boolean(menu.value) && copySignature(menu.value, items.value) !== savedSignature.value);
+  const status = computed<SaveStatus>(() => (busy.value ? 'saving' : dirty.value ? 'unsaved' : draftSavedAt.value ? 'draft' : 'live'));
 
-  async function run<T>(task: () => Promise<T>, failure: string): Promise<T | undefined> {
-    inFlight.value++;
-    try {
-      const result = await task();
-      failed.value = false;
-      return result;
-    } catch (err) {
-      failed.value = true;
-      notify('error', `${failure}: ${errorMessage(err)}`);
-      return undefined;
-    } finally {
-      inFlight.value--;
-    }
-  }
-
-  async function load(target: StudioMenu) {
-    flush();
-    menu.value = target;
+  function resetUi() {
     selection.value = { kind: 'menu' };
     pendingNew.value = null;
     collapsed.clear();
+  }
+
+  async function load(target: StudioMenu) {
+    menu.value = target;
+    resetUi();
     loading.value = true;
     try {
-      const [menuItems, vendorPool] = await Promise.all([
+      const [liveItems, draft, vendorPool] = await Promise.all([
         menuStudioApi.listItems(target.id),
+        menuStudioApi.getDraft(target.id).catch(() => null),
         menuStudioApi.itemPool(target.vendorId).catch(() => [] as PoolItem[]),
       ]);
-      items.value = menuItems;
       pool.value = vendorPool;
+      if (draft) {
+        menu.value = { ...target, ...draft.menu };
+        items.value = draft.items;
+        draftSavedAt.value = draft.savedAt;
+      } else {
+        items.value = liveItems;
+        draftSavedAt.value = null;
+      }
+      nextTempId = Math.min(-1, ...items.value.map((item) => item.id - 1));
+      savedSignature.value = copySignature(menu.value, items.value);
     } catch (err) {
       notify('error', `Couldn't open this menu: ${errorMessage(err)}`);
     } finally {
@@ -97,59 +116,55 @@ export function useMenuStudio(notify: Notify) {
 
   const takenSlugs = () => items.value.map((item) => item.name);
 
-  async function persistOrder(entries: ReturnType<typeof orderWithInsert>) {
-    if (!menu.value || !entries.length) return;
-    const menuId = menu.value.id;
-    items.value = applyOrder(items.value, entries);
-    await run(() => menuStudioApi.reorder(menuId, entries), "Couldn't save the new order");
-  }
-
-  async function createAt(target: DropTarget, fields: Omit<ItemPayload, 'parentId'> & { displayName: string }): Promise<StudioItem | undefined> {
+  function createAt(target: DropTarget, fields: Partial<StudioItem> & { displayName: string }): StudioItem | undefined {
     if (!menu.value) return undefined;
-    const menuId = menu.value.id;
-    const created = await run(
-      () => menuStudioApi.createItem({ ...fields, menuId, name: uniqueSlug(fields.displayName, takenSlugs()), parentId: target.parentId, sortOrder: target.index }),
-      `Couldn't add ${fields.displayName}`,
-    );
-    if (!created) return undefined;
-    items.value = [...items.value, created];
+    const created: StudioItem = {
+      type: 'item',
+      isActive: true,
+      ctaConfig: null,
+      ...fields,
+      id: nextTempId--,
+      name: uniqueSlug(fields.displayName, takenSlugs()),
+      menuId: menu.value.id,
+      parentId: target.parentId,
+      sortOrder: target.index,
+    };
+    items.value = applyOrder([...items.value, created], orderWithInsert([...items.value, created], target, [created.id]));
     if (target.parentId) collapsed.delete(target.parentId);
-    await persistOrder(orderWithInsert(items.value, target, [created.id]));
     return created;
   }
 
-  async function addFromBank(key: string, target: DropTarget) {
+  function addFromBank(key: string, target: DropTarget) {
     const entry = bank.value.find((candidate) => candidate.key === key);
     if (!entry) return;
-    const created = await createAt(target, copyableFields(entry.item));
+    const created = createAt(target, copyableFields(entry.item));
     if (created) selection.value = { kind: 'item', id: created.id };
   }
 
   /** Copies a whole section (with everything inside it) from another menu. */
-  async function addTemplate(sectionId: number, target: DropTarget) {
+  function addTemplate(sectionId: number, target: DropTarget) {
     const template = templates.value.find((candidate) => candidate.item.id === sectionId);
-    if (!template) return;
-    const root = await createAt(target, { ...copyableFields(template.item), type: 'category' });
-    if (!root || !menu.value) return;
-    const menuId = menu.value.id;
+    if (!template || !menu.value) return;
+    const root = createAt(target, { ...copyableFields(template.item), type: 'category' });
+    if (!root) return;
     const idMap = new Map<number, number>([[template.item.id, root.id]]);
+    const copies: StudioItem[] = [];
     for (const source of parentsFirst(template.subtree)) {
-      const parentId = idMap.get(source.parentId ?? -1) ?? root.id;
-      const created = await run(
-        () => menuStudioApi.createItem({
-          ...copyableFields(source),
-          isActive: source.isActive,
-          menuId,
-          name: uniqueSlug(source.displayName || source.name, takenSlugs()),
-          parentId,
-          sortOrder: source.sortOrder ?? 0,
-        }),
-        `Couldn't copy ${source.displayName}`,
-      );
-      if (!created) break;
-      items.value = [...items.value, created];
-      idMap.set(source.id, created.id);
+      const copy: StudioItem = {
+        ...copyableFields(source),
+        isActive: source.isActive,
+        ctaConfig: null,
+        id: nextTempId--,
+        name: uniqueSlug(source.displayName || source.name, [...takenSlugs(), ...copies.map((item) => item.name)]),
+        menuId: menu.value.id,
+        parentId: idMap.get(source.parentId ?? -Infinity) ?? root.id,
+        sortOrder: source.sortOrder ?? 0,
+      };
+      idMap.set(source.id, copy.id);
+      copies.push(copy);
     }
+    items.value = [...items.value, ...copies];
+    selection.value = { kind: 'item', id: root.id };
     notify('success', `Added ${template.item.displayName} with ${template.itemCount} items`);
   }
 
@@ -157,27 +172,21 @@ export function useMenuStudio(notify: Notify) {
     pendingNew.value = { section, target };
   }
 
-  async function commitNew(name: string) {
+  function commitNew(name: string) {
     const pending = pendingNew.value;
     pendingNew.value = null;
     const displayName = name.trim();
     if (!pending || !displayName) return;
-    const created = await createAt(pending.target, {
-      displayName,
-      type: pending.section ? 'category' : 'item',
-      isActive: true,
-      ctaConfig: null,
-    });
+    const created = createAt(pending.target, { displayName, type: pending.section ? 'category' : 'item' });
     if (created) selection.value = { kind: 'item', id: created.id };
   }
 
-  async function move(id: number, target: DropTarget) {
+  function move(id: number, target: DropTarget) {
     const entries = planMove(items.value, id, target);
-    if (!entries) return;
-    await persistOrder(entries);
+    if (entries) items.value = applyOrder(items.value, entries);
   }
 
-  async function drop(target: DropTarget) {
+  function drop(target: DropTarget) {
     const payload = drag.value;
     drag.value = null;
     if (!payload) return;
@@ -187,38 +196,16 @@ export function useMenuStudio(notify: Notify) {
     startNew(payload.section, target);
   }
 
-  function scheduleItemSave(id: number) {
-    const existing = itemTimers.get(id);
-    if (existing) clearTimeout(existing);
-    else pendingSaves.value++;
-    itemTimers.set(id, setTimeout(() => saveItemNow(id), SAVE_DELAY_MS));
-  }
-
-  async function saveItemNow(id: number) {
-    const timer = itemTimers.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      itemTimers.delete(id);
-      pendingSaves.value--;
-    }
-    const item = items.value.find((row) => row.id === id);
-    if (!item || !item.displayName.trim()) return;
-    const saved = await run(() => menuStudioApi.updateItem(id, toItemPayload(item)), `Couldn't save ${item.displayName}`);
-    if (saved) failedItemIds.delete(id);
-    else failedItemIds.add(id);
-  }
-
   function updateItem(id: number, patch: Partial<StudioItem>) {
     items.value = items.value.map((item) => (item.id === id ? { ...item, ...patch } : item));
-    scheduleItemSave(id);
   }
 
-  async function duplicate(id: number) {
+  function duplicate(id: number) {
     const source = items.value.find((item) => item.id === id);
     if (!source) return;
     const parentId = source.parentId || null;
     const index = childrenOf(items.value, parentId).findIndex((item) => item.id === id) + 1;
-    const created = await createAt({ parentId, index }, {
+    const created = createAt({ parentId, index }, {
       ...copyableFields(source),
       displayName: `${source.displayName} (copy)`,
       isActive: source.isActive,
@@ -227,67 +214,99 @@ export function useMenuStudio(notify: Notify) {
     if (created) selection.value = { kind: 'item', id: created.id };
   }
 
-  async function remove(id: number) {
+  function remove(id: number) {
     const target = items.value.find((item) => item.id === id);
     if (!target) return;
     const removed = new Set([id, ...descendantIds(items.value, id)]);
-    for (const removedId of removed) {
-      const timer = itemTimers.get(removedId);
-      if (timer) {
-        clearTimeout(timer);
-        itemTimers.delete(removedId);
-        pendingSaves.value--;
-      }
-    }
-    const ok = await run(() => menuStudioApi.deleteItem(id, removed.size > 1).then(() => true), `Couldn't remove ${target.displayName}`);
-    if (!ok) return;
     items.value = items.value.filter((item) => !removed.has(item.id));
     if (selection.value.kind === 'item' && removed.has(selection.value.id)) selection.value = { kind: 'menu' };
     notify('success', removed.size > 1
       ? `Removed ${target.displayName} and ${removed.size - 1} item${removed.size > 2 ? 's' : ''} inside it`
-      : `Removed ${target.displayName} from this menu`);
+      : `Removed ${target.displayName}`);
   }
 
-  function updateMenu(patch: MenuPayload) {
-    if (!menu.value) return;
-    menu.value = { ...menu.value, ...patch } as StudioMenu;
-    if (menuTimer) clearTimeout(menuTimer);
-    else pendingSaves.value++;
-    menuTimer = setTimeout(saveMenuNow, SAVE_DELAY_MS);
+  function updateMenu(patch: Partial<StudioMenu>) {
+    if (menu.value) menu.value = { ...menu.value, ...patch };
   }
 
-  async function saveMenuNow() {
-    if (menuTimer) {
-      clearTimeout(menuTimer);
-      menuTimer = null;
-      pendingSaves.value--;
+  function workingCopy(): WorkingCopy | null {
+    if (!menu.value) return null;
+    if (!menu.value.displayName.trim()) {
+      notify('error', 'Give the menu a name before saving');
+      return null;
     }
+    const unnamed = items.value.find((item) => !item.displayName.trim());
+    if (unnamed) {
+      selection.value = { kind: 'item', id: unnamed.id };
+      notify('error', 'Every item and section needs a name before saving');
+      return null;
+    }
+    return { menu: menuSettings(menu.value), items: items.value.map(toItemPayload) };
+  }
+
+  /** Stores the working copy privately. Guests keep seeing the last saved menu. */
+  async function saveDraft(): Promise<boolean> {
+    const copy = workingCopy();
+    if (!copy || !menu.value || busy.value) return false;
+    const signature = copySignature(menu.value, items.value);
+    busy.value = 'draft';
+    try {
+      const { savedAt } = await menuStudioApi.saveDraft(menu.value.id, copy);
+      draftSavedAt.value = savedAt;
+      menu.value = { ...menu.value, draftSavedAt: savedAt };
+      savedSignature.value = signature;
+      notify('success', 'Draft saved. Guests still see the last saved menu.');
+      return true;
+    } catch (err) {
+      notify('error', `Couldn't save the draft: ${errorMessage(err)}`);
+      return false;
+    } finally {
+      busy.value = null;
+    }
+  }
+
+  /** Saves the working copy and makes it live. */
+  async function publish(): Promise<boolean> {
+    const copy = workingCopy();
+    if (!copy || !menu.value || busy.value) return false;
+    busy.value = 'publish';
+    try {
+      const result = await menuStudioApi.publish(menu.value.id, copy);
+      const realId = (id: number) => (id < 0 ? result.idMap[String(id)] ?? id : id);
+      if (selection.value.kind === 'item') selection.value = { kind: 'item', id: realId(selection.value.id) };
+      const wasCollapsed = [...collapsed];
+      collapsed.clear();
+      wasCollapsed.forEach((id) => collapsed.add(realId(id)));
+      menu.value = result.menu;
+      items.value = result.items;
+      draftSavedAt.value = null;
+      savedSignature.value = copySignature(menu.value, items.value);
+      notify('success', 'Saved. Guests now see these changes.');
+      return true;
+    } catch (err) {
+      notify('error', `Couldn't save: ${errorMessage(err)}`);
+      return false;
+    } finally {
+      busy.value = null;
+    }
+  }
+
+  /** Throws away the stored draft and any unsaved edits, and reopens the live menu. */
+  async function discardDraft() {
+    if (!menu.value || busy.value) return;
     const current = menu.value;
-    if (!current || !current.displayName.trim()) return;
-    const saved = await run(() => menuStudioApi.updateMenu(current.id, {
-      displayName: current.displayName,
-      description: current.description ?? '',
-      itemStoryHeading: current.itemStoryHeading,
-      itemMaterialHeading: current.itemMaterialHeading,
-      elaborateDescriptions: current.elaborateDescriptions,
-      ctaConfig: current.ctaConfig,
-    }), "Couldn't save menu settings");
-    menuSaveFailed = !saved;
-    return saved;
-  }
-
-  /** Runs any debounced saves immediately (before switching menus or leaving). */
-  function flush() {
-    for (const id of [...itemTimers.keys()]) void saveItemNow(id);
-    if (menuTimer) void saveMenuNow();
-  }
-
-  /** Saves again whatever failed last time. */
-  function retry() {
-    failed.value = false;
-    for (const id of failedItemIds) if (items.value.some((item) => item.id === id)) scheduleItemSave(id);
-    failedItemIds.clear();
-    if (menuSaveFailed && menu.value) updateMenu({});
+    busy.value = 'discard';
+    try {
+      if (draftSavedAt.value) await menuStudioApi.discardDraft(current.id);
+      const live = (await menuStudioApi.listMenus()).find((row) => row.id === current.id) ?? { ...current, draftSavedAt: null };
+      busy.value = null;
+      await load(live);
+      notify('success', 'Changes discarded. You are looking at the live menu.');
+    } catch (err) {
+      notify('error', `Couldn't discard the draft: ${errorMessage(err)}`);
+    } finally {
+      busy.value = null;
+    }
   }
 
   function toggleCollapsed(id: number) {
@@ -296,10 +315,10 @@ export function useMenuStudio(notify: Notify) {
   }
 
   return {
-    menu, items, pool, loading, selection, drag, pendingNew, collapsed,
-    tree, bank, templates, selectedItem, saveState,
+    menu, items, pool, loading, busy, selection, drag, pendingNew, collapsed,
+    tree, bank, templates, selectedItem, dirty, status, draftSavedAt,
     load, addFromBank, addTemplate, startNew, commitNew, move, drop,
-    updateItem, duplicate, remove, updateMenu, flush, retry, toggleCollapsed,
+    updateItem, duplicate, remove, updateMenu, saveDraft, publish, discardDraft, toggleCollapsed,
   };
 }
 
